@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
+    "models": "node tools/models.mjs",
     "start": "node tools/build.mjs && node tools/serve.mjs",
     "serve": "node tools/serve.mjs",
     "test": "node tools/build.mjs && node test/run.mjs"
@@ -13,12 +14,15 @@
     "webgl",
     "game",
     "low-poly",
-    "three.js", "single-file",
+    "three.js",
+    "single-file",
     "canvas"
   ],
   "license": "MIT",
   "private": true,
   "devDependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
     "esbuild": "0.28.2",
     "playwright": "1.63.0",
     "three": "0.187.0"

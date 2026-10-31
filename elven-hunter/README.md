@@ -4,9 +4,10 @@ An open-world, third-person forest game that runs in **one self-contained HTML f
 
 No CDN and no network calls at runtime. Rendering is done by
 [three.js](https://threejs.org) (MIT); the terrain generator, the character rigs and the
-gameplay are plain JavaScript. The build bundles the slice of three.js the game uses
-together with the game into a single ~630 KB file. Open it from a USB stick on a plane
-and it plays.
+gameplay are plain JavaScript. Heroes, followers and goblins are rigged, animated
+models from Kay Lousberg's CC0 [KayKit Adventurers](https://kaylousberg.itch.io/kaykit-adventurers)
+pack. The build bundles the slice of three.js the game uses, the models and the game into
+a single ~3.1 MB file. Open it from a USB stick on a plane and it plays.
 
 The wood is 300 × 300 units of procedurally generated hills, a winding river and about
 3,600 scattered trees, rocks and ferns, with four landmarks to find. Spiders hunt the
@@ -63,12 +64,15 @@ src/
               (water ripple + see-through cutout), instanced batches
   world.js    value-noise heightmap, terrain and water mesh, prop scattering,
               the four hand-placed landmarks
-  chars.js    procedural character rigs — humanoid, spider, cocoon — assembled
-              from primitives each frame and animated by walk phase
+  chars.js    procedural rigs — humanoid, spider, cocoon — built from primitives;
+              humanoids use these only far away or while models load
+  models.js   animated character models: loading, actors, animation layering
   game.js     state, input, camera, combat, AI, allies, skills, HUD, telemetry
+assets/       slimmed KayKit models (*.glb, CC0) + shared animation clips
 tools/
-  build.mjs   bundles three.js with esbuild, inlines it and the four modules
-              into index.html
+  build.mjs   bundles three.js with esbuild, inlines it, the models (base64) and
+              the modules into index.html
+  models.mjs  rebuilds assets/ from the KayKit pack (fetches it if needed)
   serve.mjs   dependency-free static server
 test/
   run.mjs     headless suite driving the real game in Chromium
@@ -81,7 +85,30 @@ committed, because the site is served as static files with no build step.
 To use another three.js class, add its name to `src/three-entry.js`; only listed classes
 are bundled.
 
+### Characters
+
+- **Models.** Rogue → hooded rogue with crossbow (draws a knife to strike), Warrior →
+  barbarian with axe, Wizard → mage with staff. Elves get ears and dwarves a beard,
+  attached to the head bone. Followers use the knight, rogues, mage and barbarian;
+  goblins are smaller, green-tinted rogues. Spiders, cocoons and fairies stay procedural.
+- **One skeleton, one set of clips.** All five KayKit characters share a 41-bone rig, so
+  `assets/anims.glb` carries 14 clips once (idle, run, jump, attacks, shoot, cast, throw,
+  hit, death, cheer) and every model plays them. `tools/models.mjs` strips the other 61
+  clips, constant tracks and IK helpers: 18 MB of source becomes 1.8 MB.
+- **Layered animation.** Each clip also exists as an upper-body and a lower-body half.
+  An attack or hit plays on the upper body while the legs keep their run or idle, so you
+  can shoot on the move. Weights cross-fade every frame.
+- **Budget.** The nearest 12 humanoids within 42 units get a model ("actor", pooled and
+  reused); everything else is drawn by the instanced primitive rigs, so a horde costs
+  a fixed amount. Each model's six body parts are merged into one skinned mesh.
+- **Death.** Slain goblins and spiders leave a body that plays its death, then sinks.
+
 ### Rendering notes
+
+- **Real shadows.** The sun casts a shadow map (2048² on laptops, 1024² on phones) that
+  follows the hunter; trees, rocks, buildings and characters all cast. Beyond its reach,
+  small contact discs stand in. If a device is still slow at the lowest render scale, the
+  world stops casting shadows (characters keep theirs) and the diagnostics report says so.
 
 - **Smooth shading.** Meshes carry per-vertex normals: the terrain takes its normals from
   the heightmap's slope, characters are built from rounded tubes and subdivided spheres,
@@ -136,7 +163,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-44 assertions run the actual game in headless Chromium with software WebGL and check
+51 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames
@@ -154,8 +181,10 @@ software WebGL frame rates vary a lot between machines.
 
 ## Known limitations
 
-- **Characters are built from primitives.** They are rounded now; the next step is real
-  low-poly models (`.glb`) with skeletal animation, which three.js can now load.
+- **Spiders are still built from primitives**; the KayKit pack has no spider. A CC0
+  rigged spider would slot into the same actor system.
+- **Size.** The models are embedded as base64, so the file is ~3.1 MB. Mesh quantisation
+  (`KHR_mesh_quantization`) could roughly halve the model share if that matters.
 - **Needs WebGL 2** (three.js dropped WebGL 1). Every current browser has it, including
   Safari on iOS 15 and later.
 - **No haptics on iOS.** Safari does not implement the Vibration API. Android gets the
@@ -164,4 +193,6 @@ software WebGL frame rates vary a lot between machines.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Character models and animations: KayKit Adventurers by
+Kay Lousberg, CC0 — see [assets/LICENSE-KayKit-Adventurers.txt](assets/LICENSE-KayKit-Adventurers.txt).
+three.js: MIT, notice kept in the bundle.

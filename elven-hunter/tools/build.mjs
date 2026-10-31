@@ -9,7 +9,7 @@
  * classes listed in src/three-entry.js into an IIFE that defines `THREE`, and
  * that is inlined ahead of the game's own scripts.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -25,6 +25,13 @@ const three = await build({
 // `</script` inside the bundle would end the inline <script> early
 const threeJs = three.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 
+// Character models (assets/*.glb, made by tools/models.mjs) ride along as base64,
+// so the game still opens from disk with no fetch.
+const ASSETS = join(ROOT, 'assets');
+const models = readdirSync(ASSETS).filter((f) => f.endsWith('.glb')).sort();
+const assetsJs = 'var MODEL_DATA={\n' + models.map((f) =>
+  JSON.stringify(f.replace(/\.glb$/, '')) + ':"' + readFileSync(join(ASSETS, f)).toString('base64') + '"').join(',\n') + '\n};';
+
 // Order matters: engine defines the math and mesh builders that world/chars use,
 // and game.js wires everything together at the end.
 const MODULES = [
@@ -32,6 +39,8 @@ const MODULES = [
   ['/*ENGINE*/', 'engine.js'],
   ['/*WORLD*/',  'world.js'],
   ['/*CHARS*/',  'chars.js'],
+  ['/*ASSETS*/', null],
+  ['/*MODELS*/', 'models.js'],
   ['/*GAME*/',   'game.js'],
 ];
 
@@ -39,7 +48,7 @@ let html = readFileSync(join(SRC, 'shell.html'), 'utf8');
 
 for (const [token, file] of MODULES) {
   if (!html.includes(token)) throw new Error(`shell.html is missing the ${token} placeholder`);
-  const body = file ? readFileSync(join(SRC, file), 'utf8') : threeJs;
+  const body = file ? readFileSync(join(SRC, file), 'utf8') : (token === '/*THREE*/' ? threeJs : assetsJs);
   html = html.replace(token, () => '\n' + body + '\n');
 }
 
@@ -48,4 +57,5 @@ writeFileSync(out, html);
 
 const kb = (html.length / 1024).toFixed(1);
 const tk = (threeJs.length / 1024).toFixed(1);
-console.log(`built index.html  (${kb} KB incl. ${tk} KB of three.js, no external dependencies)`);
+const mk = (assetsJs.length / 1024).toFixed(1);
+console.log(`built index.html  (${kb} KB incl. ${tk} KB of three.js and ${mk} KB of models; no external dependencies)`);

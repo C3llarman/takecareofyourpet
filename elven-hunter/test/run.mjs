@@ -181,8 +181,9 @@ section('Gameplay');
     hurtPlayer(999, 'test');
     return { dead: G.player.dead, logged: TELE.deaths.length > 0 };
   });
-  await page.waitForTimeout(1800);
-  ok('death ends the run', death.dead && (await page.evaluate(() => G.state)) === 'dead');
+  // the death screen follows a 1.5 s timer; software WebGL frames can delay it
+  const ended = await page.waitForFunction(() => G.state === 'dead', null, { timeout: 10000 }).then(() => true, () => false);
+  ok('death ends the run', death.dead && ended);
   ok('death is recorded for diagnostics', death.logged);
 
   ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
@@ -325,6 +326,56 @@ section('Keyboard & mouse (laptop)');
   await page.close();
 }
 
+/* ---------------- animated characters ---------------- */
+section('Characters');
+{
+  const page = await open(browser, LAPTOP);
+  await page.evaluate(() => startRun());
+  await page.waitForTimeout(400);
+  const m = await page.evaluate(() => ({
+    ready: MODELS_READY, models: Object.keys(MODELS).length, clips: Object.keys(CLIPS).length,
+    playerActor: ACTOR_OF.has(G.player),
+    ears: (() => { const a = ACTOR_OF.get(G.player); let n = 0; a && a.root.getObjectByName('head').children.forEach((c) => { if (c.isMesh) n++; }); return n; })(),
+  }));
+  ok('character models load', m.ready && m.models === 5, `${m.models} models, ${m.clips} clips (incl. upper/lower masks)`);
+  ok('the hunter is a skinned model', m.playerActor);
+  ok('an elf has ears', m.ears === 2);
+
+  const layered = await page.evaluate(() => new Promise((res) => {
+    G.ents.length = 0; G.player.cdT = 0; IN.mx = 0; doShoot();
+    const a = ACTOR_OF.get(G.player); let n = 0;
+    const tick = () => {
+      const up = a.acts['1H_Ranged_Shoot@up'];
+      if (up && up.getEffectiveWeight() > 0.3) res({ ok: true, ov: a.ov });
+      else if (++n > 40) res({ ok: false, ov: a.ov });
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }));
+  ok('shooting plays an upper-body animation', layered.ok, layered.ov || 'none');
+
+  const corpse = await page.evaluate(() => new Promise((res) => {
+    G.ents.length = 0;
+    const y = G.player.yaw;
+    spawnGoblin(G.player.x + Math.sin(y) * 2, G.player.z + Math.cos(y) * 2, 'spear');
+    hurtEnemy(G.ents[0], 1e6);
+    const c = G.ents.find((e) => e.kind === 'corpse'), t0 = G.t;
+    let died = false;
+    const wait = () => {
+      const a = ACTOR_OF.get(c); if (a && a.dead) died = true;
+      if (G.ents.indexOf(c) < 0 || G.t - t0 > 4) res({ had: !!c, gone: G.ents.indexOf(c) < 0, died });
+      else requestAnimationFrame(wait);
+    };
+    requestAnimationFrame(wait);
+  }));
+  ok('a slain goblin plays its death, then clears away', corpse.had && corpse.died && corpse.gone);
+
+  const shadows = await page.evaluate(() => ({ on: R3.shadowMap.enabled, sun: SUN.castShadow, world: WORLD.receiveShadow }));
+  ok('real shadows are on', shadows.on && shadows.sun && shadows.world);
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.join(' | '));
+  await page.close();
+}
+
 /* ---------------- rendering budget ---------------- */
 section('Rendering');
 {
@@ -333,7 +384,7 @@ section('Rendering');
   await page.waitForTimeout(600);
   // real GPU draw calls, as counted by three.js for the last rendered frame
   const normal = await page.evaluate(() => ({ draws: R3.info.render.calls, parts: DRAW.length + SHAD.length, jsMs: JSMS }));
-  ok('ordinary scene stays cheap', normal.draws < 40, `${normal.draws} draw calls for ${normal.parts} parts`);
+  ok('ordinary scene stays cheap', normal.draws < 80, `${normal.draws} draw calls (incl. shadow pass) for ${normal.parts} instanced parts`);
   ok('simulation cost is negligible', normal.jsMs < 3, `${normal.jsMs.toFixed(2)} ms/frame`);
 
   await page.evaluate(() => {
@@ -344,7 +395,9 @@ section('Rendering');
   await page.waitForTimeout(500);
   const horde = await page.evaluate(() => ({ draws: R3.info.render.calls, parts: DRAW.length + SHAD.length }));
   ok('level-of-detail caps a horde', horde.parts < 700, `${horde.parts} parts with 46 enemies`);
-  ok('instancing keeps a horde to a few draw calls', horde.draws < 40, `${horde.draws} draw calls`);
+  // nearest 12 humanoids are skinned models (several parts each, drawn twice with
+  // the shadow pass); the rest stay instanced, so the cost is capped, not per-enemy
+  ok('a horde stays within the draw-call budget', horde.draws < 200, `${horde.draws} draw calls`);
   await page.close();
 }
 

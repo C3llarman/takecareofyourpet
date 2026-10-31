@@ -82,7 +82,8 @@ var TELE={
       fps:{ median:med, worst5pct:low, worstFrameMs:Math.round(this.worstFrame) },
       taps:{ total:this.taps, onButton:this.hits, missedOrCamera:this.miss, perButton:this.btn,
              stickGrabs:this.stickGrabs, missedAt:this.missPts },
-      render:{ quality:Math.round(QUAL*100)/100, hudScale:HDPR, safeBottom:SAFEB },
+      render:{ quality:Math.round(QUAL*100)/100, hudScale:HDPR, safeBottom:SAFEB,
+               worldShadows:!(WORLD&&!WORLD.castShadow), models:MODELS_READY, actors:ACTOR_OF.size },
       combat:{ damageTakenBy:this.dmg, deaths:this.deaths, kills:G.killed, freed:G.freed,
                level:G.player?G.player.level:0 },
       build:{ race:G.build.race, cls:G.build.cls, skills:G.build.skills },
@@ -181,6 +182,7 @@ function buildWorld(){
   buildHollow(m,86,-56);
   buildStones(m,-88,-78);
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
+  WORLD.castShadow=true; WORLD.receiveShadow=true;
   SCENE.add(WORLD);
   WORLDTRIS=m.count()/3;
 }
@@ -372,7 +374,8 @@ function aimTarget(p,maxD){
 function doShoot(){
   var p=G.player, S=G.S;
   if(p.cdT>0||p.dead) return;
-  p.cdT=S.cd; p.atkT=p.atkDur=0.34; p.atkKind=(S.proj==='arrow')?'bow':'melee';
+  p.cdT=S.cd; p.atkT=p.atkDur=0.34;
+  p.atkKind=(S.proj==='arrow')?'bow':(S.proj==='bolt'?'cast':'throw');
   var n=1+S.extra, sp=(S.proj==='bolt')?30:(S.proj==='axe'?26:38);
   var tgt=aimTarget(p,34); G.lock=tgt||null;
   var sy=p.y+1.35*p.scale;
@@ -402,6 +405,9 @@ function hurtEnemy(e,d){
     if(Math.random()<0.3){ G.player.coins+=3+((Math.random()*7)|0); }
     if(Math.random()<0.16){ G.player.potions++; msg('+potion','#ff9d9d',e.x,e.y+2,e.z); }
     var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
+    // leave a body that plays its death and sinks away
+    G.ents.push({kind:'corpse',of:e.kind,gk:e.gk,big:e.big,x:e.x,y:e.y,z:e.z,yaw:e.yaw,scale:e.scale,
+      look:e.look,t:0,deadT:0.001,speed:0,walkPhase:e.walkPhase});
   }
 }
 function breakCocoon(c,d){
@@ -590,6 +596,12 @@ function updateEnts(dt){
     var e=G.ents[i];
     var pd=Math.hypot(e.x-p.x,e.z-p.z);
     if(e.hurtT>0) e.hurtT-=dt;
+    if(e.kind==='corpse'){
+      e.t+=dt; e.deadT=e.t;
+      if(e.t>1.6) e.y-=dt*0.9;                 // sink into the leaf litter
+      if(e.t>2.8) G.ents.splice(i,1);
+      continue;
+    }
 
     if(e.kind==='shot'){
       e.spin+=dt*18; e.life-=dt;
@@ -783,7 +795,7 @@ function addShadow(e){
   var m=mat(); m4trs(m,e.x,H(e.x,e.z)+0.06,e.z,0,e.yaw||0,0,sc*f,1,sc*f);
   SHAD.push(m);
 }
-var SKYCOL=[0.47,0.58,0.56];
+var SKYCOL=[0.47,0.58,0.56], SUN=null, SUNDIR=[0,1,0], SHADOWR=34, FRAMEDT=0.016;
 /* scene, camera and lights, matched to the original hand-written shader:
    hemisphere ambient from (0.20,0.24,0.20) below to (0.42,0.48,0.40) above, a warm
    sun at 0.72, linear fog from 38 to 133 units. three.js divides diffuse light by
@@ -798,7 +810,16 @@ function initScene(){
   SCENE.add(hemi);
   var sl=0.42, sx=Math.cos(sl)*0.55, sy=0.78, sz=Math.sin(sl)*0.3, sL=Math.hypot(sx,sy,sz);
   var sun=new THREE.DirectionalLight(new THREE.Color(1.0,0.95,0.80),0.72*sL*Math.PI);
-  sun.position.set(sx/sL*100,sy/sL*100,sz/sL*100); SCENE.add(sun);
+  SUNDIR=[sx/sL,sy/sL,sz/sL];
+  sun.position.set(SUNDIR[0]*100,SUNDIR[1]*100,SUNDIR[2]*100); SCENE.add(sun); SCENE.add(sun.target);
+  // real shadows: trees, rocks and characters all cast; a box around the hunter
+  R3.shadowMap.enabled=true; R3.shadowMap.type=THREE.PCFShadowMap;
+  sun.castShadow=true;
+  var sm=DESKTOP?2048:1024; sun.shadow.mapSize.set(sm,sm);
+  var sc=sun.shadow.camera; sc.left=-SHADOWR; sc.right=SHADOWR; sc.top=SHADOWR; sc.bottom=-SHADOWR;
+  sc.near=10; sc.far=180; sc.updateProjectionMatrix();
+  sun.shadow.bias=-0.0006; sun.shadow.normalBias=0.05;
+  SUN=sun;
   WORLDMAT=worldMaterial();
   CHARMAT=new THREE.MeshLambertMaterial({vertexColors:true});
   SHADMAT=new THREE.MeshBasicMaterial({color:new THREE.Color(0.03,0.04,0.025),transparent:true,opacity:0.30,depthWrite:false});
@@ -807,6 +828,15 @@ function initScene(){
   // create every batch now, so no shader is compiled for the first time mid-fight
   for(var k in PARTS) if(k!=='sky'&&k!=='disc') partBatch(k);
   shadowBatch();
+}
+/* build one actor of each kind up front so their shaders compile at load */
+function warmActors(){
+  if(!MODELS_READY) return;
+  var specs=[{model:'barbarian',weapons:[]},{model:'knight',weapons:[]},{model:'mage',weapons:[]},
+    {model:'rogue',weapons:[],ears:true},{model:'rogue_hooded',weapons:[],beard:true}];
+  for(var i=0;i<specs.length;i++) if(MODELS[specs[i].model]){
+    var a=makeActor(specs[i]); a.spec='warm'; a.group.visible=true; a.group.position.set(0,-50,0);
+  }
 }
 function shadowBatch(){
   var sb=BATCH.shadow;
@@ -822,7 +852,7 @@ function setRes(){
 }
 function partBatch(k){
   var b=BATCH[k];
-  if(!b){ b=batch(k,PARTS[k].geom,CHARMAT,true); SCENE.add(b.mesh); }
+  if(!b){ b=batch(k,PARTS[k].geom,CHARMAT,true); b.mesh.castShadow=true; SCENE.add(b.mesh); }
   return b;
 }
 function draw(){
@@ -842,19 +872,26 @@ function draw(){
   batchesBegin();
   // contact shadows
   SHAD.length=0;
-  addShadow(p);
+  // the sun's shadow map follows the hunter; contact discs only cover what lies
+  // beyond its reach
+  SUN.position.set(p.x+SUNDIR[0]*80,p.y+SUNDIR[1]*80,p.z+SUNDIR[2]*80);
+  SUN.target.position.set(p.x,p.y,p.z); SUN.target.updateMatrixWorld();
   for(var si=0;si<G.ents.length;si++){ var se=G.ents[si];
     if(se.kind==='shot'||se.kind==='eshot'||se.kind==='fairy') continue;
-    if(Math.hypot(se.x-c.x,se.z-c.z)>50) continue;
+    var sd=Math.hypot(se.x-c.x,se.z-c.z);
+    if(sd>50||Math.hypot(se.x-p.x,se.z-p.z)<SHADOWR-4) continue;
     addShadow(se); }
   var sb=shadowBatch();
   for(var sk=0;sk<SHAD.length;sk++) batchAdd(sb,SHAD[sk],null);
-  // entities: rigs are still built part by part, then poured into instanced batches
+  // nearby humanoids get animated models; everything else is poured into
+  // instanced batches from the primitive rigs
+  var actors=assignActors(FRAMEDT);
   DRAW.length=0;
-  pushEnt(p);
+  if(!actors.has(p)) pushEnt(p);
   VIS.length=0;
   for(var i=0;i<G.ents.length;i++){
     var e=G.ents[i];
+    if(actors.has(e)) continue;
     var ed=Math.hypot(e.x-c.x,e.z-c.z);
     if(ed>62) continue;
     VIS.push([ed,e]);
@@ -874,7 +911,7 @@ function mat(){ if(MPI>=MPOOL.length) MPOOL.push(m4()); return MPOOL[MPI++]; }
 function pushEnt(e){
   RIG.length=0;
   var root=mat();
-  if(e.kind==='spider') spiderRig(RIG,e,G.t);
+  if(e.kind==='spider'||(e.kind==='corpse'&&e.of==='spider')) spiderRig(RIG,e,G.t);
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
   else if(e.kind==='shot'||e.kind==='eshot'){
     var m=mat();
@@ -896,8 +933,11 @@ function pushEnt(e){
   }
   else humanoidRig(RIG,e,G.t);
   m4trs(root,e.x,e.y,e.z,0,e.yaw||0,0,1,1,1);
-  // death tilt
-  if(e.deadT!==undefined&&e.deadT>0){
+  // death tilt (a dead spider rolls onto its back)
+  if(e.kind==='corpse'&&e.of==='spider'){
+    var tf=Math.min(1,e.t/0.35), sc0=e.scale||1;
+    m4trs(root,e.x,e.y+tf*1.15*sc0,e.z,0,e.yaw||0,tf*3.14,1,1,1);
+  } else if(e.deadT!==undefined&&e.deadT>0){
     var t2=Math.min(1,e.deadT/0.6);
     m4trs(root,e.x,e.y+t2*0.1,e.z,t2*1.45,e.yaw||0,0,1,1,1);
   }
@@ -1317,13 +1357,16 @@ function autoQuality(dt){
   var a=0; for(var i=0;i<qSamp.length;i++) a+=qSamp[i];
   a/=qSamp.length; qSamp.length=0; qT=0;
   var old=QUAL;
+  // last resort on a struggling device: the world stops casting shadows (it is the
+  // big cost of the shadow pass); characters keep theirs
+  if(a<32&&QUAL<=0.62&&WORLD&&WORLD.castShadow){ WORLD.castShadow=false; TELE.lowShadows=1; }
   if(a<42&&QUAL>0.62) QUAL=Math.max(0.62,QUAL-0.12);
   else if(a>57&&QUAL<1) QUAL=Math.min(1,QUAL+0.06);
   if(QUAL!==old) setRes();
 }
 var last=0, acc=0, JSMS=0, DRAWMS=0;
 function frame(ts){
-  var dt=Math.min(0.05,(ts-last)/1000||0.016); last=ts;
+  var dt=Math.min(0.05,(ts-last)/1000||0.016); last=ts; FRAMEDT=G.state==='play'?dt:0;
   MPI=0;
   var t0=performance.now();
   if(G.state==='play') update(dt);
@@ -1339,13 +1382,18 @@ function boot(){
   initParts();
   initScene();
   buildWorld();
-  R3.compile(SCENE,CAM3);          // warm every shader up front
   try{ G.best=+localStorage.getItem('eh3_best')||0; }catch(e){}
   recalc();
-  var bt=document.getElementById('boot'); if(bt) bt.style.display='none';
-  titleScreen();
-  window.__ready=true;
-  requestAnimationFrame(function(t){last=t;requestAnimationFrame(frame);});
+  var bt=document.getElementById('boot'); if(bt) bt.textContent='waking the hunters…';
+  loadModels(function(){
+    warmActors();
+    R3.compile(SCENE,CAM3);        // warm every shader up front
+    for(var wi=ACTORS.length-1;wi>=0;wi--) if(ACTORS[wi].spec==='warm'){ SCENE.remove(ACTORS[wi].group); ACTORS.splice(wi,1); }
+    if(bt) bt.style.display='none';
+    titleScreen();
+    window.__ready=true;
+    requestAnimationFrame(function(t){last=t;requestAnimationFrame(frame);});
+  });
 }
 /* events */
 addEventListener('resize',resize);
