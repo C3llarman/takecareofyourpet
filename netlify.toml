@@ -1,0 +1,18 @@
+# Netlify settings for Take Care of Your Pet.
+# The game is a single static page, so there is no build step.
+[build]
+  publish = "."
+  command = ""
+
+# Always fetch the newest version of the game page.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
