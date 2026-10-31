@@ -1076,6 +1076,7 @@ function titleScreen(){
     '<p class="sub">Free them and they fight beside you.</p>'+
     '<button class="btn" id="make">Make your hunter</button>'+
     '<button class="btn alt" id="diag2">Copy diagnostic report</button>'+
+    '<a class="btn alt" id="arcade" href="../">&larr; Back to Elk Leaf Arcade</a>'+
     '<textarea id="dgout" style="display:none;width:100%;height:120px;margin-top:8px;font-size:11px;'+
     'background:#0d0a04;color:#cdbb8c;border:1px solid #3b2f16;border-radius:8px;padding:6px"></textarea>'+
     (G.best?'<p class="hint">Best: level '+G.best+'</p>':'')+

@@ -1,5 +1,5 @@
 # Netlify settings for Elk Leaf Arcade.
-# The arcade menu is index.html; each game lives in its own folder (pet/ is Take Care of Your Pet).
+# The arcade menu is index.html; each game lives in its own folder (pet/ is Take Care of Your Pet, elven-hunter/ is Elven Hunter).
 # Everything is static, so there is no build step.
 [build]
   publish = "."
@@ -18,6 +18,11 @@
 
 [[headers]]
   for = "/pet/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/elven-hunter/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
