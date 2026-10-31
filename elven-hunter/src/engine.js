@@ -155,71 +155,88 @@ function blobMesh(col,jitter,level){
   return m;
 }
 
-/* ---------- GL wrapper ---------- */
-function GPUMesh(gl,mb){
-  this.n=mb.count();
-  this.pb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.pb); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(mb.p),gl.STATIC_DRAW);
-  this.nb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.nb); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(mb.n),gl.STATIC_DRAW);
-  this.cb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.cb); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(mb.c),gl.STATIC_DRAW);
-  this.fb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.fb); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(mb.f),gl.STATIC_DRAW);
+/* ---------- three.js bridge ----------
+   Meshes are still authored with MB (above) and then handed to three.js as
+   BufferGeometry. Colours are authored as display values, so colour management
+   is off and output is linear: what you write is what you see. */
+THREE.ColorManagement.enabled=false;
+function toGeom(mb){
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(mb.p,3));
+  g.setAttribute('normal',new THREE.Float32BufferAttribute(mb.n,3));
+  g.setAttribute('color',new THREE.Float32BufferAttribute(mb.c,3));
+  g.setAttribute('flag',new THREE.Float32BufferAttribute(mb.f,1));
+  return g;
 }
 
-var VS=[
-'attribute vec3 aP; attribute vec3 aN; attribute vec3 aC; attribute float aF;',
-'uniform mat4 uProj,uView,uModel; uniform float uTime; uniform vec3 uTint;',
-'varying vec3 vN; varying vec3 vC; varying float vFog; varying vec3 vW; varying float vProp;',
-'void main(){',
-'  vec3 p=aP;',
-'  if(aF>0.5&&aF<1.5){ p.y += sin(p.x*0.35+uTime*1.3)*0.12 + sin(p.z*0.27-uTime*0.9)*0.12; }',
-'  vec4 wp=uModel*vec4(p,1.0);',
-'  vec4 vp=uView*wp;',
-'  gl_Position=uProj*vp;',
-'  vN=normalize((uModel*vec4(aN,0.0)).xyz);',
-'  vC=aC*uTint;',
-'  vW=wp.xyz;',
-'  vProp=aF>1.5?1.0:0.0;',
-'  vFog=clamp((-vp.z-38.0)/95.0,0.0,1.0);',
-'}'].join('\n');
+/* uniforms shared by the world material: time for the water ripple, and the
+   camera -> hunter segment used to cut away props that would hide her */
+var WORLDU={uTime:{value:0},uCut:{value:1},uCam:{value:new THREE.Vector3()},uFocus:{value:new THREE.Vector3()}};
+function worldMaterial(){
+  var m=new THREE.MeshLambertMaterial({vertexColors:true});
+  m.onBeforeCompile=function(sh){
+    for(var k in WORLDU) sh.uniforms[k]=WORLDU[k];
+    sh.vertexShader=sh.vertexShader
+      .replace('#include <common>',
+        '#include <common>\nattribute float flag; uniform float uTime; varying vec3 vWorld; varying float vProp;')
+      .replace('#include <begin_vertex>',
+        '#include <begin_vertex>\n'+
+        // flag 1 = water surface: a gentle swell
+        'if(flag>0.5&&flag<1.5){ transformed.y += sin(transformed.x*0.35+uTime*1.3)*0.12 + sin(transformed.z*0.27-uTime*0.9)*0.12; }\n'+
+        'vProp = flag>1.5 ? 1.0 : 0.0;\n'+
+        'vWorld = (modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.fragmentShader=sh.fragmentShader
+      .replace('#include <common>',
+        '#include <common>\nuniform float uCut; uniform vec3 uCam; uniform vec3 uFocus; varying vec3 vWorld; varying float vProp;')
+      .replace('#include <clipping_planes_fragment>',
+        // flag 2 = prop: dithered hole where it sits between the camera and the hunter
+        'if(uCut>0.5&&vProp>0.5){\n'+
+        '  vec3 ab=uFocus-uCam; float t=clamp(dot(vWorld-uCam,ab)/max(dot(ab,ab),0.001),0.0,1.0);\n'+
+        '  if(t<0.96){\n'+
+        '    float k=length(vWorld-(uCam+ab*t))/mix(1.1,1.9,t);\n'+
+        '    if(k<0.65) discard;\n'+
+        '    if(k<1.0&&mod(floor(gl_FragCoord.x)+floor(gl_FragCoord.y),2.0)<1.0) discard;\n'+
+        '  }\n'+
+        '}\n#include <clipping_planes_fragment>');
+  };
+  return m;
+}
 
-/* Props (trees, rocks, buildings) that sit between the camera and the hunter are
-   cut away with a dithered hole, so the forest never hides who you are playing. */
-var FS=[
-'#ifdef GL_FRAGMENT_PRECISION_HIGH',
-'precision highp float;',
-'#else',
-'precision mediump float;',
-'#endif',
-'varying vec3 vN; varying vec3 vC; varying float vFog; varying vec3 vW; varying float vProp;',
-'uniform vec3 uFog; uniform vec3 uSun; uniform float uAlpha; uniform float uUnlit;',
-'uniform float uCut; uniform vec3 uCam; uniform vec3 uFocus;',
-'void main(){',
-'  if(uCut>0.5&&vProp>0.5){',
-'    vec3 ab=uFocus-uCam; float t=clamp(dot(vW-uCam,ab)/max(dot(ab,ab),0.001),0.0,1.0);',
-'    if(t<0.96){',
-'      float k=length(vW-(uCam+ab*t))/mix(1.1,1.9,t);',
-'      if(k<0.65) discard;',
-'      if(k<1.0&&mod(floor(gl_FragCoord.x)+floor(gl_FragCoord.y),2.0)<1.0) discard;',
-'    }',
-'  }',
-'  if(uUnlit>0.5){ gl_FragColor=vec4(vC,1.0); return; }',
-'  vec3 n=normalize(vN);',
-'  float d=max(dot(n,uSun),0.0);',
-'  float sky=0.5+0.5*n.y;',
-'  vec3 amb=mix(vec3(0.20,0.24,0.20),vec3(0.42,0.48,0.40),sky);',
-'  vec3 col=vC*(amb+vec3(1.0,0.95,0.80)*d*0.72);',
-'  col+=vec3(0.05,0.07,0.04)*max(0.0,-n.y);',
-'  gl_FragColor=vec4(mix(col,uFog,vFog),uAlpha);',
-'}'].join('\n');
-
-function makeProgram(gl){
-  function sh(t,src){var s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);
-    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s;}
-  var p=gl.createProgram();
-  gl.attachShader(p,sh(gl.VERTEX_SHADER,VS));
-  gl.attachShader(p,sh(gl.FRAGMENT_SHADER,FS));
-  gl.linkProgram(p);
-  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-  return p;
+/* Instanced batches: every character part of one shape (all the limbs, all the
+   heads...) is drawn in a single call, whatever the size of the horde. */
+var BATCH={};
+function batch(key,geom,mat,colored){
+  var b=BATCH[key];
+  if(!b){ b=BATCH[key]={geom:geom,mat:mat,colored:colored,cap:0,n:0,mesh:null}; growBatch(b,64); }
+  return b;
+}
+function growBatch(b,cap){
+  var old=b.mesh, m=new THREE.InstancedMesh(b.geom,b.mat,cap);
+  m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  if(b.colored){ m.instanceColor=new THREE.InstancedBufferAttribute(new Float32Array(cap*3),3); m.instanceColor.setUsage(THREE.DynamicDrawUsage); }
+  m.frustumCulled=false; m.count=0;
+  if(old){
+    m.instanceMatrix.array.set(old.instanceMatrix.array);
+    if(b.colored) m.instanceColor.array.set(old.instanceColor.array);
+    m.renderOrder=old.renderOrder;
+    if(old.parent){ old.parent.add(m); old.parent.remove(old); }
+    old.dispose();
+  }
+  b.mesh=m; b.cap=cap;
+}
+function batchAdd(b,m16,col){
+  if(b.n>=b.cap) growBatch(b,b.cap*2);
+  b.mesh.instanceMatrix.array.set(m16,b.n*16);
+  if(b.colored){ var c=b.mesh.instanceColor.array, i=b.n*3; c[i]=col[0]; c[i+1]=col[1]; c[i+2]=col[2]; }
+  b.n++;
+}
+function batchesBegin(){ for(var k in BATCH) BATCH[k].n=0; }
+function batchesEnd(){
+  for(var k in BATCH){ var b=BATCH[k], m=b.mesh;
+    m.count=b.n; m.visible=b.n>0;
+    if(b.n){ m.instanceMatrix.clearUpdateRanges(); m.instanceMatrix.addUpdateRange(0,b.n*16); m.instanceMatrix.needsUpdate=true;
+      if(b.colored){ m.instanceColor.clearUpdateRanges(); m.instanceColor.addUpdateRange(0,b.n*3); m.instanceColor.needsUpdate=true; } }
+  }
 }
 
 function discMesh(seg){

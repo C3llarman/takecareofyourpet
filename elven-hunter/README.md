@@ -2,10 +2,11 @@
 
 An open-world, third-person forest game that runs in **one self-contained HTML file**.
 
-No game engine, no framework, no CDN, no network calls at runtime. The renderer, the
-terrain generator, the character rigs and the gameplay are all plain JavaScript and raw
-WebGL, bundled into a single ~87 KB file. Open it from a USB stick on a plane and it
-plays.
+No CDN and no network calls at runtime. Rendering is done by
+[three.js](https://threejs.org) (MIT); the terrain generator, the character rigs and the
+gameplay are plain JavaScript. The build bundles the slice of three.js the game uses
+together with the game into a single ~630 KB file. Open it from a USB stick on a plane
+and it plays.
 
 The wood is 300 × 300 units of procedurally generated hills, a winding river and about
 3,600 scattered trees, rocks and ferns, with four landmarks to find. Spiders hunt the
@@ -56,22 +57,29 @@ mode, touch the screen and it goes back.
 
 ```
 src/
-  engine.js   4×4 matrix math, flat-shaded mesh builders (box, cone, blob, limb,
-              disc, sky dome), the GLSL shader pair, GPU buffer wrapper
+  three-entry.js  the three.js classes the game uses (bundled by esbuild)
+  engine.js   4×4 matrix math, smooth mesh builders (box, cone, tube, blob, disc,
+              sky dome), the bridge to three.js: geometry, the world material
+              (water ripple + see-through cutout), instanced batches
   world.js    value-noise heightmap, terrain and water mesh, prop scattering,
               the four hand-placed landmarks
   chars.js    procedural character rigs — humanoid, spider, cocoon — assembled
               from primitives each frame and animated by walk phase
   game.js     state, input, camera, combat, AI, allies, skills, HUD, telemetry
 tools/
-  build.mjs   inlines the four modules into index.html
+  build.mjs   bundles three.js with esbuild, inlines it and the four modules
+              into index.html
   serve.mjs   dependency-free static server
 test/
   run.mjs     headless suite driving the real game in Chromium
 ```
 
-`npm run build` regenerates `index.html` from `src/`. **Edit the files in `src/`, never
-`index.html`** — it is a build artifact and gets overwritten.
+`npm install` then `npm run build` regenerates `index.html` from `src/`. **Edit the files
+in `src/`, never `index.html`** — it is a build artifact and gets overwritten. It is
+committed, because the site is served as static files with no build step.
+
+To use another three.js class, add its name to `src/three-entry.js`; only listed classes
+are bundled.
 
 ### Rendering notes
 
@@ -81,7 +89,13 @@ test/
   instead of breaking into facets.
 - **See-through foliage.** Trees, rocks and buildings between the camera and the hunter
   are cut away in the fragment shader with a dithered hole, so the forest never hides
-  you. Props are flagged per vertex (`aF = 2`) so the ground and characters are never cut.
+  you. Props are flagged per vertex (`flag = 2`, water is `1`) so the ground and
+  characters are never cut. This is injected into three.js's Lambert material with
+  `onBeforeCompile`, so it keeps three's lighting and fog.
+- **Lighting matched to the original renderer.** Colour management is off and output is
+  linear, so palette values display as written. A hemisphere light and a warm sun
+  reproduce the old shader's ambient and sun terms (intensities are scaled by π because
+  three.js divides diffuse light by π).
 - **Solid world.** Trunks, larger rocks, stumps and the landmarks register circle or
   rotated-box colliders in a coarse grid. The hunter, creatures and followers are pushed
   out of them, and out of each other, so crowds spread around you instead of stacking.
@@ -91,10 +105,12 @@ test/
 
 - Everything static — terrain, water, every tree and rock — is baked into **one vertex
   buffer and drawn in a single call** (~132k triangles).
-- Characters are assembled per frame from a handful of shared primitive meshes, each
-  drawn with its own model matrix. Beyond 20 units, or past the seventh-nearest
-  character, a reduced rig is used; a 46-enemy horde costs about 455 draw calls instead
-  of 1,100.
+- Characters are assembled per frame from a handful of shared primitive meshes and
+  poured into **instanced batches**: one draw call per part shape, whatever the crowd.
+  A 46-enemy horde costs 12 draw calls (it was 455 before three.js). Beyond 20 units,
+  or past the seventh-nearest character, a reduced rig is still used to save vertices.
+- Every batch is created and every shader compiled during the loading screen, so the
+  first goblin you meet does not cause a stall.
 - **Adaptive resolution.** The game measures its own frame rate and scales the render
   target between 62% and 100% to hold ~60 fps, then eases back up. The HUD canvas draws
   at a lower scale than the 3D view, because Canvas2D compositing is expensive on iOS.
@@ -116,11 +132,11 @@ looking perfectly fine in a screenshot.
 ## Tests
 
 ```bash
-npm install         # playwright, the only dev dependency
+npm install         # three, esbuild, playwright (dev only; nothing ships but index.html)
 npm test
 ```
 
-43 assertions run the actual game in headless Chromium with software WebGL and check
+44 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames
@@ -138,9 +154,10 @@ software WebGL frame rates vary a lot between machines.
 
 ## Known limitations
 
-- **Characters are built from primitives.** They are rounded now, but the honest fix is
-  real low-poly models (`.glb`) with skeletal animation, which is the main reason to
-  consider moving the renderer onto an engine such as three.js.
+- **Characters are built from primitives.** They are rounded now; the next step is real
+  low-poly models (`.glb`) with skeletal animation, which three.js can now load.
+- **Needs WebGL 2** (three.js dropped WebGL 1). Every current browser has it, including
+  Safari on iOS 15 and later.
 - **No haptics on iOS.** Safari does not implement the Vibration API. Android gets the
   full set.
 - Save data is limited to a best-depth record in `localStorage`.

@@ -331,8 +331,9 @@ section('Rendering');
   const page = await open(browser, LAPTOP);
   await page.evaluate(() => startRun());
   await page.waitForTimeout(600);
-  const normal = await page.evaluate(() => ({ draws: DRAW.length + SHAD.length + 1, jsMs: JSMS }));
-  ok('ordinary scene stays cheap', normal.draws < 150, `${normal.draws} draw calls`);
+  // real GPU draw calls, as counted by three.js for the last rendered frame
+  const normal = await page.evaluate(() => ({ draws: R3.info.render.calls, parts: DRAW.length + SHAD.length, jsMs: JSMS }));
+  ok('ordinary scene stays cheap', normal.draws < 40, `${normal.draws} draw calls for ${normal.parts} parts`);
   ok('simulation cost is negligible', normal.jsMs < 3, `${normal.jsMs.toFixed(2)} ms/frame`);
 
   await page.evaluate(() => {
@@ -341,8 +342,9 @@ section('Rendering');
     for (let i = 0; i < 16; i++) { const a = i / 16 * 6.28, d = 6 + i % 14; spawnGoblin(G.player.x + Math.cos(a) * d, G.player.z + Math.sin(a) * d, 'spear'); }
   });
   await page.waitForTimeout(500);
-  const horde = await page.evaluate(() => DRAW.length + SHAD.length + 1);
-  ok('level-of-detail caps a horde', horde < 700, `${horde} draw calls with 46 enemies`);
+  const horde = await page.evaluate(() => ({ draws: R3.info.render.calls, parts: DRAW.length + SHAD.length }));
+  ok('level-of-detail caps a horde', horde.parts < 700, `${horde.parts} parts with 46 enemies`);
+  ok('instancing keeps a horde to a few draw calls', horde.draws < 40, `${horde.draws} draw calls`);
   await page.close();
 }
 

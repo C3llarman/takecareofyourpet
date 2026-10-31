@@ -1,6 +1,6 @@
 var PARTS={};
-function initParts(gl){
-  function reg(k,mb){ PARTS[k]=new GPUMesh(gl,mb); PARTS[k].mb=mb; }
+function initParts(){
+  function reg(k,mb){ PARTS[k]={geom:toGeom(mb),mb:mb,n:mb.count()}; }
   reg('box',boxMesh([1,1,1]));
   // limbs and torsos are rounded tubes, not boxes
   reg('limb',tubeMesh([1,1,1],0.8,0,-1));

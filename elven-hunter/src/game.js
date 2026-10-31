@@ -1,9 +1,12 @@
 /* ================= Elven Hunter 3D ================= */
 var cvs=document.getElementById('gl'), hud=document.getElementById('hud'), hx=hud.getContext('2d');
 var ui=document.getElementById('ui');
-var gl=cvs.getContext('webgl',{antialias:true,alpha:false,powerPreference:'high-performance'});
-if(!gl){ document.body.innerHTML='<div style="color:#e8c26a;font:16px Georgia,serif;padding:30px">This device cannot run WebGL.</div>'; }
-var W=0,H2=0,DPR=1,prog,uni={},att={},WORLD=null;
+/* three.js does the drawing; the game, HUD and input are unchanged */
+var R3=null;
+try{ R3=new THREE.WebGLRenderer({canvas:cvs,antialias:true,alpha:false,powerPreference:'high-performance'}); }catch(e){ R3=null; }
+if(!R3){ document.body.innerHTML='<div style="color:#e8c26a;font:16px Georgia,serif;padding:30px">This device cannot run WebGL 2.</div>'; }
+var SCENE=null, CAM3=null, SKY=null, WORLDMAT=null, CHARMAT=null, SHADMAT=null;
+var W=0,H2=0,DPR=1,WORLD=null;
 var proj=m4(), view=m4(), model=m4(), tmp=m4();
 
 /* ---------- data ---------- */
@@ -177,7 +180,8 @@ function buildWorld(){
   buildCamp(m,-72,48);
   buildHollow(m,86,-56);
   buildStones(m,-88,-78);
-  WORLD=new GPUMesh(gl,m);
+  WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
+  SCENE.add(WORLD);
   WORLDTRIS=m.count()/3;
 }
 var WORLDTRIS=0;
@@ -779,39 +783,63 @@ function addShadow(e){
   var m=mat(); m4trs(m,e.x,H(e.x,e.z)+0.06,e.z,0,e.yaw||0,0,sc*f,1,sc*f);
   SHAD.push(m);
 }
+var SKYCOL=[0.47,0.58,0.56];
+/* scene, camera and lights, matched to the original hand-written shader:
+   hemisphere ambient from (0.20,0.24,0.20) below to (0.42,0.48,0.40) above, a warm
+   sun at 0.72, linear fog from 38 to 133 units. three.js divides diffuse light by
+   pi, so intensities are scaled by pi to land on the same brightness. */
+function initScene(){
+  R3.outputColorSpace=THREE.LinearSRGBColorSpace; R3.toneMapping=THREE.NoToneMapping;
+  R3.setClearColor(new THREE.Color(SKYCOL[0],SKYCOL[1],SKYCOL[2]),1);
+  SCENE=new THREE.Scene();
+  SCENE.fog=new THREE.Fog(new THREE.Color(SKYCOL[0],SKYCOL[1],SKYCOL[2]),38,133);
+  CAM3=new THREE.PerspectiveCamera(59,1,0.35,260);
+  var hemi=new THREE.HemisphereLight(new THREE.Color(0.42,0.48,0.40),new THREE.Color(0.20,0.24,0.20),Math.PI);
+  SCENE.add(hemi);
+  var sl=0.42, sx=Math.cos(sl)*0.55, sy=0.78, sz=Math.sin(sl)*0.3, sL=Math.hypot(sx,sy,sz);
+  var sun=new THREE.DirectionalLight(new THREE.Color(1.0,0.95,0.80),0.72*sL*Math.PI);
+  sun.position.set(sx/sL*100,sy/sL*100,sz/sL*100); SCENE.add(sun);
+  WORLDMAT=worldMaterial();
+  CHARMAT=new THREE.MeshLambertMaterial({vertexColors:true});
+  SHADMAT=new THREE.MeshBasicMaterial({color:new THREE.Color(0.03,0.04,0.025),transparent:true,opacity:0.30,depthWrite:false});
+  SKY=new THREE.Mesh(PARTS.sky.geom,new THREE.MeshBasicMaterial({vertexColors:true,fog:false,depthWrite:false,side:THREE.DoubleSide}));
+  SKY.scale.set(240,170,240); SKY.renderOrder=-1; SKY.frustumCulled=false; SCENE.add(SKY);
+  // create every batch now, so no shader is compiled for the first time mid-fight
+  for(var k in PARTS) if(k!=='sky'&&k!=='disc') partBatch(k);
+  shadowBatch();
+}
+function shadowBatch(){
+  var sb=BATCH.shadow;
+  if(!sb){ sb=batch('shadow',PARTS.disc.geom,SHADMAT,false); sb.mesh.renderOrder=1; SCENE.add(sb.mesh); }
+  return sb;
+}
+var RESW=0, RESH=0;
+function setRes(){
+  if(!R3) return;
+  var w=Math.max(1,Math.round(W*DPR*QUAL)), h=Math.max(1,Math.round(H2*DPR*QUAL));
+  if(w===RESW&&h===RESH) return;
+  RESW=w; RESH=h; R3.setPixelRatio(1); R3.setSize(w,h,false);
+}
+function partBatch(k){
+  var b=BATCH[k];
+  if(!b){ b=batch(k,PARTS[k].geom,CHARMAT,true); SCENE.add(b.mesh); }
+  return b;
+}
 function draw(){
-  gl.viewport(0,0,cvs.width,cvs.height);
-  var sky=[0.47,0.58,0.56];
-  gl.clearColor(sky[0],sky[1],sky[2],1);
-  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-  if(!G.player) return;
+  setRes();
+  if(!G.player){ R3.clear(); return; }
   var p=G.player, c=G.cam;
-  m4persp(proj,(W/H2<1)?1.22:1.03,W/H2,0.35,260);
+  // the HUD projects through these, so keep them alongside the three.js camera
+  var fov=(W/H2<1)?1.22:1.03;
+  m4persp(proj,fov,W/H2,0.35,260);
   m4look(view,c.x,c.y,c.z,p.x,p.y+1.5,p.z);
-  gl.useProgram(prog);
-  gl.uniformMatrix4fv(uni.proj,false,proj);
-  gl.uniformMatrix4fv(uni.view,false,view);
-  gl.uniform1f(uni.time,G.t);
-  gl.uniform3f(uni.fog,sky[0],sky[1],sky[2]);
-  var sl=0.42;
-  gl.uniform3f(uni.sun,Math.cos(sl)*0.55,0.78,Math.sin(sl)*0.3);
-  gl.uniform1f(uni.alpha,1);
-  // sky dome, drawn around the camera before anything else
-  gl.uniform1f(uni.unlit,1); gl.depthMask(false); gl.disable(gl.CULL_FACE);
-  m4trs(model,c.x,c.y,c.z,0,0,0,240,170,240);
-  gl.uniformMatrix4fv(uni.model,false,model);
-  gl.uniform3f(uni.tint,1,1,1);
-  bindMesh(PARTS.sky); gl.drawArrays(gl.TRIANGLES,0,PARTS.sky.n);
-  gl.depthMask(true); gl.enable(gl.CULL_FACE); gl.uniform1f(uni.unlit,0);
-  // world
-  m4id(model);
-  gl.uniformMatrix4fv(uni.model,false,model);
-  gl.uniform3f(uni.tint,1,1,1);
-  gl.uniform1f(uni.cut,1);
-  gl.uniform3f(uni.cam,c.x,c.y,c.z);
-  gl.uniform3f(uni.focus,p.x,p.y+1.1*(p.scale||1),p.z);
-  bindMesh(WORLD); gl.drawArrays(gl.TRIANGLES,0,WORLD.n);
-  gl.uniform1f(uni.cut,0);
+  CAM3.fov=fov*180/Math.PI; CAM3.aspect=W/H2; CAM3.updateProjectionMatrix();
+  CAM3.position.set(c.x,c.y,c.z); CAM3.lookAt(p.x,p.y+1.5,p.z);
+  SKY.position.set(c.x,c.y,c.z);
+  WORLDU.uTime.value=G.t;
+  WORLDU.uCam.value.set(c.x,c.y,c.z);
+  WORLDU.uFocus.value.set(p.x,p.y+1.1*(p.scale||1),p.z);
+  batchesBegin();
   // contact shadows
   SHAD.length=0;
   addShadow(p);
@@ -819,14 +847,9 @@ function draw(){
     if(se.kind==='shot'||se.kind==='eshot'||se.kind==='fairy') continue;
     if(Math.hypot(se.x-c.x,se.z-c.z)>50) continue;
     addShadow(se); }
-  if(SHAD.length){
-    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
-    gl.uniform1f(uni.alpha,0.30); gl.uniform3f(uni.tint,0.05,0.07,0.04);
-    bindMesh(PARTS.disc);
-    for(var sk=0;sk<SHAD.length;sk++){ gl.uniformMatrix4fv(uni.model,false,SHAD[sk]); gl.drawArrays(gl.TRIANGLES,0,PARTS.disc.n); }
-    gl.depthMask(true); gl.disable(gl.BLEND); gl.uniform1f(uni.alpha,1);
-  }
-  // entities
+  var sb=shadowBatch();
+  for(var sk=0;sk<SHAD.length;sk++) batchAdd(sb,SHAD[sk],null);
+  // entities: rigs are still built part by part, then poured into instanced batches
   DRAW.length=0;
   pushEnt(p);
   VIS.length=0;
@@ -842,22 +865,9 @@ function draw(){
     pushEnt(VIS[vi][1]);
   }
   LOD=0;
-  // group by mesh
-  DRAW.sort(function(a,b){return a[0]<b[0]?-1:(a[0]>b[0]?1:0);});
-  var cur=null;
-  for(var k=0;k<DRAW.length;k++){
-    var d=DRAW[k];
-    if(d[0]!==cur){ cur=d[0]; bindMesh(PARTS[cur]); }
-    gl.uniformMatrix4fv(uni.model,false,d[1]);
-    gl.uniform3f(uni.tint,d[2][0],d[2][1],d[2][2]);
-    gl.drawArrays(gl.TRIANGLES,0,PARTS[cur].n);
-  }
-}
-function bindMesh(M){
-  gl.bindBuffer(gl.ARRAY_BUFFER,M.pb); gl.vertexAttribPointer(att.p,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER,M.nb); gl.vertexAttribPointer(att.n,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER,M.cb); gl.vertexAttribPointer(att.c,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER,M.fb); gl.vertexAttribPointer(att.f,1,gl.FLOAT,false,0,0);
+  for(var k=0;k<DRAW.length;k++){ var d=DRAW[k]; batchAdd(partBatch(d[0]),d[1],d[2]); }
+  batchesEnd();
+  R3.render(SCENE,CAM3);
 }
 var RIG=[], MPOOL=[], MPI=0;
 function mat(){ if(MPI>=MPOOL.length) MPOOL.push(m4()); return MPOOL[MPI++]; }
@@ -1295,7 +1305,7 @@ function resize(){
   readSafe();
   DPR=Math.min(window.devicePixelRatio||1,2);
   W=cvs.clientWidth; H2=cvs.clientHeight;
-  cvs.width=Math.round(W*DPR*QUAL); cvs.height=Math.round(H2*DPR*QUAL);
+  setRes();
   HDPR=Math.min(DPR,1.5);                 // the HUD costs real time on iOS; it needs less resolution
   hud.width=Math.round(W*HDPR); hud.height=Math.round(H2*HDPR);
   layoutButtons();
@@ -1309,7 +1319,7 @@ function autoQuality(dt){
   var old=QUAL;
   if(a<42&&QUAL>0.62) QUAL=Math.max(0.62,QUAL-0.12);
   else if(a>57&&QUAL<1) QUAL=Math.min(1,QUAL+0.06);
-  if(QUAL!==old){ cvs.width=Math.round(W*DPR*QUAL); cvs.height=Math.round(H2*DPR*QUAL); }
+  if(QUAL!==old) setRes();
 }
 var last=0, acc=0, JSMS=0, DRAWMS=0;
 function frame(ts){
@@ -1325,21 +1335,11 @@ function frame(ts){
   requestAnimationFrame(frame);
 }
 function boot(){
-  prog=makeProgram(gl);
-  gl.useProgram(prog);
-  att.p=gl.getAttribLocation(prog,'aP'); att.n=gl.getAttribLocation(prog,'aN');
-  att.c=gl.getAttribLocation(prog,'aC'); att.f=gl.getAttribLocation(prog,'aF');
-  gl.enableVertexAttribArray(att.p); gl.enableVertexAttribArray(att.n);
-  gl.enableVertexAttribArray(att.c); gl.enableVertexAttribArray(att.f);
-  uni.proj=gl.getUniformLocation(prog,'uProj'); uni.view=gl.getUniformLocation(prog,'uView');
-  uni.model=gl.getUniformLocation(prog,'uModel'); uni.time=gl.getUniformLocation(prog,'uTime');
-  uni.tint=gl.getUniformLocation(prog,'uTint'); uni.fog=gl.getUniformLocation(prog,'uFog');
-  uni.sun=gl.getUniformLocation(prog,'uSun'); uni.alpha=gl.getUniformLocation(prog,'uAlpha'); uni.unlit=gl.getUniformLocation(prog,'uUnlit');
-  uni.cut=gl.getUniformLocation(prog,'uCut'); uni.cam=gl.getUniformLocation(prog,'uCam'); uni.focus=gl.getUniformLocation(prog,'uFocus');
-  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
   resize();
-  initParts(gl);
+  initParts();
+  initScene();
   buildWorld();
+  R3.compile(SCENE,CAM3);          // warm every shader up front
   try{ G.best=+localStorage.getItem('eh3_best')||0; }catch(e){}
   recalc();
   var bt=document.getElementById('boot'); if(bt) bt.style.display='none';
@@ -1406,4 +1406,4 @@ cvs.addEventListener('wheel',function(e){
   G.cam.dist=clamp(G.cam.dist+e.deltaY*0.012,4.0,18.0);
 },{passive:false});
 cvs.addEventListener('touchstart',function(){ setMode(false); },{passive:true});
-if(gl) boot();
+if(R3) boot();

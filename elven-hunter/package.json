@@ -1,7 +1,7 @@
 {
   "name": "elven-hunter-3d",
   "version": "0.7.0",
-  "description": "An open-world, third-person low-poly forest game that runs in a single self-contained HTML file. No engine, no dependencies, no network at runtime.",
+  "description": "An open-world, third-person low-poly forest game that runs in a single self-contained HTML file. Rendered with three.js, bundled inline; no network at runtime.",
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
@@ -9,11 +9,21 @@
     "serve": "node tools/serve.mjs",
     "test": "node tools/build.mjs && node test/run.mjs"
   },
-  "keywords": ["webgl", "game", "low-poly", "no-dependencies", "canvas"],
+  "keywords": [
+    "webgl",
+    "game",
+    "low-poly",
+    "three.js", "single-file",
+    "canvas"
+  ],
   "license": "MIT",
   "private": true,
   "devDependencies": {
-    "playwright": "^1.47.0"
+    "esbuild": "0.28.2",
+    "playwright": "1.63.0",
+    "three": "0.187.0"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }
