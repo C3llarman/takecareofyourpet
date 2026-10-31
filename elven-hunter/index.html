@@ -117,6 +117,15 @@ MB.prototype.tri=function(ax,ay,az,bx,by,bz,cx,cy,cz,col,flag){
   this.c.push(r,g,b,r,g,b,r,g,b);
   var fl=flag||0; this.f.push(fl,fl,fl);
 };
+/* smooth triangle: per-vertex positions, normals and colours, so light rolls
+   across a surface instead of breaking on every facet */
+MB.prototype.triV=function(a,b,c,na,nb,nc,ca,cb,cc,flag){
+  this.p.push(a[0],a[1],a[2],b[0],b[1],b[2],c[0],c[1],c[2]);
+  this.n.push(na[0],na[1],na[2],nb[0],nb[1],nb[2],nc[0],nc[1],nc[2]);
+  this.c.push(ca[0],ca[1],ca[2],cb[0],cb[1],cb[2],cc[0],cc[1],cc[2]);
+  var fl=flag||0; this.f.push(fl,fl,fl);
+};
+function nrm(v){ var l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
 MB.prototype.quad=function(a,b,c,d,col,flag){
   this.tri(a[0],a[1],a[2],b[0],b[1],b[2],c[0],c[1],c[2],col,flag);
   this.tri(a[0],a[1],a[2],c[0],c[1],c[2],d[0],d[1],d[2],col,flag);
@@ -138,41 +147,68 @@ function boxMesh(col,taper){
   m.quad(D,A,E,H,d);
   return m;
 }
-/* cone: radius 0.5 at y=0, apex y=1 */
-function coneMesh(col,seg,r0,r1){
-  var m=new MB(); seg=seg||7; r0=(r0===undefined)?0.5:r0; r1=(r1===undefined)?0:r1;
+/* cone / frustum: radius r0 at y=0, r1 at y=1, smooth-shaded sides */
+function coneMesh(col,seg,r0,r1,noCap){
+  var m=new MB(); seg=seg||10; r0=(r0===undefined)?0.5:r0; r1=(r1===undefined)?0:r1;
+  var ny=r0-r1, dk=[col[0]*0.7,col[1]*0.7,col[2]*0.7], down=[0,-1,0];
   for(var i=0;i<seg;i++){
-    var a=i/seg*Math.PI*2, b=(i+1)/seg*Math.PI*2;
-    var x0=Math.cos(a)*r0,z0=Math.sin(a)*r0,x1=Math.cos(b)*r0,z1=Math.sin(b)*r0;
-    var X0=Math.cos(a)*r1,Z0=Math.sin(a)*r1,X1=Math.cos(b)*r1,Z1=Math.sin(b)*r1;
-    var sh=0.88+0.12*Math.cos(a);
-    var cc=[col[0]*sh,col[1]*sh,col[2]*sh];
-    if(r1<=0.001) m.tri(x0,0,z0,x1,0,z1,0,1,0,cc);
-    else m.quad([x0,0,z0],[x1,0,z1],[X1,1,Z1],[X0,1,Z0],cc);
-    m.tri(0,0,0,x1,0,z1,x0,0,z0,[col[0]*0.7,col[1]*0.7,col[2]*0.7]);
+    var a=i/seg*Math.PI*2, b=(i+1)/seg*Math.PI*2, h=(a+b)/2;
+    var ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b);
+    var na=nrm([ca,ny,sa]), nb=nrm([cb,ny,sb]), nh=nrm([Math.cos(h),ny,Math.sin(h)]);
+    var A=[ca*r0,0,sa*r0], B=[cb*r0,0,sb*r0];
+    if(r1<=0.001) m.triV(A,B,[0,1,0], na,nb,nh, col,col,col);
+    else {
+      var C=[cb*r1,1,sb*r1], D=[ca*r1,1,sa*r1];
+      m.triV(A,B,C,na,nb,nb,col,col,col); m.triV(A,C,D,na,nb,na,col,col,col);
+      if(!noCap) m.tri(D[0],1,D[2],C[0],1,C[2],0,1,0,col);
+    }
+    if(!noCap) m.triV([0,0,0],B,A,down,down,down,dk,dk,dk);
   }
   return m;
 }
-/* faceted sphere-ish blob (octahedron subdivided once) */
-function blobMesh(col,jitter){
-  var m=new MB(), J=jitter||0;
+/* rounded tube for limbs and torsos: y from y0 to y1, radius 0.5 -> 0.5*taper,
+   capped with shallow domes so the ends read as round rather than cut */
+function tubeMesh(col,taper,y0,y1,seg){
+  var m=new MB(); seg=seg||10;
+  var r0=0.5, r1=0.5*taper, dir=(y1>y0)?1:-1, ny=(r0-r1)*dir;
+  function ring(r,y,k){ var a=k/seg*Math.PI*2; return [Math.cos(a)*r,y,Math.sin(a)*r]; }
+  var e0=[0,y0-dir*0.22,0], e1=[0,y1+dir*0.18*taper,0], u0=[0,-dir,0], u1=[0,dir,0];
+  for(var i=0;i<seg;i++){
+    var a=i/seg*Math.PI*2, b=(i+1)/seg*Math.PI*2;
+    var na=nrm([Math.cos(a),ny,Math.sin(a)]), nb=nrm([Math.cos(b),ny,Math.sin(b)]);
+    var A=ring(r0,y0,i),B=ring(r0,y0,i+1),C=ring(r1,y1,i+1),D=ring(r1,y1,i);
+    if(dir>0){ m.triV(A,C,B,na,nb,nb,col,col,col); m.triV(A,D,C,na,na,nb,col,col,col);
+               m.triV(A,B,e0,na,nb,u0,col,col,col); m.triV(D,e1,C,na,u1,nb,col,col,col); }
+    else     { m.triV(A,B,C,na,nb,nb,col,col,col); m.triV(A,C,D,na,nb,na,col,col,col);
+               m.triV(B,A,e0,nb,na,u0,col,col,col); m.triV(C,e1,D,nb,u1,na,col,col,col); }
+  }
+  return m;
+}
+/* smooth sphere-ish blob: an octahedron subdivided `level` times (default 2),
+   with normals taken from the sphere so it shades round */
+function blobMesh(col,jitter,level){
+  var m=new MB(), J=jitter||0; level=(level===undefined)?2:level;
   var v=[[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]];
   var faces=[[0,4,2],[0,2,5],[0,5,3],[0,3,4],[1,2,4],[1,5,2],[1,3,5],[1,4,3]];
   function mid(a,b){var x=(a[0]+b[0])/2,y=(a[1]+b[1])/2,z=(a[2]+b[2])/2,l=Math.hypot(x,y,z)||1;return [x/l,y/l,z/l];}
   var rs=[];
-  for(var f=0;f<faces.length;f++){
-    var A=v[faces[f][0]],B=v[faces[f][1]],C=v[faces[f][2]];
-    var AB=mid(A,B),BC=mid(B,C),CA=mid(C,A);
-    rs.push([A,AB,CA],[AB,B,BC],[CA,BC,C],[AB,BC,CA]);
-  }
-  for(var i=0;i<rs.length;i++){
-    var t=rs[i], p=[];
-    for(var k=0;k<3;k++){
-      var q=t[k], s=1+ (J? (Math.sin(q[0]*9.1+q[1]*4.7+q[2]*7.3)*J):0);
-      p.push([q[0]*0.5*s,q[1]*0.5*s+0.5,q[2]*0.5*s]);
+  for(var f=0;f<faces.length;f++) rs.push([v[faces[f][0]],v[faces[f][1]],v[faces[f][2]]]);
+  for(var lv=0;lv<level;lv++){
+    var nx=[];
+    for(var r=0;r<rs.length;r++){
+      var A=rs[r][0],B=rs[r][1],C=rs[r][2], AB=mid(A,B),BC=mid(B,C),CA=mid(C,A);
+      nx.push([A,AB,CA],[AB,B,BC],[CA,BC,C],[AB,BC,CA]);
     }
-    var sh=0.85+0.15*(p[0][1]);
-    m.tri(p[0][0],p[0][1],p[0][2],p[1][0],p[1][1],p[1][2],p[2][0],p[2][1],p[2][2],[col[0]*sh,col[1]*sh,col[2]*sh]);
+    rs=nx;
+  }
+  function vert(q){
+    var s=1+(J?(Math.sin(q[0]*9.1+q[1]*4.7+q[2]*7.3)*J):0);
+    return [q[0]*0.5*s,q[1]*0.5*s+0.5,q[2]*0.5*s];
+  }
+  function shade(q){ var sh=0.86+0.14*(0.5+0.5*q[1]); return [col[0]*sh,col[1]*sh,col[2]*sh]; }
+  for(var i=0;i<rs.length;i++){
+    var t=rs[i];
+    m.triV(vert(t[0]),vert(t[1]),vert(t[2]), t[0],t[1],t[2], shade(t[0]),shade(t[1]),shade(t[2]));
   }
   return m;
 }
@@ -189,24 +225,40 @@ function GPUMesh(gl,mb){
 var VS=[
 'attribute vec3 aP; attribute vec3 aN; attribute vec3 aC; attribute float aF;',
 'uniform mat4 uProj,uView,uModel; uniform float uTime; uniform vec3 uTint;',
-'varying vec3 vN; varying vec3 vC; varying float vFog; varying float vY;',
+'varying vec3 vN; varying vec3 vC; varying float vFog; varying vec3 vW; varying float vProp;',
 'void main(){',
 '  vec3 p=aP;',
-'  if(aF>0.5){ p.y += sin(p.x*0.35+uTime*1.3)*0.12 + sin(p.z*0.27-uTime*0.9)*0.12; }',
+'  if(aF>0.5&&aF<1.5){ p.y += sin(p.x*0.35+uTime*1.3)*0.12 + sin(p.z*0.27-uTime*0.9)*0.12; }',
 '  vec4 wp=uModel*vec4(p,1.0);',
 '  vec4 vp=uView*wp;',
 '  gl_Position=uProj*vp;',
 '  vN=normalize((uModel*vec4(aN,0.0)).xyz);',
 '  vC=aC*uTint;',
-'  vY=wp.y;',
+'  vW=wp.xyz;',
+'  vProp=aF>1.5?1.0:0.0;',
 '  vFog=clamp((-vp.z-38.0)/95.0,0.0,1.0);',
 '}'].join('\n');
 
+/* Props (trees, rocks, buildings) that sit between the camera and the hunter are
+   cut away with a dithered hole, so the forest never hides who you are playing. */
 var FS=[
+'#ifdef GL_FRAGMENT_PRECISION_HIGH',
+'precision highp float;',
+'#else',
 'precision mediump float;',
-'varying vec3 vN; varying vec3 vC; varying float vFog; varying float vY;',
+'#endif',
+'varying vec3 vN; varying vec3 vC; varying float vFog; varying vec3 vW; varying float vProp;',
 'uniform vec3 uFog; uniform vec3 uSun; uniform float uAlpha; uniform float uUnlit;',
+'uniform float uCut; uniform vec3 uCam; uniform vec3 uFocus;',
 'void main(){',
+'  if(uCut>0.5&&vProp>0.5){',
+'    vec3 ab=uFocus-uCam; float t=clamp(dot(vW-uCam,ab)/max(dot(ab,ab),0.001),0.0,1.0);',
+'    if(t<0.96){',
+'      float k=length(vW-(uCam+ab*t))/mix(1.1,1.9,t);',
+'      if(k<0.65) discard;',
+'      if(k<1.0&&mod(floor(gl_FragCoord.x)+floor(gl_FragCoord.y),2.0)<1.0) discard;',
+'    }',
+'  }',
 '  if(uUnlit>0.5){ gl_FragColor=vec4(vC,1.0); return; }',
 '  vec3 n=normalize(vN);',
 '  float d=max(dot(n,uSun),0.0);',
@@ -294,24 +346,34 @@ function Hn(x,z){ // normal-ish slope 0..1
   var e=1.2, hl=H(x-e,z),hr=H(x+e,z),hd=H(x,z-e),hu=H(x,z+e);
   return Math.min(1,Math.hypot(hr-hl,hu-hd)/(2*e)*0.9);
 }
-var C_GRASS=[0.29,0.45,0.22], C_GRASS2=[0.26,0.41,0.20], C_DIRT=[0.36,0.27,0.17],
+var C_GRASS=[0.30,0.47,0.22], C_GRASS2=[0.22,0.37,0.18], C_DIRT=[0.36,0.27,0.17],
     C_ROCK=[0.38,0.38,0.40], C_SAND=[0.56,0.50,0.33], C_WATER=[0.16,0.33,0.42];
 
+/* ground colour at a point: drifts smoothly (no checkerboard) and blends
+   grass -> dirt -> rock with slope, sand near the water */
+function groundCol(x,z,y){
+  var sl=Hn(x,z), g=fbm(x+311,z-97,2,0.045);
+  var col=mix3(C_GRASS2,C_GRASS,g);
+  col=mix3(col,C_DIRT,smooth01((sl-0.26)/0.16));
+  col=mix3(col,C_ROCK,smooth01((sl-0.48)/0.14));
+  return mix3(col,C_SAND,smooth01((WATER+0.9-y)/0.6));
+}
 function terrainMesh(){
-  var m=new MB(), N=92, S=WSIZE/N;
-  for(var i=0;i<N;i++) for(var j=0;j<N;j++){
-    var x0=-WHALF+i*S, z0=-WHALF+j*S, x1=x0+S, z1=z0+S;
-    var y00=H(x0,z0),y10=H(x1,z0),y11=H(x1,z1),y01=H(x0,z1);
-    var my=(y00+y10+y11+y01)/4, sl=Hn(x0+S/2,z0+S/2);
-    var col;
-    if(my<WATER+0.5) col=C_SAND;
-    else if(sl>0.55) col=C_ROCK;
-    else if(sl>0.34) col=C_DIRT;
-    else col=(((i+j)&1)?C_GRASS:C_GRASS2);
-    var t=(RNG()-0.5)*0.10;
-    col=[Math.max(0,col[0]+t),Math.max(0,col[1]+t),Math.max(0,col[2]+t)];
-    m.tri(x0,y00,z0, x1,y11,z1, x1,y10,z0, col);
-    m.tri(x0,y00,z0, x0,y01,z1, x1,y11,z1, col);
+  var m=new MB(), N=100, S=WSIZE/N, e=0.8;
+  // shared grid of heights, smooth normals and colours, so hills roll instead of facet
+  var P=[], NN=[], CC=[];
+  for(var i=0;i<=N;i++) for(var j=0;j<=N;j++){
+    var x=-WHALF+i*S, z=-WHALF+j*S, y=H(x,z);
+    P.push([x,y,z]);
+    NN.push(nrm([H(x-e,z)-H(x+e,z),2*e,H(x,z-e)-H(x,z+e)]));
+    var c=groundCol(x,z,y), t=(RNG()-0.5)*0.025;
+    CC.push([Math.max(0,c[0]+t),Math.max(0,c[1]+t),Math.max(0,c[2]+t)]);
+  }
+  function id(i,j){ return i*(N+1)+j; }
+  for(var i2=0;i2<N;i2++) for(var j2=0;j2<N;j2++){
+    var a=id(i2,j2), b=id(i2+1,j2), c2=id(i2+1,j2+1), d=id(i2,j2+1);
+    m.triV(P[a],P[c2],P[b],NN[a],NN[c2],NN[b],CC[a],CC[c2],CC[b]);
+    m.triV(P[a],P[d],P[c2],NN[a],NN[d],NN[c2],CC[a],CC[d],CC[c2]);
   }
   // water plane
   var wc=C_WATER;
@@ -320,6 +382,56 @@ function terrainMesh(){
     m.quad([a,WATER,b],[a,WATER,b+s2],[a+s2,WATER,b+s2],[a+s2,WATER,b],wc,1);
   }
   return m;
+}
+
+function mix3(a,b,t){ t=t<0?0:(t>1?1:t); return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]; }
+function smooth01(t){ t=t<0?0:(t>1?1:t); return t*t*(3-2*t); }
+
+/* ---------- solid props ----------
+   Trunks, rocks and buildings are baked into the world mesh, so they also get a
+   record here: circles and rotated boxes in a coarse grid, used to stop the
+   hunter and the creatures walking through them. */
+var COLL=[], CGRID={}, CCELL=8;
+function cKey(ix,iz){ return ix*1000+iz; }
+function addColl(c){
+  var r=c.r||Math.hypot(c.hx,c.hz);
+  var i0=Math.floor((c.x-r)/CCELL), i1=Math.floor((c.x+r)/CCELL);
+  var j0=Math.floor((c.z-r)/CCELL), j1=Math.floor((c.z+r)/CCELL);
+  for(var i=i0;i<=i1;i++) for(var j=j0;j<=j1;j++){
+    var k=cKey(i,j); (CGRID[k]||(CGRID[k]=[])).push(c);
+  }
+  COLL.push(c);
+}
+function collCircle(x,z,r){ addColl({x:x,z:z,r:r}); }
+function collBox(x,z,hx,hz,ry){ addColl({x:x,z:z,hx:hx,hz:hz,c:Math.cos(ry),s:Math.sin(ry),box:1}); }
+/* push a circle of radius rad at (o.x,o.z) out of every solid it overlaps */
+function collide(o,rad){
+  var hitAny=false;
+  var ix=Math.floor(o.x/CCELL), iz=Math.floor(o.z/CCELL);
+  for(var i=ix-1;i<=ix+1;i++) for(var j=iz-1;j<=iz+1;j++){
+    var L=CGRID[cKey(i,j)]; if(!L) continue;
+    for(var n=0;n<L.length;n++){
+      var c=L[n], dx=o.x-c.x, dz=o.z-c.z;
+      if(!c.box){
+        var R=c.r+rad, d2=dx*dx+dz*dz;
+        if(d2<R*R){ var d=Math.sqrt(d2)||0.001; o.x=c.x+dx/d*R; o.z=c.z+dz/d*R; hitAny=true; }
+      } else {
+        // into box space (inverse of addMesh's rotation)
+        var lx=dx*c.c-dz*c.s, lz=dx*c.s+dz*c.c;
+        var qx=Math.max(-c.hx,Math.min(c.hx,lx)), qz=Math.max(-c.hz,Math.min(c.hz,lz));
+        var ex=lx-qx, ez=lz-qz, e2=ex*ex+ez*ez;
+        if(e2<rad*rad){
+          if(e2>1e-6){ var e=Math.sqrt(e2); lx=qx+ex/e*rad; lz=qz+ez/e*rad; }
+          else { // centre is inside: leave by the nearest face
+            var px=c.hx-Math.abs(lx), pz=c.hz-Math.abs(lz);
+            if(px<pz) lx=(lx<0?-1:1)*(c.hx+rad); else lz=(lz<0?-1:1)*(c.hz+rad);
+          }
+          o.x=c.x+lx*c.c+lz*c.s; o.z=c.z-lx*c.s+lz*c.c; hitAny=true;
+        }
+      }
+    }
+  }
+  return hitAny;
 }
 
 /* ---------- props ---------- */
@@ -333,19 +445,20 @@ function addMesh(dst,src,tx,ty,tz,ry,sx,sy,sz,tint){
     dst.n.push(nx*c+nz*s, ny, -nx*s+nz*c);
     if(tint){ dst.c.push(src.c[i]*tint[0],src.c[i+1]*tint[1],src.c[i+2]*tint[2]); }
     else dst.c.push(src.c[i],src.c[i+1],src.c[i+2]);
-    dst.f.push(src.f[i]);
+    dst.f.push(src.f[i]===1?1:2);   // 2 = prop: may be cut away when it hides the hunter
   }
 }
 var PINE_A=null,PINE_B=null,OAK_A=null,TRUNK=null,ROCK=null,SHROOM=null,FERN=null,STUMP=null;
 function initProps(){
-  TRUNK=boxMesh([0.26,0.19,0.13],0.75);
-  PINE_A=coneMesh([0.17,0.33,0.19],6);
-  PINE_B=coneMesh([0.21,0.40,0.22],6);
-  OAK_A=blobMesh([0.24,0.42,0.20],0.22);
-  ROCK=blobMesh([0.40,0.40,0.42],0.35);
-  SHROOM=coneMesh([0.62,0.24,0.20],6);
-  FERN=coneMesh([0.25,0.46,0.22],5,0.5,0.1);
-  STUMP=coneMesh([0.30,0.22,0.15],7,0.5,0.42);
+  // round, smooth-shaded props (trunks were square boxes, canopies were facets)
+  TRUNK=coneMesh([0.26,0.19,0.13],7,0.5,0.36,true);
+  PINE_A=coneMesh([0.17,0.33,0.19],9,0.5,0,true);
+  PINE_B=coneMesh([0.21,0.40,0.22],9,0.5,0,true);
+  OAK_A=blobMesh([0.24,0.42,0.20],0.14,1);
+  ROCK=blobMesh([0.40,0.40,0.42],0.18,1);
+  SHROOM=blobMesh([0.62,0.24,0.20],0,0);
+  FERN=coneMesh([0.25,0.46,0.22],7,0.5,0.1,true);
+  STUMP=coneMesh([0.30,0.22,0.15],8,0.5,0.42);
 }
 function scatterWorld(m){
   var r=mulberry(7);
@@ -360,6 +473,7 @@ function scatterWorld(m){
     if(k<0.42){ // pine
       var hh=3.6+r()*4.2, rr=0.9+r()*0.5, ry=r()*6.28;
       addMesh(m,TRUNK,x,y,z,ry,0.5*rr,hh*0.42,0.5*rr);
+      collCircle(x,z,0.30*rr);
       var p=(r()<0.5)?PINE_A:PINE_B;
       addMesh(m,p,x,y+hh*0.26,z,ry,2.5*rr,hh*0.52,2.5*rr);
       addMesh(m,p,x,y+hh*0.58,z,ry+0.7,1.9*rr,hh*0.46,1.9*rr);
@@ -367,13 +481,16 @@ function scatterWorld(m){
     } else if(k<0.62){ // broadleaf
       var hh2=3.0+r()*3.0, rr2=1.0+r()*0.6, ry2=r()*6.28;
       addMesh(m,TRUNK,x,y,z,ry2,0.62*rr2,hh2*0.72,0.62*rr2);
+      collCircle(x,z,0.36*rr2);
       addMesh(m,OAK_A,x,y+hh2*0.58,z,ry2,3.5*rr2,3.2*rr2,3.5*rr2);
       if(r()<0.5) addMesh(m,OAK_A,x+rr2,y+hh2*0.75,z-rr2*0.6,ry2+1,2.3*rr2,2.1*rr2,2.3*rr2);
     } else if(k<0.74){ // rock
       var s=0.8+r()*2.6;
       addMesh(m,ROCK,x,y-0.18*s,z,r()*6.28,s,s*(0.6+r()*0.5),s);
+      if(s>1.3) collCircle(x,z,0.40*s);
     } else if(k<0.82){ // stump / log
       addMesh(m,STUMP,x,y,z,r()*6.28,1.1,0.8+r()*0.6,1.1);
+      collCircle(x,z,0.50);
     } else if(k<0.93){ // fern tuft
       var n=2+((r()*3)|0);
       for(var q=0;q<n;q++){
@@ -385,7 +502,7 @@ function scatterWorld(m){
       for(var q2=0;q2<n2;q2++){
         var bx=x+(r()-0.5)*1.8, bz=z+(r()-0.5)*1.8, by=H(bx,bz);
         addMesh(m,TRUNK,bx,by,bz,0,0.12,0.30,0.12,[1.6,1.6,1.5]);
-        addMesh(m,SHROOM,bx,by+0.26,bz,r()*6.28,0.55,0.34,0.55);
+        addMesh(m,SHROOM,bx,by+0.12,bz,r()*6.28,0.55,0.36,0.55);
       }
     }
   }
@@ -397,6 +514,7 @@ function buildTavern(m,x,z){
   var y=H(x,z);
   var wall=[0.44,0.33,0.22], roof=[0.33,0.17,0.14], warm=[0.95,0.72,0.35];
   addMesh(m,boxMesh(wall),x,y-0.2,z,0.5,9,4.2,7);
+  collBox(x,z,4.5,3.5,0.5);
   addMesh(m,coneMesh(roof,4),x,y+3.9,z,0.5+Math.PI/4,9.6,3.2,8.0);
   addMesh(m,boxMesh([0.30,0.22,0.15]),x+3.2,y+2.6,z-2.2,0.5,1.0,2.4,1.0); // chimney
   // glowing windows
@@ -408,6 +526,7 @@ function buildTavern(m,x,z){
   // lantern posts
   for(var k=-1;k<=1;k+=2){
     addMesh(m,boxMesh([0.25,0.18,0.12]),x+k*5.2,y,z+5.0,0,0.25,2.6,0.25);
+    collCircle(x+k*5.2,z+5.0,0.25);
     addMesh(m,boxMesh(warm),x+k*5.2,y+2.6,z+5.0,0,0.5,0.6,0.5);
   }
   LANDMARKS.push({x:x,z:z,r:11,name:'The Greenleaf Tavern',kind:'tavern'});
@@ -418,6 +537,7 @@ function buildCamp(m,x,z){
   for(var i=0;i<4;i++){
     var a=i/4*6.28+0.4, tx=x+Math.cos(a)*6.5, tz=z+Math.sin(a)*6.5, ty=H(tx,tz);
     addMesh(m,coneMesh(hide,5),tx,ty,tz,a,3.4,2.8,3.4);
+    collCircle(tx,tz,1.4);
   }
   addMesh(m,coneMesh(fire,6),x,y+0.1,z,0,1.5,1.4,1.5);
   for(var k=0;k<6;k++){
@@ -427,6 +547,7 @@ function buildCamp(m,x,z){
   for(var p=0;p<3;p++){ // spikes
     var a3=p/3*6.28+1.1, sx=x+Math.cos(a3)*9, sz=z+Math.sin(a3)*9;
     addMesh(m,coneMesh(wood,5,0.5,0.05),sx,H(sx,sz),sz,0,0.7,3.4,0.7);
+    collCircle(sx,sz,0.35);
   }
   LANDMARKS.push({x:x,z:z,r:13,name:'Goblin Camp',kind:'camp'});
 }
@@ -436,6 +557,7 @@ function buildHollow(m,x,z){
   for(var i=0;i<7;i++){
     var a=i/7*6.28, px=x+Math.cos(a)*(7+i%3), pz=z+Math.sin(a)*(7+i%3);
     addMesh(m,boxMesh(stone,0.6),px,H(px,pz),pz,a,1.4,4.5+((i*7)%3),1.4);
+    collCircle(px,pz,0.75);
   }
   for(var k=0;k<9;k++){ // egg sacs
     var a2=k/9*6.28+0.3, ex=x+Math.cos(a2)*(2+k%4), ez=z+Math.sin(a2)*(2+k%4);
@@ -447,6 +569,7 @@ function buildStones(m,x,z){
   for(var i=0;i<6;i++){
     var a=i/6*6.28, px=x+Math.cos(a)*5.5, pz=z+Math.sin(a)*5.5;
     addMesh(m,boxMesh([0.42,0.42,0.45],0.8),px,H(px,pz)-0.3,pz,a,1.3,5.5+(i%2)*1.5,1.0);
+    collCircle(px,pz,0.65);
   }
   addMesh(m,boxMesh([0.46,0.46,0.49],0.9),x,H(x,z),z,0,2.4,0.6,2.4);
   LANDMARKS.push({x:x,z:z,r:9,name:'The Standing Stones',kind:'stones'});
@@ -454,30 +577,20 @@ function buildStones(m,x,z){
 
 </script>
 <script>
-/* ---------- limb mesh: y from 0 down to -1 ---------- */
-function limbMesh(col,taper){
-  var m=new MB(), t=(taper===undefined)?1:taper, h=0.5, ht=h*t;
-  var A=[-h,0,-h],B=[h,0,-h],C=[h,0,h],D=[-h,0,h];
-  var E=[-ht,-1,-ht],F=[ht,-1,-ht],G=[ht,-1,ht],H2=[-ht,-1,ht];
-  var d=[col[0]*0.85,col[1]*0.85,col[2]*0.85];
-  m.quad(A,B,C,D,col); m.quad(H2,G,F,E,d);
-  m.quad(A,E,F,B,col); m.quad(B,F,G,C,d);
-  m.quad(C,G,H2,D,col); m.quad(D,H2,E,A,d);
-  return m;
-}
 var PARTS={};
 function initParts(gl){
   function reg(k,mb){ PARTS[k]=new GPUMesh(gl,mb); PARTS[k].mb=mb; }
   reg('box',boxMesh([1,1,1]));
-  reg('boxT',boxMesh([1,1,1],0.7));
-  reg('boxW',boxMesh([1,1,1],1.22));
-  reg('limb',limbMesh([1,1,1],0.8));
-  reg('limbT',limbMesh([1,1,1],0.45));
-  reg('blob',blobMesh([1,1,1],0));
-  reg('blobR',blobMesh([1,1,1],0.3));
-  reg('cone',coneMesh([1,1,1],6));
-  reg('cone8',coneMesh([1,1,1],8));
-  reg('tube',coneMesh([1,1,1],6,0.5,0.42));
+  // limbs and torsos are rounded tubes, not boxes
+  reg('limb',tubeMesh([1,1,1],0.8,0,-1));
+  reg('limbT',tubeMesh([1,1,1],0.62,0,-1));
+  reg('torso',tubeMesh([1,1,1],1.22,0,1,12));
+  reg('torsoT',tubeMesh([1,1,1],0.72,0,1,12));
+  reg('blob',blobMesh([1,1,1],0,2));
+  reg('blobR',blobMesh([1,1,1],0.12,2));
+  reg('cone',coneMesh([1,1,1],10));
+  reg('cone8',coneMesh([1,1,1],12));
+  reg('tube',coneMesh([1,1,1],10,0.5,0.42));
   reg('disc',discMesh(14));
   reg('sky',skyMesh([0.62,0.70,0.68],[0.30,0.45,0.52],[0.20,0.25,0.22],20));
 }
@@ -495,9 +608,9 @@ function humanoidRig(out,e,t){
     var mvL=Math.min(1,(e.speed||0)/4.4), swL=Math.sin(e.walkPhase||0)*0.7*mvL;
     out.push(['limb',-0.17*s,0.86*s,0, swL,0,0, 0.24*s,0.86*s,0.24*s,P.pants]);
     out.push(['limb', 0.17*s,0.86*s,0,-swL,0,0, 0.24*s,0.86*s,0.24*s,P.pants]);
-    out.push(['boxT',0,0.86*s,0, 0,0,0, 0.52*s,0.62*s,0.32*s,P.cloak||P.tunic]);
-    out.push(['box',0,1.48*s,0, 0,0,0, 0.30*s,0.30*s,0.30*s,P.skin]);
-    out.push(['box',0,1.68*s,0, 0,0,0, 0.34*s,0.14*s,0.34*s,P.hair]);
+    out.push(['torsoT',0,0.86*s,0, 0,0,0, 0.52*s,0.62*s,0.34*s,P.cloak||P.tunic]);
+    out.push(['blob',0,1.46*s,0, 0,0,0, 0.32*s,0.34*s,0.32*s,P.skin]);
+    out.push(['blob',0,1.62*s,-0.02*s, 0,0,0, 0.35*s,0.22*s,0.35*s,P.hair]);
     return;
   }
   var P=e.look2||e.look, sc=e.scale||1;
@@ -515,11 +628,11 @@ function humanoidRig(out,e,t){
   var lrx=sw+air*0.65, rrx=-sw+air*0.35;
   push('limbT',-0.17*sc,HIP,0, lrx,0,0, 0.30*sc,HIP,0.30*sc, P.pants);
   push('limbT', 0.17*sc,HIP,0, rrx,0,0, 0.30*sc,HIP,0.30*sc, P.pants);
-  push('box',-0.18*sc+Math.sin(lrx)*HIP*0.92, HIP-Math.cos(lrx)*HIP, Math.sin(lrx)*0.04, lrx*0.3,0,0, 0.27*sc,0.17*sc,0.38*sc, P.boot);
-  push('box', 0.18*sc+Math.sin(rrx)*HIP*0.92, HIP-Math.cos(rrx)*HIP, Math.sin(rrx)*0.04, rrx*0.3,0,0, 0.27*sc,0.17*sc,0.38*sc, P.boot);
+  push('blob',-0.17*sc, HIP-Math.cos(lrx)*HIP-0.06*sc, Math.sin(lrx)*HIP+0.05*sc, lrx*0.3,0,0, 0.26*sc,0.20*sc,0.40*sc, P.boot);
+  push('blob', 0.17*sc, HIP-Math.cos(rrx)*HIP-0.06*sc, Math.sin(rrx)*HIP+0.05*sc, rrx*0.3,0,0, 0.26*sc,0.20*sc,0.40*sc, P.boot);
   // torso: broad at the shoulders, narrow at the waist
-  push('boxW',0,HIP-0.02*sc,0, tilt*0.5,sw2*0.18,0, 0.46*sc,TOR+0.02*sc,0.30*sc, P.tunic);
-  push('box', 0,HIP+TOR*0.30,0, tilt*0.5,sw2*0.18,0, 0.50*sc,0.10*sc,0.33*sc, P.belt);
+  push('torso',0,HIP-0.02*sc,0, tilt*0.5,sw2*0.18,0, 0.46*sc,TOR+0.02*sc,0.32*sc, P.tunic);
+  push('tube', 0,HIP+TOR*0.26,0, tilt*0.5,sw2*0.18,0, 0.50*sc,0.10*sc,0.35*sc, P.belt);
   // shoulders
   push('blob',-0.27*sc,SH-0.10*sc,0, 0,0,0, 0.24*sc,0.22*sc,0.26*sc, P.pauldron||P.tunic);
   push('blob', 0.27*sc,SH-0.10*sc,0, 0,0,0, 0.24*sc,0.22*sc,0.26*sc, P.pauldron||P.tunic);
@@ -535,7 +648,7 @@ function humanoidRig(out,e,t){
   } else {
     push('cone8',0,hy-0.06*sc,-0.02*sc, tilt*0.5,sw2*0.3,0, 0.44*sc,0.46*sc,0.46*sc, P.cloak||P.tunic);
   }
-  if(P.beard) push('boxT',0,hy+0.02*sc,0.09*sc, 3.14,0,0, 0.24*sc,0.26*sc,0.14*sc, P.hair);
+  if(P.beard) push('blob',0,hy-0.06*sc,0.10*sc, 0,0,0, 0.26*sc,0.26*sc,0.16*sc, P.hair);
   if(P.helm) push('cone8',0,hy+0.10*sc,0, 0,0,0, 0.36*sc,0.30*sc,0.36*sc, P.metal);
   // arms
   var shY=SH-0.06*sc, shX=0.29*sc, aL=0.62*sc;
@@ -552,7 +665,7 @@ function humanoidRig(out,e,t){
   if(P.cloak){
     var fl=0.20+mv*0.55+Math.sin(walk*2)*0.05*mv;
     push('limbT',0,SH+0.01*sc,-0.24*sc, fl,0,0, 0.48*sc,(SH-0.34*sc),0.09*sc, P.cloak);
-    push('box', 0,SH+0.03*sc,-0.17*sc, 0,0,0, 0.50*sc,0.11*sc,0.20*sc, P.cloak);
+    push('blob', 0,SH-0.03*sc,-0.15*sc, 0,0,0, 0.54*sc,0.16*sc,0.24*sc, P.cloak);
   }
   // weapon
   var wx=shX+Math.sin(raRx)*aL, wy=shY-Math.cos(raRx)*aL;
@@ -895,6 +1008,8 @@ function ptrDown(id,x,y){
   if(G.state!=='play') return;
   var b=hitBtn(x,y);
   if(b){ touches[id]={btn:b.id}; press(b.id); TELE.tap(b.id,x,y,true); return; }
+  var MG=mapGeom();
+  if(Math.hypot(x-MG.x,y-MG.y)<MG.r){ SHOWKEY=!SHOWKEY; return; }   // tap the map for its key
   var stickTaken=false;
   for(var k in touches) if(touches[k].stick) stickTaken=true;
   if(!stickTaken && x<W*0.58){
@@ -1116,6 +1231,7 @@ function update(dt){
   // bounds
   var bd=Math.hypot(p.x,p.z), lim=WHALF*0.95;
   if(bd>lim){ p.x*=lim/bd; p.z*=lim/bd; }
+  collide(p,0.42*(p.scale||1));   // trunks, rocks and walls are solid
   // gravity / jump
   var gh=H(p.x,p.z);
   if((IN.jump||IN.jumpBuf>0)&&p.onGround){ p.vy=8.9; p.onGround=false; IN.jumpBuf=0; }
@@ -1127,8 +1243,9 @@ function update(dt){
   // actions — a tap during cooldown is remembered briefly so it never feels dropped
   IN.atkBuf=Math.max(0,IN.atkBuf-dt); IN.shotBuf=Math.max(0,IN.shotBuf-dt); IN.jumpBuf=Math.max(0,IN.jumpBuf-dt);
   if(IN.attack||IN.atkBuf>0){ if(p.cdT<=0){ doAttack(); IN.atkBuf=0; } }
-  else if(p.cdT<=0&&!p.dead){
-    // auto-swing: if something hostile is already in reach, the hunter defends herself
+  else if(!DESKTOP&&p.cdT<=0&&!p.dead){
+    // auto-swing (touch only): if something hostile is already in reach, the hunter
+    // defends herself. With a mouse it just yanked your facing around, so it is off.
     for(var ai2=0;ai2<G.ents.length;ai2++){
       var ae=G.ents[ai2];
       if(ae.kind!=='spider'&&ae.kind!=='goblin') continue;
@@ -1139,6 +1256,7 @@ function update(dt){
   if(IN.dash){ IN.dash=false; if(S.dash&&p.dashCd<=0){ p.dashCd=1.6; p.dashT=0.19; msg('Shadowstep','#bff0ff',p.x,p.y+2.4,p.z);} }
 
   updateEnts(dt);
+  separate();
   followCam(dt);
   // landmarks: discovery, and the tavern as a place to rest
   p.atTavern=false;
@@ -1186,9 +1304,34 @@ function moveCreature(e,dt,tx,tz,spd){
     e.x+=(dx/d)*m*dt; e.z+=(dz/d)*m*dt; e.speed=m;
     e.walkPhase+=dt*m*(e.kind==='spider'?2.4:1.5);
   } else e.speed=0;
+  collide(e,bodyR(e));
   var gh=H(e.x,e.z);
   if(e.onGround===false){ e.vy-=24*dt; e.y+=e.vy*dt; if(e.y<=gh){e.y=gh;e.vy=0;e.onGround=true;} }
   else e.y+=(gh-e.y)*Math.min(1,dt*10);
+}
+function bodyR(e){
+  if(e.kind==='spider') return 0.75*(e.scale||1);
+  return 0.42*(e.scale||1);
+}
+/* keep bodies from stacking: creatures, allies and the hunter shove each other apart */
+var BODIES=[];
+function separate(){
+  var p=G.player; BODIES.length=0; BODIES.push(p);
+  for(var i=0;i<G.ents.length;i++){ var e=G.ents[i];
+    if((e.kind==='spider'||e.kind==='goblin'||e.kind==='ally')&&Math.abs(e.x-p.x)<60&&Math.abs(e.z-p.z)<60) BODIES.push(e); }
+  for(var a=0;a<BODIES.length;a++){ var A=BODIES[a], ra=bodyR(A);
+    for(var b=a+1;b<BODIES.length;b++){ var B=BODIES[b];
+      var dx=B.x-A.x, dz=B.z-A.z, R=ra+bodyR(B);
+      if(dx>R||dx<-R||dz>R||dz<-R) continue;
+      var d=Math.hypot(dx,dz); if(d>=R) continue;
+      if(d<1e-4){ dx=Math.random()-0.5; dz=Math.random()-0.5; d=Math.hypot(dx,dz); }
+      var push=(R-d), nx=dx/d, nz=dz/d;
+      // the hunter is heavy: creatures give way, she barely moves
+      var wa=(A===p)?0.15:0.5, wb=(A===p)?0.85:0.5;
+      A.x-=nx*push*wa; A.z-=nz*push*wa; B.x+=nx*push*wb; B.z+=nz*push*wb;
+    }
+  }
+  collide(p,0.42*(p.scale||1));
 }
 function updateEnts(dt){
   var p=G.player;
@@ -1277,7 +1420,10 @@ function updateEnts(dt){
               }
             }
           } else {
-            moveCreature(e,dt,tgt.x,tgt.z,spd);
+            var stopD=bodyR(e)+bodyR(tgt)+0.25;
+            if(tdist>stopD) moveCreature(e,dt,tgt.x,tgt.z,spd);
+            else { e.speed*=0.6; var fy=Math.atan2(tgt.x-e.x,tgt.z-e.z);
+              e.yaw+=(((fy-e.yaw+9.42)%6.28)-3.14)*Math.min(1,dt*8); }
             if(tdist<1.6+(e.scale||1)&&e.atkCd<=0){
               e.atkCd=e.big?1.9:1.35; e.wind=e.big?0.55:0.38;
             }
@@ -1414,7 +1560,11 @@ function draw(){
   m4id(model);
   gl.uniformMatrix4fv(uni.model,false,model);
   gl.uniform3f(uni.tint,1,1,1);
+  gl.uniform1f(uni.cut,1);
+  gl.uniform3f(uni.cam,c.x,c.y,c.z);
+  gl.uniform3f(uni.focus,p.x,p.y+1.1*(p.scale||1),p.z);
   bindMesh(WORLD); gl.drawArrays(gl.TRIANGLES,0,WORLD.n);
+  gl.uniform1f(uni.cut,0);
   // contact shadows
   SHAD.length=0;
   addShadow(p);
@@ -1505,6 +1655,58 @@ function pushEnt(e){
 }
 
 /* ---------- HUD ---------- */
+var SHOWKEY=false;
+/* minimap placement: top-right on a laptop; on a phone it sits under the health
+   panel, because the top-right corner belongs to the potion / skill buttons */
+function mapGeom(){
+  if(DESKTOP){ var r=Math.min(92,W*0.07); return {x:W-12*clamp(W/1100,1,1.5)-r, y:12*clamp(W/1100,1,1.5)+r+10, r:r}; }
+  var r2=Math.min(54,W*0.13); return {x:12+r2, y:12+56+12+r2, r:r2};
+}      // phones: tap the minimap to show the map key
+/* minimap glyphs, one shape per kind so you can tell what is what at a glance */
+function mapIcon(kind,x,y,s,unknown){
+  s=s||1; hx.save(); hx.translate(x,y); hx.scale(s,s); hx.lineWidth=1.4;
+  if(unknown){
+    hx.fillStyle='rgba(8,11,8,.85)'; hx.beginPath(); hx.arc(0,0,6,0,6.3); hx.fill();
+    hx.strokeStyle='#8a7a50'; hx.stroke();
+    hx.fillStyle='#c9b27a'; hx.font='700 9px Georgia,serif'; hx.textAlign='center'; hx.fillText('?',0,3.2);
+    hx.restore(); return;
+  }
+  switch(kind){
+    case 'spider': case 'bigspider':     // red body with legs
+      var r=kind==='bigspider'?3.6:2.4;
+      hx.strokeStyle='#d6584a'; hx.beginPath();
+      hx.moveTo(-r*1.7,-r*0.9); hx.lineTo(r*1.7,r*0.9); hx.moveTo(-r*1.7,r*0.9); hx.lineTo(r*1.7,-r*0.9); hx.stroke();
+      hx.fillStyle='#d6584a'; hx.beginPath(); hx.arc(0,0,r,0,6.3); hx.fill(); break;
+    case 'goblin':                       // orange diamond
+      hx.fillStyle='#e8913a'; hx.beginPath(); hx.moveTo(0,-3.4); hx.lineTo(3.4,0); hx.lineTo(0,3.4); hx.lineTo(-3.4,0); hx.closePath(); hx.fill(); break;
+    case 'archer':                       // orange diamond with a dark bow-mark
+      hx.fillStyle='#e8913a'; hx.beginPath(); hx.moveTo(0,-3.6); hx.lineTo(3.6,0); hx.lineTo(0,3.6); hx.lineTo(-3.6,0); hx.closePath(); hx.fill();
+      hx.fillStyle='#2a1a0a'; hx.fillRect(-0.7,-2,1.4,4); break;
+    case 'cocoon':                       // white ring: someone to rescue
+      hx.strokeStyle='#eef6f6'; hx.lineWidth=1.8; hx.beginPath(); hx.arc(0,0,3,0,6.3); hx.stroke();
+      hx.fillStyle='#eef6f6'; hx.beginPath(); hx.arc(0,0,1,0,6.3); hx.fill(); break;
+    case 'ally':                         // green dot
+      hx.fillStyle='#7fdf5a'; hx.beginPath(); hx.arc(0,0,2.6,0,6.3); hx.fill(); break;
+    case 'fairy':                        // cyan four-point star
+      hx.fillStyle='#bff0ff'; hx.beginPath();
+      for(var k=0;k<8;k++){ var a=k/8*6.283, rr=(k&1)?1.2:4; hx.lineTo(Math.sin(a)*rr,-Math.cos(a)*rr); }
+      hx.closePath(); hx.fill(); break;
+    case 'tavern':                       // warm house
+      hx.fillStyle='#f0b860'; hx.beginPath(); hx.moveTo(-5,0); hx.lineTo(0,-5); hx.lineTo(5,0); hx.lineTo(5,4.5); hx.lineTo(-5,4.5); hx.closePath(); hx.fill();
+      hx.strokeStyle='#2a1a0a'; hx.lineWidth=1; hx.stroke(); break;
+    case 'camp':                         // tent
+      hx.fillStyle='#c0603a'; hx.beginPath(); hx.moveTo(-5,4); hx.lineTo(0,-5); hx.lineTo(5,4); hx.closePath(); hx.fill();
+      hx.strokeStyle='#2a1a0a'; hx.lineWidth=1; hx.stroke(); break;
+    case 'hollow':                       // web
+      hx.strokeStyle='#c9a0e8'; hx.lineWidth=1.2; hx.beginPath(); hx.arc(0,0,4.6,0,6.3); hx.arc(0,0,2.2,0,6.3);
+      for(var w=0;w<4;w++){ var wa=w/4*3.1416; hx.moveTo(Math.cos(wa)*5,Math.sin(wa)*5); hx.lineTo(-Math.cos(wa)*5,-Math.sin(wa)*5); }
+      hx.stroke(); break;
+    case 'stones':                       // ring of stones
+      hx.fillStyle='#b8b8c0';
+      for(var q=0;q<6;q++){ var qa=q/6*6.283; hx.fillRect(Math.cos(qa)*4-1.2,Math.sin(qa)*4-1.2,2.4,2.4); } break;
+  }
+  hx.restore();
+}
 function drawHUD(){
   hx.setTransform(1,0,0,1,0,0);
   hx.clearRect(0,0,hud.width,hud.height);
@@ -1549,29 +1751,46 @@ function drawHUD(){
     hx.fillStyle='#bff0ff'; hx.font='600 11px Georgia,serif';
     hx.fillText(FAIRYNAME[p.buff].split(' ')[0]+' '+Math.ceil(p.buffT)+'s',pad+bw+84,pad+40);
   }
-  // minimap
-  var mr=DESKTOP?Math.min(92,W*0.07):Math.min(58,W*0.14), mx=W-pad-mr, my=pad+mr+(DESKTOP?10:34);
+  // minimap: every kind of thing has its own shape, landmarks off the edge stay
+  // pinned to the rim so you always know which way they lie
+  var MG=mapGeom(), mr=MG.r, mx=MG.x, my=MG.y;
   hx.save(); hx.beginPath(); hx.arc(mx,my,mr,0,6.3); hx.clip();
   hx.fillStyle='rgba(12,18,12,.62)'; hx.fillRect(mx-mr,my-mr,mr*2,mr*2);
-  var sc=mr/(DESKTOP?86:70);
-  for(var L=0;L<LANDMARKS.length;L++){
-    var lm=LANDMARKS[L], dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
-    var rot=rotPt(dx,dz,G.cam.yaw);
-    hx.fillStyle=G.found[lm.name]?'#e8c26a':'#6b5f3a';
-    hx.fillRect(mx+rot.x-3,my+rot.y-3,6,6);
-  }
+  var sc=mr/(DESKTOP?86:70), ms=DESKTOP?1:0.85;
   for(var e2=0;e2<G.ents.length;e2++){
     var en=G.ents[e2];
     if(en.kind==='shot'||en.kind==='eshot') continue;
     var ddx=(en.x-p.x)*sc, ddz=(en.z-p.z)*sc;
     if(Math.hypot(ddx,ddz)>mr) continue;
     var rp=rotPt(ddx,ddz,G.cam.yaw);
-    hx.fillStyle=en.kind==='ally'?'#7fbf5a':(en.kind==='cocoon'?'#dfe8e8':(en.kind==='fairy'?'#bff0ff':'#d6584a'));
-    hx.beginPath(); hx.arc(mx+rp.x,my+rp.y,en.kind==='cocoon'?2.6:2,0,6.3); hx.fill();
+    mapIcon(en.kind==='goblin'?(en.gk==='bow'?'archer':'goblin'):(en.kind==='spider'&&en.big?'bigspider':en.kind),mx+rp.x,my+rp.y,ms);
   }
-  hx.fillStyle='#f3e7c9'; hx.beginPath(); hx.moveTo(mx,my-5); hx.lineTo(mx-3.6,my+4); hx.lineTo(mx+3.6,my+4); hx.closePath(); hx.fill();
   hx.restore();
+  for(var L=0;L<LANDMARKS.length;L++){
+    var lm=LANDMARKS[L], dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
+    var rot=rotPt(dx,dz,G.cam.yaw), rl=Math.hypot(rot.x,rot.y), edge=rl>mr-7;
+    if(edge){ rot.x*=(mr-7)/rl; rot.y*=(mr-7)/rl; }
+    mapIcon(lm.kind,mx+rot.x,my+rot.y,ms*(edge?0.85:1.1),!G.found[lm.name]);
+  }
+  // north marker rides the rim (the map turns with the camera)
+  var nr=rotPt(0,-mr,G.cam.yaw);
+  hx.font='700 '+Math.round(11*ms)+'px Georgia,serif'; hx.textAlign='center';
+  hx.fillStyle='rgba(8,11,8,.8)'; hx.beginPath(); hx.arc(mx+nr.x,my+nr.y,7*ms,0,6.3); hx.fill();
+  hx.fillStyle='#e8c26a'; hx.fillText('N',mx+nr.x,my+nr.y+4*ms);
+  hx.fillStyle='#f3e7c9'; hx.beginPath(); hx.moveTo(mx,my-5); hx.lineTo(mx-3.6,my+4); hx.lineTo(mx+3.6,my+4); hx.closePath(); hx.fill();
   hx.strokeStyle='rgba(232,194,106,.55)'; hx.lineWidth=2; hx.beginPath(); hx.arc(mx,my,mr,0,6.3); hx.stroke();
+  if(DESKTOP||SHOWKEY){
+    var keyItems=[['spider','Spider'],['goblin','Goblin'],['archer','Goblin archer'],['cocoon','Captive — free them'],
+      ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['camp','Goblin camp'],
+      ['hollow',"Queen's Hollow"],['stones','Standing stones']];
+    var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
+    hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
+    hx.textAlign='left'; hx.font='600 '+(DESKTOP?11.5:10.5)+'px Georgia,serif';
+    for(var ki=0;ki<keyItems.length;ki++){
+      mapIcon(keyItems[ki][0],kx+7,ky+ki*lh-3,0.9);
+      hx.fillStyle='#d8c9a2'; hx.fillText(keyItems[ki][1],kx+18,ky+ki*lh+1);
+    }
+  }
   // diagnostics overlay — screenshot this and send it
   if(SHOWDBG){
     var f=TELE.fps.slice().sort(function(a,b){return a-b;});
@@ -1652,11 +1871,11 @@ function drawHUD(){
     hx.fillStyle='rgba(243,231,201,.42)';
     hx.fillText(keys,W/2,H2-30); hx.fillText(keys2,W/2,H2-13);
     if(!LOCKED){
-      var bw3=250, bh3=44;
-      hx.fillStyle='rgba(8,11,8,.72)'; roundRect(W/2-bw3/2,H2*0.5-bh3/2,bw3,bh3,10); hx.fill();
-      hx.strokeStyle='rgba(232,194,106,.7)'; hx.lineWidth=2; hx.stroke();
-      hx.fillStyle='#e8c26a'; hx.font='600 15px Georgia,serif';
-      hx.fillText('Click to look around',W/2,H2*0.5+5);
+      var bw3=210, bh3=34, by3=H2*0.80;
+      hx.fillStyle='rgba(8,11,8,.62)'; roundRect(W/2-bw3/2,by3-bh3/2,bw3,bh3,9); hx.fill();
+      hx.strokeStyle='rgba(232,194,106,.6)'; hx.lineWidth=1.5; hx.stroke();
+      hx.fillStyle='#e8c26a'; hx.font='600 14px Georgia,serif';
+      hx.fillText('Click to look around',W/2,by3+5);
     } else {
       // a small crosshair, since the mouse is captured
       hx.strokeStyle='rgba(243,231,201,.5)'; hx.lineWidth=1.5;
@@ -1757,10 +1976,11 @@ function startRun(){
   recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0;
   populate();
-  G.cam.yaw=0; G.cam.pitch=DESKTOP?0.36:0.30; G.cam.dist=DESKTOP?9.2:7.0;
+  G.cam.yaw=0; G.cam.pitch=DESKTOP?0.32:0.30; G.cam.dist=DESKTOP?6.2:7.0;
   G.cam.x=G.player.x; G.cam.y=G.player.y+6; G.cam.z=G.player.z+9;
   layoutButtons();
   hide(); G.state='play';
+  wantLock();                     // the Play click is a user gesture: capture the mouse now
   tip('Find the tavern light to the north');
 }
 function skillScreen(){
@@ -1868,6 +2088,7 @@ function boot(){
   uni.model=gl.getUniformLocation(prog,'uModel'); uni.time=gl.getUniformLocation(prog,'uTime');
   uni.tint=gl.getUniformLocation(prog,'uTint'); uni.fog=gl.getUniformLocation(prog,'uFog');
   uni.sun=gl.getUniformLocation(prog,'uSun'); uni.alpha=gl.getUniformLocation(prog,'uAlpha'); uni.unlit=gl.getUniformLocation(prog,'uUnlit');
+  uni.cut=gl.getUniformLocation(prog,'uCut'); uni.cam=gl.getUniformLocation(prog,'uCam'); uni.focus=gl.getUniformLocation(prog,'uFocus');
   gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
   resize();
   initParts(gl);

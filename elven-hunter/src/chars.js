@@ -1,27 +1,17 @@
-/* ---------- limb mesh: y from 0 down to -1 ---------- */
-function limbMesh(col,taper){
-  var m=new MB(), t=(taper===undefined)?1:taper, h=0.5, ht=h*t;
-  var A=[-h,0,-h],B=[h,0,-h],C=[h,0,h],D=[-h,0,h];
-  var E=[-ht,-1,-ht],F=[ht,-1,-ht],G=[ht,-1,ht],H2=[-ht,-1,ht];
-  var d=[col[0]*0.85,col[1]*0.85,col[2]*0.85];
-  m.quad(A,B,C,D,col); m.quad(H2,G,F,E,d);
-  m.quad(A,E,F,B,col); m.quad(B,F,G,C,d);
-  m.quad(C,G,H2,D,col); m.quad(D,H2,E,A,d);
-  return m;
-}
 var PARTS={};
 function initParts(gl){
   function reg(k,mb){ PARTS[k]=new GPUMesh(gl,mb); PARTS[k].mb=mb; }
   reg('box',boxMesh([1,1,1]));
-  reg('boxT',boxMesh([1,1,1],0.7));
-  reg('boxW',boxMesh([1,1,1],1.22));
-  reg('limb',limbMesh([1,1,1],0.8));
-  reg('limbT',limbMesh([1,1,1],0.45));
-  reg('blob',blobMesh([1,1,1],0));
-  reg('blobR',blobMesh([1,1,1],0.3));
-  reg('cone',coneMesh([1,1,1],6));
-  reg('cone8',coneMesh([1,1,1],8));
-  reg('tube',coneMesh([1,1,1],6,0.5,0.42));
+  // limbs and torsos are rounded tubes, not boxes
+  reg('limb',tubeMesh([1,1,1],0.8,0,-1));
+  reg('limbT',tubeMesh([1,1,1],0.62,0,-1));
+  reg('torso',tubeMesh([1,1,1],1.22,0,1,12));
+  reg('torsoT',tubeMesh([1,1,1],0.72,0,1,12));
+  reg('blob',blobMesh([1,1,1],0,2));
+  reg('blobR',blobMesh([1,1,1],0.12,2));
+  reg('cone',coneMesh([1,1,1],10));
+  reg('cone8',coneMesh([1,1,1],12));
+  reg('tube',coneMesh([1,1,1],10,0.5,0.42));
   reg('disc',discMesh(14));
   reg('sky',skyMesh([0.62,0.70,0.68],[0.30,0.45,0.52],[0.20,0.25,0.22],20));
 }
@@ -39,9 +29,9 @@ function humanoidRig(out,e,t){
     var mvL=Math.min(1,(e.speed||0)/4.4), swL=Math.sin(e.walkPhase||0)*0.7*mvL;
     out.push(['limb',-0.17*s,0.86*s,0, swL,0,0, 0.24*s,0.86*s,0.24*s,P.pants]);
     out.push(['limb', 0.17*s,0.86*s,0,-swL,0,0, 0.24*s,0.86*s,0.24*s,P.pants]);
-    out.push(['boxT',0,0.86*s,0, 0,0,0, 0.52*s,0.62*s,0.32*s,P.cloak||P.tunic]);
-    out.push(['box',0,1.48*s,0, 0,0,0, 0.30*s,0.30*s,0.30*s,P.skin]);
-    out.push(['box',0,1.68*s,0, 0,0,0, 0.34*s,0.14*s,0.34*s,P.hair]);
+    out.push(['torsoT',0,0.86*s,0, 0,0,0, 0.52*s,0.62*s,0.34*s,P.cloak||P.tunic]);
+    out.push(['blob',0,1.46*s,0, 0,0,0, 0.32*s,0.34*s,0.32*s,P.skin]);
+    out.push(['blob',0,1.62*s,-0.02*s, 0,0,0, 0.35*s,0.22*s,0.35*s,P.hair]);
     return;
   }
   var P=e.look2||e.look, sc=e.scale||1;
@@ -59,11 +49,11 @@ function humanoidRig(out,e,t){
   var lrx=sw+air*0.65, rrx=-sw+air*0.35;
   push('limbT',-0.17*sc,HIP,0, lrx,0,0, 0.30*sc,HIP,0.30*sc, P.pants);
   push('limbT', 0.17*sc,HIP,0, rrx,0,0, 0.30*sc,HIP,0.30*sc, P.pants);
-  push('box',-0.18*sc+Math.sin(lrx)*HIP*0.92, HIP-Math.cos(lrx)*HIP, Math.sin(lrx)*0.04, lrx*0.3,0,0, 0.27*sc,0.17*sc,0.38*sc, P.boot);
-  push('box', 0.18*sc+Math.sin(rrx)*HIP*0.92, HIP-Math.cos(rrx)*HIP, Math.sin(rrx)*0.04, rrx*0.3,0,0, 0.27*sc,0.17*sc,0.38*sc, P.boot);
+  push('blob',-0.17*sc, HIP-Math.cos(lrx)*HIP-0.06*sc, Math.sin(lrx)*HIP+0.05*sc, lrx*0.3,0,0, 0.26*sc,0.20*sc,0.40*sc, P.boot);
+  push('blob', 0.17*sc, HIP-Math.cos(rrx)*HIP-0.06*sc, Math.sin(rrx)*HIP+0.05*sc, rrx*0.3,0,0, 0.26*sc,0.20*sc,0.40*sc, P.boot);
   // torso: broad at the shoulders, narrow at the waist
-  push('boxW',0,HIP-0.02*sc,0, tilt*0.5,sw2*0.18,0, 0.46*sc,TOR+0.02*sc,0.30*sc, P.tunic);
-  push('box', 0,HIP+TOR*0.30,0, tilt*0.5,sw2*0.18,0, 0.50*sc,0.10*sc,0.33*sc, P.belt);
+  push('torso',0,HIP-0.02*sc,0, tilt*0.5,sw2*0.18,0, 0.46*sc,TOR+0.02*sc,0.32*sc, P.tunic);
+  push('tube', 0,HIP+TOR*0.26,0, tilt*0.5,sw2*0.18,0, 0.50*sc,0.10*sc,0.35*sc, P.belt);
   // shoulders
   push('blob',-0.27*sc,SH-0.10*sc,0, 0,0,0, 0.24*sc,0.22*sc,0.26*sc, P.pauldron||P.tunic);
   push('blob', 0.27*sc,SH-0.10*sc,0, 0,0,0, 0.24*sc,0.22*sc,0.26*sc, P.pauldron||P.tunic);
@@ -79,7 +69,7 @@ function humanoidRig(out,e,t){
   } else {
     push('cone8',0,hy-0.06*sc,-0.02*sc, tilt*0.5,sw2*0.3,0, 0.44*sc,0.46*sc,0.46*sc, P.cloak||P.tunic);
   }
-  if(P.beard) push('boxT',0,hy+0.02*sc,0.09*sc, 3.14,0,0, 0.24*sc,0.26*sc,0.14*sc, P.hair);
+  if(P.beard) push('blob',0,hy-0.06*sc,0.10*sc, 0,0,0, 0.26*sc,0.26*sc,0.16*sc, P.hair);
   if(P.helm) push('cone8',0,hy+0.10*sc,0, 0,0,0, 0.36*sc,0.30*sc,0.36*sc, P.metal);
   // arms
   var shY=SH-0.06*sc, shX=0.29*sc, aL=0.62*sc;
@@ -96,7 +86,7 @@ function humanoidRig(out,e,t){
   if(P.cloak){
     var fl=0.20+mv*0.55+Math.sin(walk*2)*0.05*mv;
     push('limbT',0,SH+0.01*sc,-0.24*sc, fl,0,0, 0.48*sc,(SH-0.34*sc),0.09*sc, P.cloak);
-    push('box', 0,SH+0.03*sc,-0.17*sc, 0,0,0, 0.50*sc,0.11*sc,0.20*sc, P.cloak);
+    push('blob', 0,SH-0.03*sc,-0.15*sc, 0,0,0, 0.54*sc,0.16*sc,0.24*sc, P.cloak);
   }
   // weapon
   var wx=shX+Math.sin(raRx)*aL, wy=shY-Math.cos(raRx)*aL;

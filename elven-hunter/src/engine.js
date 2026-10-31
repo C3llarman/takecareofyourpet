@@ -59,6 +59,15 @@ MB.prototype.tri=function(ax,ay,az,bx,by,bz,cx,cy,cz,col,flag){
   this.c.push(r,g,b,r,g,b,r,g,b);
   var fl=flag||0; this.f.push(fl,fl,fl);
 };
+/* smooth triangle: per-vertex positions, normals and colours, so light rolls
+   across a surface instead of breaking on every facet */
+MB.prototype.triV=function(a,b,c,na,nb,nc,ca,cb,cc,flag){
+  this.p.push(a[0],a[1],a[2],b[0],b[1],b[2],c[0],c[1],c[2]);
+  this.n.push(na[0],na[1],na[2],nb[0],nb[1],nb[2],nc[0],nc[1],nc[2]);
+  this.c.push(ca[0],ca[1],ca[2],cb[0],cb[1],cb[2],cc[0],cc[1],cc[2]);
+  var fl=flag||0; this.f.push(fl,fl,fl);
+};
+function nrm(v){ var l=Math.hypot(v[0],v[1],v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
 MB.prototype.quad=function(a,b,c,d,col,flag){
   this.tri(a[0],a[1],a[2],b[0],b[1],b[2],c[0],c[1],c[2],col,flag);
   this.tri(a[0],a[1],a[2],c[0],c[1],c[2],d[0],d[1],d[2],col,flag);
@@ -80,41 +89,68 @@ function boxMesh(col,taper){
   m.quad(D,A,E,H,d);
   return m;
 }
-/* cone: radius 0.5 at y=0, apex y=1 */
-function coneMesh(col,seg,r0,r1){
-  var m=new MB(); seg=seg||7; r0=(r0===undefined)?0.5:r0; r1=(r1===undefined)?0:r1;
+/* cone / frustum: radius r0 at y=0, r1 at y=1, smooth-shaded sides */
+function coneMesh(col,seg,r0,r1,noCap){
+  var m=new MB(); seg=seg||10; r0=(r0===undefined)?0.5:r0; r1=(r1===undefined)?0:r1;
+  var ny=r0-r1, dk=[col[0]*0.7,col[1]*0.7,col[2]*0.7], down=[0,-1,0];
   for(var i=0;i<seg;i++){
-    var a=i/seg*Math.PI*2, b=(i+1)/seg*Math.PI*2;
-    var x0=Math.cos(a)*r0,z0=Math.sin(a)*r0,x1=Math.cos(b)*r0,z1=Math.sin(b)*r0;
-    var X0=Math.cos(a)*r1,Z0=Math.sin(a)*r1,X1=Math.cos(b)*r1,Z1=Math.sin(b)*r1;
-    var sh=0.88+0.12*Math.cos(a);
-    var cc=[col[0]*sh,col[1]*sh,col[2]*sh];
-    if(r1<=0.001) m.tri(x0,0,z0,x1,0,z1,0,1,0,cc);
-    else m.quad([x0,0,z0],[x1,0,z1],[X1,1,Z1],[X0,1,Z0],cc);
-    m.tri(0,0,0,x1,0,z1,x0,0,z0,[col[0]*0.7,col[1]*0.7,col[2]*0.7]);
+    var a=i/seg*Math.PI*2, b=(i+1)/seg*Math.PI*2, h=(a+b)/2;
+    var ca=Math.cos(a),sa=Math.sin(a),cb=Math.cos(b),sb=Math.sin(b);
+    var na=nrm([ca,ny,sa]), nb=nrm([cb,ny,sb]), nh=nrm([Math.cos(h),ny,Math.sin(h)]);
+    var A=[ca*r0,0,sa*r0], B=[cb*r0,0,sb*r0];
+    if(r1<=0.001) m.triV(A,B,[0,1,0], na,nb,nh, col,col,col);
+    else {
+      var C=[cb*r1,1,sb*r1], D=[ca*r1,1,sa*r1];
+      m.triV(A,B,C,na,nb,nb,col,col,col); m.triV(A,C,D,na,nb,na,col,col,col);
+      if(!noCap) m.tri(D[0],1,D[2],C[0],1,C[2],0,1,0,col);
+    }
+    if(!noCap) m.triV([0,0,0],B,A,down,down,down,dk,dk,dk);
   }
   return m;
 }
-/* faceted sphere-ish blob (octahedron subdivided once) */
-function blobMesh(col,jitter){
-  var m=new MB(), J=jitter||0;
+/* rounded tube for limbs and torsos: y from y0 to y1, radius 0.5 -> 0.5*taper,
+   capped with shallow domes so the ends read as round rather than cut */
+function tubeMesh(col,taper,y0,y1,seg){
+  var m=new MB(); seg=seg||10;
+  var r0=0.5, r1=0.5*taper, dir=(y1>y0)?1:-1, ny=(r0-r1)*dir;
+  function ring(r,y,k){ var a=k/seg*Math.PI*2; return [Math.cos(a)*r,y,Math.sin(a)*r]; }
+  var e0=[0,y0-dir*0.22,0], e1=[0,y1+dir*0.18*taper,0], u0=[0,-dir,0], u1=[0,dir,0];
+  for(var i=0;i<seg;i++){
+    var a=i/seg*Math.PI*2, b=(i+1)/seg*Math.PI*2;
+    var na=nrm([Math.cos(a),ny,Math.sin(a)]), nb=nrm([Math.cos(b),ny,Math.sin(b)]);
+    var A=ring(r0,y0,i),B=ring(r0,y0,i+1),C=ring(r1,y1,i+1),D=ring(r1,y1,i);
+    if(dir>0){ m.triV(A,C,B,na,nb,nb,col,col,col); m.triV(A,D,C,na,na,nb,col,col,col);
+               m.triV(A,B,e0,na,nb,u0,col,col,col); m.triV(D,e1,C,na,u1,nb,col,col,col); }
+    else     { m.triV(A,B,C,na,nb,nb,col,col,col); m.triV(A,C,D,na,nb,na,col,col,col);
+               m.triV(B,A,e0,nb,na,u0,col,col,col); m.triV(C,e1,D,nb,u1,na,col,col,col); }
+  }
+  return m;
+}
+/* smooth sphere-ish blob: an octahedron subdivided `level` times (default 2),
+   with normals taken from the sphere so it shades round */
+function blobMesh(col,jitter,level){
+  var m=new MB(), J=jitter||0; level=(level===undefined)?2:level;
   var v=[[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]];
   var faces=[[0,4,2],[0,2,5],[0,5,3],[0,3,4],[1,2,4],[1,5,2],[1,3,5],[1,4,3]];
   function mid(a,b){var x=(a[0]+b[0])/2,y=(a[1]+b[1])/2,z=(a[2]+b[2])/2,l=Math.hypot(x,y,z)||1;return [x/l,y/l,z/l];}
   var rs=[];
-  for(var f=0;f<faces.length;f++){
-    var A=v[faces[f][0]],B=v[faces[f][1]],C=v[faces[f][2]];
-    var AB=mid(A,B),BC=mid(B,C),CA=mid(C,A);
-    rs.push([A,AB,CA],[AB,B,BC],[CA,BC,C],[AB,BC,CA]);
-  }
-  for(var i=0;i<rs.length;i++){
-    var t=rs[i], p=[];
-    for(var k=0;k<3;k++){
-      var q=t[k], s=1+ (J? (Math.sin(q[0]*9.1+q[1]*4.7+q[2]*7.3)*J):0);
-      p.push([q[0]*0.5*s,q[1]*0.5*s+0.5,q[2]*0.5*s]);
+  for(var f=0;f<faces.length;f++) rs.push([v[faces[f][0]],v[faces[f][1]],v[faces[f][2]]]);
+  for(var lv=0;lv<level;lv++){
+    var nx=[];
+    for(var r=0;r<rs.length;r++){
+      var A=rs[r][0],B=rs[r][1],C=rs[r][2], AB=mid(A,B),BC=mid(B,C),CA=mid(C,A);
+      nx.push([A,AB,CA],[AB,B,BC],[CA,BC,C],[AB,BC,CA]);
     }
-    var sh=0.85+0.15*(p[0][1]);
-    m.tri(p[0][0],p[0][1],p[0][2],p[1][0],p[1][1],p[1][2],p[2][0],p[2][1],p[2][2],[col[0]*sh,col[1]*sh,col[2]*sh]);
+    rs=nx;
+  }
+  function vert(q){
+    var s=1+(J?(Math.sin(q[0]*9.1+q[1]*4.7+q[2]*7.3)*J):0);
+    return [q[0]*0.5*s,q[1]*0.5*s+0.5,q[2]*0.5*s];
+  }
+  function shade(q){ var sh=0.86+0.14*(0.5+0.5*q[1]); return [col[0]*sh,col[1]*sh,col[2]*sh]; }
+  for(var i=0;i<rs.length;i++){
+    var t=rs[i];
+    m.triV(vert(t[0]),vert(t[1]),vert(t[2]), t[0],t[1],t[2], shade(t[0]),shade(t[1]),shade(t[2]));
   }
   return m;
 }
@@ -131,24 +167,40 @@ function GPUMesh(gl,mb){
 var VS=[
 'attribute vec3 aP; attribute vec3 aN; attribute vec3 aC; attribute float aF;',
 'uniform mat4 uProj,uView,uModel; uniform float uTime; uniform vec3 uTint;',
-'varying vec3 vN; varying vec3 vC; varying float vFog; varying float vY;',
+'varying vec3 vN; varying vec3 vC; varying float vFog; varying vec3 vW; varying float vProp;',
 'void main(){',
 '  vec3 p=aP;',
-'  if(aF>0.5){ p.y += sin(p.x*0.35+uTime*1.3)*0.12 + sin(p.z*0.27-uTime*0.9)*0.12; }',
+'  if(aF>0.5&&aF<1.5){ p.y += sin(p.x*0.35+uTime*1.3)*0.12 + sin(p.z*0.27-uTime*0.9)*0.12; }',
 '  vec4 wp=uModel*vec4(p,1.0);',
 '  vec4 vp=uView*wp;',
 '  gl_Position=uProj*vp;',
 '  vN=normalize((uModel*vec4(aN,0.0)).xyz);',
 '  vC=aC*uTint;',
-'  vY=wp.y;',
+'  vW=wp.xyz;',
+'  vProp=aF>1.5?1.0:0.0;',
 '  vFog=clamp((-vp.z-38.0)/95.0,0.0,1.0);',
 '}'].join('\n');
 
+/* Props (trees, rocks, buildings) that sit between the camera and the hunter are
+   cut away with a dithered hole, so the forest never hides who you are playing. */
 var FS=[
+'#ifdef GL_FRAGMENT_PRECISION_HIGH',
+'precision highp float;',
+'#else',
 'precision mediump float;',
-'varying vec3 vN; varying vec3 vC; varying float vFog; varying float vY;',
+'#endif',
+'varying vec3 vN; varying vec3 vC; varying float vFog; varying vec3 vW; varying float vProp;',
 'uniform vec3 uFog; uniform vec3 uSun; uniform float uAlpha; uniform float uUnlit;',
+'uniform float uCut; uniform vec3 uCam; uniform vec3 uFocus;',
 'void main(){',
+'  if(uCut>0.5&&vProp>0.5){',
+'    vec3 ab=uFocus-uCam; float t=clamp(dot(vW-uCam,ab)/max(dot(ab,ab),0.001),0.0,1.0);',
+'    if(t<0.96){',
+'      float k=length(vW-(uCam+ab*t))/mix(1.1,1.9,t);',
+'      if(k<0.65) discard;',
+'      if(k<1.0&&mod(floor(gl_FragCoord.x)+floor(gl_FragCoord.y),2.0)<1.0) discard;',
+'    }',
+'  }',
 '  if(uUnlit>0.5){ gl_FragColor=vec4(vC,1.0); return; }',
 '  vec3 n=normalize(vN);',
 '  float d=max(dot(n,uSun),0.0);',

@@ -255,6 +255,8 @@ function ptrDown(id,x,y){
   if(G.state!=='play') return;
   var b=hitBtn(x,y);
   if(b){ touches[id]={btn:b.id}; press(b.id); TELE.tap(b.id,x,y,true); return; }
+  var MG=mapGeom();
+  if(Math.hypot(x-MG.x,y-MG.y)<MG.r){ SHOWKEY=!SHOWKEY; return; }   // tap the map for its key
   var stickTaken=false;
   for(var k in touches) if(touches[k].stick) stickTaken=true;
   if(!stickTaken && x<W*0.58){
@@ -476,6 +478,7 @@ function update(dt){
   // bounds
   var bd=Math.hypot(p.x,p.z), lim=WHALF*0.95;
   if(bd>lim){ p.x*=lim/bd; p.z*=lim/bd; }
+  collide(p,0.42*(p.scale||1));   // trunks, rocks and walls are solid
   // gravity / jump
   var gh=H(p.x,p.z);
   if((IN.jump||IN.jumpBuf>0)&&p.onGround){ p.vy=8.9; p.onGround=false; IN.jumpBuf=0; }
@@ -487,8 +490,9 @@ function update(dt){
   // actions — a tap during cooldown is remembered briefly so it never feels dropped
   IN.atkBuf=Math.max(0,IN.atkBuf-dt); IN.shotBuf=Math.max(0,IN.shotBuf-dt); IN.jumpBuf=Math.max(0,IN.jumpBuf-dt);
   if(IN.attack||IN.atkBuf>0){ if(p.cdT<=0){ doAttack(); IN.atkBuf=0; } }
-  else if(p.cdT<=0&&!p.dead){
-    // auto-swing: if something hostile is already in reach, the hunter defends herself
+  else if(!DESKTOP&&p.cdT<=0&&!p.dead){
+    // auto-swing (touch only): if something hostile is already in reach, the hunter
+    // defends herself. With a mouse it just yanked your facing around, so it is off.
     for(var ai2=0;ai2<G.ents.length;ai2++){
       var ae=G.ents[ai2];
       if(ae.kind!=='spider'&&ae.kind!=='goblin') continue;
@@ -499,6 +503,7 @@ function update(dt){
   if(IN.dash){ IN.dash=false; if(S.dash&&p.dashCd<=0){ p.dashCd=1.6; p.dashT=0.19; msg('Shadowstep','#bff0ff',p.x,p.y+2.4,p.z);} }
 
   updateEnts(dt);
+  separate();
   followCam(dt);
   // landmarks: discovery, and the tavern as a place to rest
   p.atTavern=false;
@@ -546,9 +551,34 @@ function moveCreature(e,dt,tx,tz,spd){
     e.x+=(dx/d)*m*dt; e.z+=(dz/d)*m*dt; e.speed=m;
     e.walkPhase+=dt*m*(e.kind==='spider'?2.4:1.5);
   } else e.speed=0;
+  collide(e,bodyR(e));
   var gh=H(e.x,e.z);
   if(e.onGround===false){ e.vy-=24*dt; e.y+=e.vy*dt; if(e.y<=gh){e.y=gh;e.vy=0;e.onGround=true;} }
   else e.y+=(gh-e.y)*Math.min(1,dt*10);
+}
+function bodyR(e){
+  if(e.kind==='spider') return 0.75*(e.scale||1);
+  return 0.42*(e.scale||1);
+}
+/* keep bodies from stacking: creatures, allies and the hunter shove each other apart */
+var BODIES=[];
+function separate(){
+  var p=G.player; BODIES.length=0; BODIES.push(p);
+  for(var i=0;i<G.ents.length;i++){ var e=G.ents[i];
+    if((e.kind==='spider'||e.kind==='goblin'||e.kind==='ally')&&Math.abs(e.x-p.x)<60&&Math.abs(e.z-p.z)<60) BODIES.push(e); }
+  for(var a=0;a<BODIES.length;a++){ var A=BODIES[a], ra=bodyR(A);
+    for(var b=a+1;b<BODIES.length;b++){ var B=BODIES[b];
+      var dx=B.x-A.x, dz=B.z-A.z, R=ra+bodyR(B);
+      if(dx>R||dx<-R||dz>R||dz<-R) continue;
+      var d=Math.hypot(dx,dz); if(d>=R) continue;
+      if(d<1e-4){ dx=Math.random()-0.5; dz=Math.random()-0.5; d=Math.hypot(dx,dz); }
+      var push=(R-d), nx=dx/d, nz=dz/d;
+      // the hunter is heavy: creatures give way, she barely moves
+      var wa=(A===p)?0.15:0.5, wb=(A===p)?0.85:0.5;
+      A.x-=nx*push*wa; A.z-=nz*push*wa; B.x+=nx*push*wb; B.z+=nz*push*wb;
+    }
+  }
+  collide(p,0.42*(p.scale||1));
 }
 function updateEnts(dt){
   var p=G.player;
@@ -637,7 +667,10 @@ function updateEnts(dt){
               }
             }
           } else {
-            moveCreature(e,dt,tgt.x,tgt.z,spd);
+            var stopD=bodyR(e)+bodyR(tgt)+0.25;
+            if(tdist>stopD) moveCreature(e,dt,tgt.x,tgt.z,spd);
+            else { e.speed*=0.6; var fy=Math.atan2(tgt.x-e.x,tgt.z-e.z);
+              e.yaw+=(((fy-e.yaw+9.42)%6.28)-3.14)*Math.min(1,dt*8); }
             if(tdist<1.6+(e.scale||1)&&e.atkCd<=0){
               e.atkCd=e.big?1.9:1.35; e.wind=e.big?0.55:0.38;
             }
@@ -774,7 +807,11 @@ function draw(){
   m4id(model);
   gl.uniformMatrix4fv(uni.model,false,model);
   gl.uniform3f(uni.tint,1,1,1);
+  gl.uniform1f(uni.cut,1);
+  gl.uniform3f(uni.cam,c.x,c.y,c.z);
+  gl.uniform3f(uni.focus,p.x,p.y+1.1*(p.scale||1),p.z);
   bindMesh(WORLD); gl.drawArrays(gl.TRIANGLES,0,WORLD.n);
+  gl.uniform1f(uni.cut,0);
   // contact shadows
   SHAD.length=0;
   addShadow(p);
@@ -865,6 +902,58 @@ function pushEnt(e){
 }
 
 /* ---------- HUD ---------- */
+var SHOWKEY=false;
+/* minimap placement: top-right on a laptop; on a phone it sits under the health
+   panel, because the top-right corner belongs to the potion / skill buttons */
+function mapGeom(){
+  if(DESKTOP){ var r=Math.min(92,W*0.07); return {x:W-12*clamp(W/1100,1,1.5)-r, y:12*clamp(W/1100,1,1.5)+r+10, r:r}; }
+  var r2=Math.min(54,W*0.13); return {x:12+r2, y:12+56+12+r2, r:r2};
+}      // phones: tap the minimap to show the map key
+/* minimap glyphs, one shape per kind so you can tell what is what at a glance */
+function mapIcon(kind,x,y,s,unknown){
+  s=s||1; hx.save(); hx.translate(x,y); hx.scale(s,s); hx.lineWidth=1.4;
+  if(unknown){
+    hx.fillStyle='rgba(8,11,8,.85)'; hx.beginPath(); hx.arc(0,0,6,0,6.3); hx.fill();
+    hx.strokeStyle='#8a7a50'; hx.stroke();
+    hx.fillStyle='#c9b27a'; hx.font='700 9px Georgia,serif'; hx.textAlign='center'; hx.fillText('?',0,3.2);
+    hx.restore(); return;
+  }
+  switch(kind){
+    case 'spider': case 'bigspider':     // red body with legs
+      var r=kind==='bigspider'?3.6:2.4;
+      hx.strokeStyle='#d6584a'; hx.beginPath();
+      hx.moveTo(-r*1.7,-r*0.9); hx.lineTo(r*1.7,r*0.9); hx.moveTo(-r*1.7,r*0.9); hx.lineTo(r*1.7,-r*0.9); hx.stroke();
+      hx.fillStyle='#d6584a'; hx.beginPath(); hx.arc(0,0,r,0,6.3); hx.fill(); break;
+    case 'goblin':                       // orange diamond
+      hx.fillStyle='#e8913a'; hx.beginPath(); hx.moveTo(0,-3.4); hx.lineTo(3.4,0); hx.lineTo(0,3.4); hx.lineTo(-3.4,0); hx.closePath(); hx.fill(); break;
+    case 'archer':                       // orange diamond with a dark bow-mark
+      hx.fillStyle='#e8913a'; hx.beginPath(); hx.moveTo(0,-3.6); hx.lineTo(3.6,0); hx.lineTo(0,3.6); hx.lineTo(-3.6,0); hx.closePath(); hx.fill();
+      hx.fillStyle='#2a1a0a'; hx.fillRect(-0.7,-2,1.4,4); break;
+    case 'cocoon':                       // white ring: someone to rescue
+      hx.strokeStyle='#eef6f6'; hx.lineWidth=1.8; hx.beginPath(); hx.arc(0,0,3,0,6.3); hx.stroke();
+      hx.fillStyle='#eef6f6'; hx.beginPath(); hx.arc(0,0,1,0,6.3); hx.fill(); break;
+    case 'ally':                         // green dot
+      hx.fillStyle='#7fdf5a'; hx.beginPath(); hx.arc(0,0,2.6,0,6.3); hx.fill(); break;
+    case 'fairy':                        // cyan four-point star
+      hx.fillStyle='#bff0ff'; hx.beginPath();
+      for(var k=0;k<8;k++){ var a=k/8*6.283, rr=(k&1)?1.2:4; hx.lineTo(Math.sin(a)*rr,-Math.cos(a)*rr); }
+      hx.closePath(); hx.fill(); break;
+    case 'tavern':                       // warm house
+      hx.fillStyle='#f0b860'; hx.beginPath(); hx.moveTo(-5,0); hx.lineTo(0,-5); hx.lineTo(5,0); hx.lineTo(5,4.5); hx.lineTo(-5,4.5); hx.closePath(); hx.fill();
+      hx.strokeStyle='#2a1a0a'; hx.lineWidth=1; hx.stroke(); break;
+    case 'camp':                         // tent
+      hx.fillStyle='#c0603a'; hx.beginPath(); hx.moveTo(-5,4); hx.lineTo(0,-5); hx.lineTo(5,4); hx.closePath(); hx.fill();
+      hx.strokeStyle='#2a1a0a'; hx.lineWidth=1; hx.stroke(); break;
+    case 'hollow':                       // web
+      hx.strokeStyle='#c9a0e8'; hx.lineWidth=1.2; hx.beginPath(); hx.arc(0,0,4.6,0,6.3); hx.arc(0,0,2.2,0,6.3);
+      for(var w=0;w<4;w++){ var wa=w/4*3.1416; hx.moveTo(Math.cos(wa)*5,Math.sin(wa)*5); hx.lineTo(-Math.cos(wa)*5,-Math.sin(wa)*5); }
+      hx.stroke(); break;
+    case 'stones':                       // ring of stones
+      hx.fillStyle='#b8b8c0';
+      for(var q=0;q<6;q++){ var qa=q/6*6.283; hx.fillRect(Math.cos(qa)*4-1.2,Math.sin(qa)*4-1.2,2.4,2.4); } break;
+  }
+  hx.restore();
+}
 function drawHUD(){
   hx.setTransform(1,0,0,1,0,0);
   hx.clearRect(0,0,hud.width,hud.height);
@@ -909,29 +998,46 @@ function drawHUD(){
     hx.fillStyle='#bff0ff'; hx.font='600 11px Georgia,serif';
     hx.fillText(FAIRYNAME[p.buff].split(' ')[0]+' '+Math.ceil(p.buffT)+'s',pad+bw+84,pad+40);
   }
-  // minimap
-  var mr=DESKTOP?Math.min(92,W*0.07):Math.min(58,W*0.14), mx=W-pad-mr, my=pad+mr+(DESKTOP?10:34);
+  // minimap: every kind of thing has its own shape, landmarks off the edge stay
+  // pinned to the rim so you always know which way they lie
+  var MG=mapGeom(), mr=MG.r, mx=MG.x, my=MG.y;
   hx.save(); hx.beginPath(); hx.arc(mx,my,mr,0,6.3); hx.clip();
   hx.fillStyle='rgba(12,18,12,.62)'; hx.fillRect(mx-mr,my-mr,mr*2,mr*2);
-  var sc=mr/(DESKTOP?86:70);
-  for(var L=0;L<LANDMARKS.length;L++){
-    var lm=LANDMARKS[L], dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
-    var rot=rotPt(dx,dz,G.cam.yaw);
-    hx.fillStyle=G.found[lm.name]?'#e8c26a':'#6b5f3a';
-    hx.fillRect(mx+rot.x-3,my+rot.y-3,6,6);
-  }
+  var sc=mr/(DESKTOP?86:70), ms=DESKTOP?1:0.85;
   for(var e2=0;e2<G.ents.length;e2++){
     var en=G.ents[e2];
     if(en.kind==='shot'||en.kind==='eshot') continue;
     var ddx=(en.x-p.x)*sc, ddz=(en.z-p.z)*sc;
     if(Math.hypot(ddx,ddz)>mr) continue;
     var rp=rotPt(ddx,ddz,G.cam.yaw);
-    hx.fillStyle=en.kind==='ally'?'#7fbf5a':(en.kind==='cocoon'?'#dfe8e8':(en.kind==='fairy'?'#bff0ff':'#d6584a'));
-    hx.beginPath(); hx.arc(mx+rp.x,my+rp.y,en.kind==='cocoon'?2.6:2,0,6.3); hx.fill();
+    mapIcon(en.kind==='goblin'?(en.gk==='bow'?'archer':'goblin'):(en.kind==='spider'&&en.big?'bigspider':en.kind),mx+rp.x,my+rp.y,ms);
   }
-  hx.fillStyle='#f3e7c9'; hx.beginPath(); hx.moveTo(mx,my-5); hx.lineTo(mx-3.6,my+4); hx.lineTo(mx+3.6,my+4); hx.closePath(); hx.fill();
   hx.restore();
+  for(var L=0;L<LANDMARKS.length;L++){
+    var lm=LANDMARKS[L], dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
+    var rot=rotPt(dx,dz,G.cam.yaw), rl=Math.hypot(rot.x,rot.y), edge=rl>mr-7;
+    if(edge){ rot.x*=(mr-7)/rl; rot.y*=(mr-7)/rl; }
+    mapIcon(lm.kind,mx+rot.x,my+rot.y,ms*(edge?0.85:1.1),!G.found[lm.name]);
+  }
+  // north marker rides the rim (the map turns with the camera)
+  var nr=rotPt(0,-mr,G.cam.yaw);
+  hx.font='700 '+Math.round(11*ms)+'px Georgia,serif'; hx.textAlign='center';
+  hx.fillStyle='rgba(8,11,8,.8)'; hx.beginPath(); hx.arc(mx+nr.x,my+nr.y,7*ms,0,6.3); hx.fill();
+  hx.fillStyle='#e8c26a'; hx.fillText('N',mx+nr.x,my+nr.y+4*ms);
+  hx.fillStyle='#f3e7c9'; hx.beginPath(); hx.moveTo(mx,my-5); hx.lineTo(mx-3.6,my+4); hx.lineTo(mx+3.6,my+4); hx.closePath(); hx.fill();
   hx.strokeStyle='rgba(232,194,106,.55)'; hx.lineWidth=2; hx.beginPath(); hx.arc(mx,my,mr,0,6.3); hx.stroke();
+  if(DESKTOP||SHOWKEY){
+    var keyItems=[['spider','Spider'],['goblin','Goblin'],['archer','Goblin archer'],['cocoon','Captive — free them'],
+      ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['camp','Goblin camp'],
+      ['hollow',"Queen's Hollow"],['stones','Standing stones']];
+    var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
+    hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
+    hx.textAlign='left'; hx.font='600 '+(DESKTOP?11.5:10.5)+'px Georgia,serif';
+    for(var ki=0;ki<keyItems.length;ki++){
+      mapIcon(keyItems[ki][0],kx+7,ky+ki*lh-3,0.9);
+      hx.fillStyle='#d8c9a2'; hx.fillText(keyItems[ki][1],kx+18,ky+ki*lh+1);
+    }
+  }
   // diagnostics overlay — screenshot this and send it
   if(SHOWDBG){
     var f=TELE.fps.slice().sort(function(a,b){return a-b;});
@@ -1012,11 +1118,11 @@ function drawHUD(){
     hx.fillStyle='rgba(243,231,201,.42)';
     hx.fillText(keys,W/2,H2-30); hx.fillText(keys2,W/2,H2-13);
     if(!LOCKED){
-      var bw3=250, bh3=44;
-      hx.fillStyle='rgba(8,11,8,.72)'; roundRect(W/2-bw3/2,H2*0.5-bh3/2,bw3,bh3,10); hx.fill();
-      hx.strokeStyle='rgba(232,194,106,.7)'; hx.lineWidth=2; hx.stroke();
-      hx.fillStyle='#e8c26a'; hx.font='600 15px Georgia,serif';
-      hx.fillText('Click to look around',W/2,H2*0.5+5);
+      var bw3=210, bh3=34, by3=H2*0.80;
+      hx.fillStyle='rgba(8,11,8,.62)'; roundRect(W/2-bw3/2,by3-bh3/2,bw3,bh3,9); hx.fill();
+      hx.strokeStyle='rgba(232,194,106,.6)'; hx.lineWidth=1.5; hx.stroke();
+      hx.fillStyle='#e8c26a'; hx.font='600 14px Georgia,serif';
+      hx.fillText('Click to look around',W/2,by3+5);
     } else {
       // a small crosshair, since the mouse is captured
       hx.strokeStyle='rgba(243,231,201,.5)'; hx.lineWidth=1.5;
@@ -1117,10 +1223,11 @@ function startRun(){
   recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0;
   populate();
-  G.cam.yaw=0; G.cam.pitch=DESKTOP?0.36:0.30; G.cam.dist=DESKTOP?9.2:7.0;
+  G.cam.yaw=0; G.cam.pitch=DESKTOP?0.32:0.30; G.cam.dist=DESKTOP?6.2:7.0;
   G.cam.x=G.player.x; G.cam.y=G.player.y+6; G.cam.z=G.player.z+9;
   layoutButtons();
   hide(); G.state='play';
+  wantLock();                     // the Play click is a user gesture: capture the mouse now
   tip('Find the tavern light to the north');
 }
 function skillScreen(){
@@ -1228,6 +1335,7 @@ function boot(){
   uni.model=gl.getUniformLocation(prog,'uModel'); uni.time=gl.getUniformLocation(prog,'uTime');
   uni.tint=gl.getUniformLocation(prog,'uTint'); uni.fog=gl.getUniformLocation(prog,'uFog');
   uni.sun=gl.getUniformLocation(prog,'uSun'); uni.alpha=gl.getUniformLocation(prog,'uAlpha'); uni.unlit=gl.getUniformLocation(prog,'uUnlit');
+  uni.cut=gl.getUniformLocation(prog,'uCut'); uni.cam=gl.getUniformLocation(prog,'uCam'); uni.focus=gl.getUniformLocation(prog,'uFocus');
   gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
   resize();
   initParts(gl);

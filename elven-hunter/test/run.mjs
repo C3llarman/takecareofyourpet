@@ -73,8 +73,10 @@ section('Gameplay');
   await page.evaluate(() => startRun());
 
   const start = await page.evaluate(() => ({ x: G.player.x, z: G.player.z }));
+  // wait on game time, not wall time: software WebGL frame rates vary a lot
+  const t0 = await page.evaluate(() => G.t);
   await page.keyboard.down('w');
-  await page.waitForTimeout(1200);
+  await page.waitForFunction((t) => G.t - t > 1.2, t0, { timeout: 60000 });
   await page.keyboard.up('w');
   const walked = await page.evaluate(([s]) => ({
     moved: Math.hypot(G.player.x - s.x, G.player.z - s.z),
@@ -134,9 +136,29 @@ section('Gameplay');
     const a = G.ents[0]; a.cheer = 0;
     spawnSpider(a.x + 2.5, a.z, false);
     const sp = G.ents[G.ents.length - 1], hp0 = sp.hp;
-    setTimeout(() => res({ engaged: sp.hp < hp0 || G.ents.indexOf(sp) < 0 }), 2500);
+    const t0 = G.t;
+    const wait = () => (G.t - t0 > 2.5 ? res({ engaged: sp.hp < hp0 || G.ents.indexOf(sp) < 0 }) : requestAnimationFrame(wait));
+    requestAnimationFrame(wait);
   }));
   ok('followers fight', ally.engaged);
+
+  const solid = await page.evaluate(() => {
+    // stand the hunter on a tree trunk: collision must push her clear of it
+    const c = COLL.find((k) => !k.box && k.r > 0.25);
+    const o = { x: c.x + 0.05, z: c.z };
+    collide(o, 0.42);
+    // a crowd spawned on one spot must spread out rather than stack
+    G.ents.length = 0;
+    for (let i = 0; i < 5; i++) spawnSpider(G.player.x + 3, G.player.z + 3, false);
+    for (let i = 0; i < 30; i++) separate();
+    const sp = G.ents.filter((e) => e.kind === 'spider');
+    let minD = 1e9;
+    for (let i = 0; i < sp.length; i++) for (let j = i + 1; j < sp.length; j++)
+      minD = Math.min(minD, Math.hypot(sp[i].x - sp[j].x, sp[i].z - sp[j].z));
+    return { clear: Math.hypot(o.x - c.x, o.z - c.z) >= c.r + 0.42 - 1e-6, minD, colliders: COLL.length };
+  });
+  ok('trees and rocks are solid', solid.clear, `${solid.colliders} colliders`);
+  ok('creatures do not stack', solid.minD > 0.8, `closest pair ${solid.minD.toFixed(2)} apart`);
 
   const skills = await page.evaluate(() => {
     G.player.level = 1; G.player.xp = 0; G.build.points = 0; G.build.skills = {};

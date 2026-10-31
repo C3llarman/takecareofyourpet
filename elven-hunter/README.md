@@ -43,7 +43,9 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 
 Drag the left half of the screen to move, the right half to look. Buttons on the right
 handle strike, shoot and jump. Your hunter also swings automatically when something
-hostile gets within reach, so combat never depends on finding a button.
+hostile gets within reach, so combat never depends on finding a button. (Auto-swing is
+touch-only; with a mouse it yanked your facing around, so on a laptop you swing when
+you click.) Tap the minimap to show its key.
 
 The game switches between the two schemes live — move a mouse and it goes to desktop
 mode, touch the screen and it goes back.
@@ -73,14 +75,26 @@ test/
 
 ### Rendering notes
 
+- **Smooth shading.** Meshes carry per-vertex normals: the terrain takes its normals from
+  the heightmap's slope, characters are built from rounded tubes and subdivided spheres,
+  trunks are round and pines are smooth cones. Hills roll and bodies read as round
+  instead of breaking into facets.
+- **See-through foliage.** Trees, rocks and buildings between the camera and the hunter
+  are cut away in the fragment shader with a dithered hole, so the forest never hides
+  you. Props are flagged per vertex (`aF = 2`) so the ground and characters are never cut.
+- **Solid world.** Trunks, larger rocks, stumps and the landmarks register circle or
+  rotated-box colliders in a coarse grid. The hunter, creatures and followers are pushed
+  out of them, and out of each other, so crowds spread around you instead of stacking.
+- **Minimap.** Every kind of thing has its own glyph (spider, goblin, archer, captive,
+  follower, fairy, and an icon per landmark). Undiscovered landmarks show as `?`, and
+  landmarks beyond the map's edge stay pinned to its rim so you can see which way they lie.
+
 - Everything static — terrain, water, every tree and rock — is baked into **one vertex
-  buffer and drawn in a single call** (~134k triangles).
+  buffer and drawn in a single call** (~132k triangles).
 - Characters are assembled per frame from a handful of shared primitive meshes, each
   drawn with its own model matrix. Beyond 20 units, or past the seventh-nearest
   character, a reduced rig is used; a 46-enemy horde costs about 455 draw calls instead
   of 1,100.
-- Flat shading comes free: no vertices are shared between triangles, so every face
-  carries its own normal.
 - **Adaptive resolution.** The game measures its own frame rate and scales the render
   target between 62% and 100% to hold ~60 fps, then eases back up. The HUD canvas draws
   at a lower scale than the 3D view, because Canvas2D compositing is expensive on iOS.
@@ -106,7 +120,7 @@ npm install         # playwright, the only dev dependency
 npm test
 ```
 
-41 assertions run the actual game in headless Chromium with software WebGL and check
+43 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames
@@ -115,13 +129,18 @@ live state. Most of them are regression tests for bugs that shipped at least onc
 - holding the stick sideways walking the player in a circle (a feedback loop between
   camera-relative input and an auto-following camera)
 - terrain normals facing downward, so the ground received no sunlight at all
+- walking straight through tree trunks, and enemies piling onto one spot
+
+Timing-sensitive checks wait on game time (`G.t`) rather than wall-clock time, because
+software WebGL frame rates vary a lot between machines.
 
 ---
 
 ## Known limitations
 
-- **Characters are built from primitives** and look it. The honest fix is real low-poly
-  models (`.glb`) rather than more hand-tuned box coordinates.
+- **Characters are built from primitives.** They are rounded now, but the honest fix is
+  real low-poly models (`.glb`) with skeletal animation, which is the main reason to
+  consider moving the renderer onto an engine such as three.js.
 - **No haptics on iOS.** Safari does not implement the Vibration API. Android gets the
   full set.
 - Save data is limited to a best-depth record in `localStorage`.

@@ -36,24 +36,34 @@ function Hn(x,z){ // normal-ish slope 0..1
   var e=1.2, hl=H(x-e,z),hr=H(x+e,z),hd=H(x,z-e),hu=H(x,z+e);
   return Math.min(1,Math.hypot(hr-hl,hu-hd)/(2*e)*0.9);
 }
-var C_GRASS=[0.29,0.45,0.22], C_GRASS2=[0.26,0.41,0.20], C_DIRT=[0.36,0.27,0.17],
+var C_GRASS=[0.30,0.47,0.22], C_GRASS2=[0.22,0.37,0.18], C_DIRT=[0.36,0.27,0.17],
     C_ROCK=[0.38,0.38,0.40], C_SAND=[0.56,0.50,0.33], C_WATER=[0.16,0.33,0.42];
 
+/* ground colour at a point: drifts smoothly (no checkerboard) and blends
+   grass -> dirt -> rock with slope, sand near the water */
+function groundCol(x,z,y){
+  var sl=Hn(x,z), g=fbm(x+311,z-97,2,0.045);
+  var col=mix3(C_GRASS2,C_GRASS,g);
+  col=mix3(col,C_DIRT,smooth01((sl-0.26)/0.16));
+  col=mix3(col,C_ROCK,smooth01((sl-0.48)/0.14));
+  return mix3(col,C_SAND,smooth01((WATER+0.9-y)/0.6));
+}
 function terrainMesh(){
-  var m=new MB(), N=92, S=WSIZE/N;
-  for(var i=0;i<N;i++) for(var j=0;j<N;j++){
-    var x0=-WHALF+i*S, z0=-WHALF+j*S, x1=x0+S, z1=z0+S;
-    var y00=H(x0,z0),y10=H(x1,z0),y11=H(x1,z1),y01=H(x0,z1);
-    var my=(y00+y10+y11+y01)/4, sl=Hn(x0+S/2,z0+S/2);
-    var col;
-    if(my<WATER+0.5) col=C_SAND;
-    else if(sl>0.55) col=C_ROCK;
-    else if(sl>0.34) col=C_DIRT;
-    else col=(((i+j)&1)?C_GRASS:C_GRASS2);
-    var t=(RNG()-0.5)*0.10;
-    col=[Math.max(0,col[0]+t),Math.max(0,col[1]+t),Math.max(0,col[2]+t)];
-    m.tri(x0,y00,z0, x1,y11,z1, x1,y10,z0, col);
-    m.tri(x0,y00,z0, x0,y01,z1, x1,y11,z1, col);
+  var m=new MB(), N=100, S=WSIZE/N, e=0.8;
+  // shared grid of heights, smooth normals and colours, so hills roll instead of facet
+  var P=[], NN=[], CC=[];
+  for(var i=0;i<=N;i++) for(var j=0;j<=N;j++){
+    var x=-WHALF+i*S, z=-WHALF+j*S, y=H(x,z);
+    P.push([x,y,z]);
+    NN.push(nrm([H(x-e,z)-H(x+e,z),2*e,H(x,z-e)-H(x,z+e)]));
+    var c=groundCol(x,z,y), t=(RNG()-0.5)*0.025;
+    CC.push([Math.max(0,c[0]+t),Math.max(0,c[1]+t),Math.max(0,c[2]+t)]);
+  }
+  function id(i,j){ return i*(N+1)+j; }
+  for(var i2=0;i2<N;i2++) for(var j2=0;j2<N;j2++){
+    var a=id(i2,j2), b=id(i2+1,j2), c2=id(i2+1,j2+1), d=id(i2,j2+1);
+    m.triV(P[a],P[c2],P[b],NN[a],NN[c2],NN[b],CC[a],CC[c2],CC[b]);
+    m.triV(P[a],P[d],P[c2],NN[a],NN[d],NN[c2],CC[a],CC[d],CC[c2]);
   }
   // water plane
   var wc=C_WATER;
@@ -62,6 +72,56 @@ function terrainMesh(){
     m.quad([a,WATER,b],[a,WATER,b+s2],[a+s2,WATER,b+s2],[a+s2,WATER,b],wc,1);
   }
   return m;
+}
+
+function mix3(a,b,t){ t=t<0?0:(t>1?1:t); return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]; }
+function smooth01(t){ t=t<0?0:(t>1?1:t); return t*t*(3-2*t); }
+
+/* ---------- solid props ----------
+   Trunks, rocks and buildings are baked into the world mesh, so they also get a
+   record here: circles and rotated boxes in a coarse grid, used to stop the
+   hunter and the creatures walking through them. */
+var COLL=[], CGRID={}, CCELL=8;
+function cKey(ix,iz){ return ix*1000+iz; }
+function addColl(c){
+  var r=c.r||Math.hypot(c.hx,c.hz);
+  var i0=Math.floor((c.x-r)/CCELL), i1=Math.floor((c.x+r)/CCELL);
+  var j0=Math.floor((c.z-r)/CCELL), j1=Math.floor((c.z+r)/CCELL);
+  for(var i=i0;i<=i1;i++) for(var j=j0;j<=j1;j++){
+    var k=cKey(i,j); (CGRID[k]||(CGRID[k]=[])).push(c);
+  }
+  COLL.push(c);
+}
+function collCircle(x,z,r){ addColl({x:x,z:z,r:r}); }
+function collBox(x,z,hx,hz,ry){ addColl({x:x,z:z,hx:hx,hz:hz,c:Math.cos(ry),s:Math.sin(ry),box:1}); }
+/* push a circle of radius rad at (o.x,o.z) out of every solid it overlaps */
+function collide(o,rad){
+  var hitAny=false;
+  var ix=Math.floor(o.x/CCELL), iz=Math.floor(o.z/CCELL);
+  for(var i=ix-1;i<=ix+1;i++) for(var j=iz-1;j<=iz+1;j++){
+    var L=CGRID[cKey(i,j)]; if(!L) continue;
+    for(var n=0;n<L.length;n++){
+      var c=L[n], dx=o.x-c.x, dz=o.z-c.z;
+      if(!c.box){
+        var R=c.r+rad, d2=dx*dx+dz*dz;
+        if(d2<R*R){ var d=Math.sqrt(d2)||0.001; o.x=c.x+dx/d*R; o.z=c.z+dz/d*R; hitAny=true; }
+      } else {
+        // into box space (inverse of addMesh's rotation)
+        var lx=dx*c.c-dz*c.s, lz=dx*c.s+dz*c.c;
+        var qx=Math.max(-c.hx,Math.min(c.hx,lx)), qz=Math.max(-c.hz,Math.min(c.hz,lz));
+        var ex=lx-qx, ez=lz-qz, e2=ex*ex+ez*ez;
+        if(e2<rad*rad){
+          if(e2>1e-6){ var e=Math.sqrt(e2); lx=qx+ex/e*rad; lz=qz+ez/e*rad; }
+          else { // centre is inside: leave by the nearest face
+            var px=c.hx-Math.abs(lx), pz=c.hz-Math.abs(lz);
+            if(px<pz) lx=(lx<0?-1:1)*(c.hx+rad); else lz=(lz<0?-1:1)*(c.hz+rad);
+          }
+          o.x=c.x+lx*c.c+lz*c.s; o.z=c.z-lx*c.s+lz*c.c; hitAny=true;
+        }
+      }
+    }
+  }
+  return hitAny;
 }
 
 /* ---------- props ---------- */
@@ -75,19 +135,20 @@ function addMesh(dst,src,tx,ty,tz,ry,sx,sy,sz,tint){
     dst.n.push(nx*c+nz*s, ny, -nx*s+nz*c);
     if(tint){ dst.c.push(src.c[i]*tint[0],src.c[i+1]*tint[1],src.c[i+2]*tint[2]); }
     else dst.c.push(src.c[i],src.c[i+1],src.c[i+2]);
-    dst.f.push(src.f[i]);
+    dst.f.push(src.f[i]===1?1:2);   // 2 = prop: may be cut away when it hides the hunter
   }
 }
 var PINE_A=null,PINE_B=null,OAK_A=null,TRUNK=null,ROCK=null,SHROOM=null,FERN=null,STUMP=null;
 function initProps(){
-  TRUNK=boxMesh([0.26,0.19,0.13],0.75);
-  PINE_A=coneMesh([0.17,0.33,0.19],6);
-  PINE_B=coneMesh([0.21,0.40,0.22],6);
-  OAK_A=blobMesh([0.24,0.42,0.20],0.22);
-  ROCK=blobMesh([0.40,0.40,0.42],0.35);
-  SHROOM=coneMesh([0.62,0.24,0.20],6);
-  FERN=coneMesh([0.25,0.46,0.22],5,0.5,0.1);
-  STUMP=coneMesh([0.30,0.22,0.15],7,0.5,0.42);
+  // round, smooth-shaded props (trunks were square boxes, canopies were facets)
+  TRUNK=coneMesh([0.26,0.19,0.13],7,0.5,0.36,true);
+  PINE_A=coneMesh([0.17,0.33,0.19],9,0.5,0,true);
+  PINE_B=coneMesh([0.21,0.40,0.22],9,0.5,0,true);
+  OAK_A=blobMesh([0.24,0.42,0.20],0.14,1);
+  ROCK=blobMesh([0.40,0.40,0.42],0.18,1);
+  SHROOM=blobMesh([0.62,0.24,0.20],0,0);
+  FERN=coneMesh([0.25,0.46,0.22],7,0.5,0.1,true);
+  STUMP=coneMesh([0.30,0.22,0.15],8,0.5,0.42);
 }
 function scatterWorld(m){
   var r=mulberry(7);
@@ -102,6 +163,7 @@ function scatterWorld(m){
     if(k<0.42){ // pine
       var hh=3.6+r()*4.2, rr=0.9+r()*0.5, ry=r()*6.28;
       addMesh(m,TRUNK,x,y,z,ry,0.5*rr,hh*0.42,0.5*rr);
+      collCircle(x,z,0.30*rr);
       var p=(r()<0.5)?PINE_A:PINE_B;
       addMesh(m,p,x,y+hh*0.26,z,ry,2.5*rr,hh*0.52,2.5*rr);
       addMesh(m,p,x,y+hh*0.58,z,ry+0.7,1.9*rr,hh*0.46,1.9*rr);
@@ -109,13 +171,16 @@ function scatterWorld(m){
     } else if(k<0.62){ // broadleaf
       var hh2=3.0+r()*3.0, rr2=1.0+r()*0.6, ry2=r()*6.28;
       addMesh(m,TRUNK,x,y,z,ry2,0.62*rr2,hh2*0.72,0.62*rr2);
+      collCircle(x,z,0.36*rr2);
       addMesh(m,OAK_A,x,y+hh2*0.58,z,ry2,3.5*rr2,3.2*rr2,3.5*rr2);
       if(r()<0.5) addMesh(m,OAK_A,x+rr2,y+hh2*0.75,z-rr2*0.6,ry2+1,2.3*rr2,2.1*rr2,2.3*rr2);
     } else if(k<0.74){ // rock
       var s=0.8+r()*2.6;
       addMesh(m,ROCK,x,y-0.18*s,z,r()*6.28,s,s*(0.6+r()*0.5),s);
+      if(s>1.3) collCircle(x,z,0.40*s);
     } else if(k<0.82){ // stump / log
       addMesh(m,STUMP,x,y,z,r()*6.28,1.1,0.8+r()*0.6,1.1);
+      collCircle(x,z,0.50);
     } else if(k<0.93){ // fern tuft
       var n=2+((r()*3)|0);
       for(var q=0;q<n;q++){
@@ -127,7 +192,7 @@ function scatterWorld(m){
       for(var q2=0;q2<n2;q2++){
         var bx=x+(r()-0.5)*1.8, bz=z+(r()-0.5)*1.8, by=H(bx,bz);
         addMesh(m,TRUNK,bx,by,bz,0,0.12,0.30,0.12,[1.6,1.6,1.5]);
-        addMesh(m,SHROOM,bx,by+0.26,bz,r()*6.28,0.55,0.34,0.55);
+        addMesh(m,SHROOM,bx,by+0.12,bz,r()*6.28,0.55,0.36,0.55);
       }
     }
   }
@@ -139,6 +204,7 @@ function buildTavern(m,x,z){
   var y=H(x,z);
   var wall=[0.44,0.33,0.22], roof=[0.33,0.17,0.14], warm=[0.95,0.72,0.35];
   addMesh(m,boxMesh(wall),x,y-0.2,z,0.5,9,4.2,7);
+  collBox(x,z,4.5,3.5,0.5);
   addMesh(m,coneMesh(roof,4),x,y+3.9,z,0.5+Math.PI/4,9.6,3.2,8.0);
   addMesh(m,boxMesh([0.30,0.22,0.15]),x+3.2,y+2.6,z-2.2,0.5,1.0,2.4,1.0); // chimney
   // glowing windows
@@ -150,6 +216,7 @@ function buildTavern(m,x,z){
   // lantern posts
   for(var k=-1;k<=1;k+=2){
     addMesh(m,boxMesh([0.25,0.18,0.12]),x+k*5.2,y,z+5.0,0,0.25,2.6,0.25);
+    collCircle(x+k*5.2,z+5.0,0.25);
     addMesh(m,boxMesh(warm),x+k*5.2,y+2.6,z+5.0,0,0.5,0.6,0.5);
   }
   LANDMARKS.push({x:x,z:z,r:11,name:'The Greenleaf Tavern',kind:'tavern'});
@@ -160,6 +227,7 @@ function buildCamp(m,x,z){
   for(var i=0;i<4;i++){
     var a=i/4*6.28+0.4, tx=x+Math.cos(a)*6.5, tz=z+Math.sin(a)*6.5, ty=H(tx,tz);
     addMesh(m,coneMesh(hide,5),tx,ty,tz,a,3.4,2.8,3.4);
+    collCircle(tx,tz,1.4);
   }
   addMesh(m,coneMesh(fire,6),x,y+0.1,z,0,1.5,1.4,1.5);
   for(var k=0;k<6;k++){
@@ -169,6 +237,7 @@ function buildCamp(m,x,z){
   for(var p=0;p<3;p++){ // spikes
     var a3=p/3*6.28+1.1, sx=x+Math.cos(a3)*9, sz=z+Math.sin(a3)*9;
     addMesh(m,coneMesh(wood,5,0.5,0.05),sx,H(sx,sz),sz,0,0.7,3.4,0.7);
+    collCircle(sx,sz,0.35);
   }
   LANDMARKS.push({x:x,z:z,r:13,name:'Goblin Camp',kind:'camp'});
 }
@@ -178,6 +247,7 @@ function buildHollow(m,x,z){
   for(var i=0;i<7;i++){
     var a=i/7*6.28, px=x+Math.cos(a)*(7+i%3), pz=z+Math.sin(a)*(7+i%3);
     addMesh(m,boxMesh(stone,0.6),px,H(px,pz),pz,a,1.4,4.5+((i*7)%3),1.4);
+    collCircle(px,pz,0.75);
   }
   for(var k=0;k<9;k++){ // egg sacs
     var a2=k/9*6.28+0.3, ex=x+Math.cos(a2)*(2+k%4), ez=z+Math.sin(a2)*(2+k%4);
@@ -189,6 +259,7 @@ function buildStones(m,x,z){
   for(var i=0;i<6;i++){
     var a=i/6*6.28, px=x+Math.cos(a)*5.5, pz=z+Math.sin(a)*5.5;
     addMesh(m,boxMesh([0.42,0.42,0.45],0.8),px,H(px,pz)-0.3,pz,a,1.3,5.5+(i%2)*1.5,1.0);
+    collCircle(px,pz,0.65);
   }
   addMesh(m,boxMesh([0.46,0.46,0.49],0.9),x,H(x,z),z,0,2.4,0.6,2.4);
   LANDMARKS.push({x:x,z:z,r:9,name:'The Standing Stones',kind:'stones'});
