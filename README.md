@@ -8,10 +8,13 @@ The home of Elk Leaf Arcade at [elkleafarcade.com](https://elkleafarcade.com): a
 |---|---|---|
 | Take Care of Your Pet | elkleafarcade.com/pet/ | `pet/` |
 | Elven Hunter | elkleafarcade.com/elven-hunter/ | `elven-hunter/` |
+| Cluck Patrol | elkleafarcade.com/cluck-patrol/ | `cluck-patrol/` |
 
 **Take Care of Your Pet** is a 3D pet care game. Feed, pet and train your pets, explore a big city, walk into shops, visit the vet, go down forest trails, and make friends with woodland animals.
 
 **Elven Hunter** is an open-world forest adventure: fight spiders and goblins and free your kin from their cocoons. It has its own README in `elven-hunter/`. Edit its files in `elven-hunter/src/`, then run `node tools/build.mjs` inside `elven-hunter/` to rebuild its `index.html`.
+
+**Cluck Patrol** is a 2D platformer: hop across a tropical island as a chicken and stomp all 22 raccoons and foxes within two and a half minutes. Everything, including its pictures, is inside `cluck-patrol/index.html`.
 
 ## Play locally
 
@@ -27,6 +30,8 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 | `pet/cover.jpg` | The game's picture on the arcade menu |
 | `pet/manifest.webmanifest`, `pet/icon.svg` | Lets phones and tablets add the pet game to the home screen |
 | `elven-hunter/` | Elven Hunter: built `index.html`, source in `src/`, build tools, tests and `cover.jpg` |
+| `cluck-patrol/index.html` | Cluck Patrol: one self-contained page (art is embedded) |
+| `cluck-patrol/cover.jpg` | Cluck Patrol's picture on the arcade menu |
 | `netlify.toml` | Netlify hosting settings (no build step) |
 
 ## Adding a game
