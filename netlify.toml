@@ -1,12 +1,23 @@
-# Netlify settings for Take Care of Your Pet.
-# The game is a single static page, so there is no build step.
+# Netlify settings for Elk Leaf Arcade.
+# The arcade menu is index.html; each game lives in its own folder (pet/ is Take Care of Your Pet).
+# Everything is static, so there is no build step.
 [build]
   publish = "."
   command = ""
 
-# Always fetch the newest version of the game page.
+# Always fetch the newest version of the menu and game pages.
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
 [[headers]]
   for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/pet/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
