@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#62B9EC">
+<title>Acorn Run</title>
+<meta name="description" content="Acorn Run: race a squirrel across floating islands, collect acorns and dodge the grumpy skunks.">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#62B9EC;
+    touch-action:none;-webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+  /* Zero-size probes: the game reads their height to keep the HUD clear of
+     notches and home indicators. Do not remove. */
+  #safe{position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top,0px);pointer-events:none;visibility:hidden}
+  #safeb{position:fixed;bottom:0;left:0;width:1px;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden}
+  /* Home button back to the arcade menu, top centre so it clears the score and distance */
+  #home{position:fixed;z-index:2;top:calc(env(safe-area-inset-top,0px) + 12px);left:50%;transform:translateX(-50%);
+    width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:rgba(59,36,18,.45);border:3px solid #FFF3D6;color:#FFF3D6;font:700 24px/1 system-ui,sans-serif;text-decoration:none}
+  #home:focus-visible{outline:3px solid #FFD85A;outline-offset:3px}
+</style>
+</head>
+<body>
+<canvas id="c" role="img" aria-label="Acorn Run. Tap or press space to jump."></canvas>
+<div id="safe"></div>
+<div id="safeb"></div>
+<a id="home" href="../" aria-label="Back to Elk Leaf Arcade" title="Back to Elk Leaf Arcade">&#8962;</a>
+<script src="src/atlas.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>

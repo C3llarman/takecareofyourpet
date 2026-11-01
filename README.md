@@ -17,7 +17,7 @@ The home of Elk Leaf Arcade at [elkleafarcade.com](https://elkleafarcade.com): a
 
 **Cluck Patrol** is a 2D platformer: hop across a tropical island as a chicken and stomp all 22 raccoons and foxes within two and a half minutes. Everything, including its pictures, is inside `cluck-patrol/index.html`.
 
-**Acorn Run** is an endless runner: race a squirrel across floating islands, backflip over wide gaps, throw acorns to break crates and knock out grumpy skunks, and say hi to the friendly skunks in hats. Everything, including its pictures, is inside `acorn-run/index.html`.
+**Acorn Run** is an endless runner: race a squirrel across floating islands, backflip over wide gaps, throw acorns to break crates and knock out grumpy skunks, and say hi to the friendly skunks in hats. It runs straight from `acorn-run/` with no build step. To make a single self-contained HTML file instead, run `python3 tools/build.py` inside `acorn-run/`.
 
 ## Play locally
 
@@ -35,7 +35,7 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 | `elven-hunter/` | Elven Hunter: built `index.html`, source in `src/`, build tools, tests and `cover.jpg` |
 | `cluck-patrol/index.html` | Cluck Patrol: one self-contained page (art is embedded) |
 | `cluck-patrol/cover.jpg` | Cluck Patrol's picture on the arcade menu |
-| `acorn-run/index.html` | Acorn Run: one self-contained page (art is embedded) |
+| `acorn-run/` | Acorn Run: `index.html`, code in `src/`, sprite atlas in `assets/`, original art sheet in `assets/source/`, optional bundler in `tools/` |
 | `acorn-run/cover.jpg` | Acorn Run's picture on the arcade menu |
 | `netlify.toml` | Netlify hosting settings (no build step) |
 
