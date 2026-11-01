@@ -1,83 +1,63 @@
-# Build a House
+# Elk Leaf Arcade
 
-A 3D block-building game that runs in a web browser. Place blocks, craft new materials from real-life recipes, open and close doors, and dress up your builder. It works on laptops (mouse, trackpad and keyboard) and on phones and tablets (touch).
+The home of Elk Leaf Arcade at [elkleafarcade.com](https://elkleafarcade.com): a menu of games that run in the browser.
 
-## Play it
+## Games
 
-Open `index.html` in Chrome, Edge, Firefox or Safari. You don't need to install anything.
+| Game | Address | Folder |
+|---|---|---|
+| Take Care of Your Pet | elkleafarcade.com/pet/ | `pet/` |
+| Elven Hunter | elkleafarcade.com/elven-hunter/ | `elven-hunter/` |
+| Cluck Patrol | elkleafarcade.com/cluck-patrol/ | `cluck-patrol/` |
+| Acorn Run | elkleafarcade.com/acorn-run/ | `acorn-run/` |
+| Build a House | elkleafarcade.com/build-a-house/ | `build-a-house/` |
 
-The first time it opens, the computer needs to be online so the browser can download the 3D library (three.js) and the fonts. Your world saves automatically in that browser.
+**Take Care of Your Pet** is a 3D pet care game. Feed, pet and train your pets, explore a big city, walk into shops, visit the vet, go down forest trails, and make friends with woodland animals.
 
-## Controls
+**Elven Hunter** is an open-world forest adventure: fight spiders and goblins and free your kin from their cocoons. It has its own README in `elven-hunter/`. Edit its files in `elven-hunter/src/`, then run `node tools/build.mjs` inside `elven-hunter/` to rebuild its `index.html`.
 
-### Laptop
+**Cluck Patrol** is a 2D platformer: hop across a tropical island as a chicken and stomp all 22 raccoons and foxes within two and a half minutes. Everything, including its pictures, is inside `cluck-patrol/index.html`.
 
-| Action | How |
-| --- | --- |
-| Place a block, or open/close a door | Click |
-| Break a block | Right-click, or Shift + click on a trackpad |
-| Spin the camera | Click and drag |
-| Zoom | Scroll wheel, or two-finger scroll on a trackpad |
-| Slide the camera | W A S D or the arrow keys |
-| Turn the camera | Q and E |
-| Pick a block | 1–9 and 0 |
-| Previous / next block | [ and ] |
-| Switch Build and Break | B |
-| Workbench (crafting) | C |
-| Dress your builder | P |
-| Move your builder | M |
-| Show the controls | H |
-| Close a panel | Esc |
+**Acorn Run** is an endless runner: race a squirrel across floating islands, backflip over wide gaps, throw acorns to break crates and knock out grumpy skunks, and say hi to the friendly skunks in hats. It runs straight from `acorn-run/` with no build step. To make a single self-contained HTML file instead, run `python3 tools/build.py` inside `acorn-run/`.
 
-### Phone or tablet
+**Build a House** is a 3D block-building game: place blocks, craft new materials from real-life recipes, open and close doors, and dress up your builder. It has its own README in `build-a-house/`.
 
-- Tap to place a block, or tap a door to open it.
-- Use the **Break** button, then tap a block to remove it.
-- Drag with one finger to spin the camera. Pinch to zoom, and drag with two fingers to slide.
+## Play locally
 
-## Materials and recipes
+Start a small web server in this folder (for example `python3 -m http.server`) and open http://localhost:8000. You can also open `pet/index.html` directly to play the pet game.
 
-You start with Grass, Dirt, Stone, Sand, Clay, Oak Log, Leaves, Planks and Door. Every material is unlimited.
+## What's in here
 
-| Make | Mix |
-| --- | --- |
-| Planks | Oak Log + Oak Log |
-| Door | Planks + Planks |
-| Glass | Sand + Sand |
-| Brick | Clay + Clay |
-| Concrete | Stone + Sand |
-| Roof Tile | Clay + Stone |
-| Marble | Stone + Stone |
-| Window | Glass + Planks |
-| Bookshelf | Planks + Leaves |
+| File | What it is |
+|---|---|
+| `index.html` | The arcade menu page |
+| `icon.svg` | The arcade's elk leaf icon |
+| `mascot.svg` | The arcade mascot, a little elk made of leaves (shown on the menu page) |
+| `pet/index.html` | Take Care of Your Pet: page, styles and code |
+| `pet/cover.jpg` | The game's picture on the arcade menu |
+| `pet/manifest.webmanifest`, `pet/icon.svg` | Lets phones and tablets add the pet game to the home screen |
+| `elven-hunter/` | Elven Hunter: built `index.html`, source in `src/`, build tools, tests and `cover.jpg` |
+| `cluck-patrol/index.html` | Cluck Patrol: one self-contained page (art is embedded) |
+| `cluck-patrol/cover.jpg` | Cluck Patrol's picture on the arcade menu |
+| `acorn-run/` | Acorn Run: `index.html`, code in `src/`, sprite atlas in `assets/`, original art sheet in `assets/source/`, optional bundler in `tools/` |
+| `acorn-run/cover.jpg` | Acorn Run's picture on the arcade menu |
+| `build-a-house/` | Build a House: `index.html`, styles in `css/`, code in `js/`, and `cover.jpg` |
+| `netlify.toml` | Netlify hosting settings (no build step) |
 
-A door is a rectangle two blocks tall, and it faces the camera when you place it.
+## Adding a game
 
-## Project layout
+Upload new games into their own folder, not the top of the repo, or they will replace the menu page.
 
-```
-build-a-house/
-├── index.html      Page layout: top bar, block bar, workbench and character panels
-├── css/style.css   All styles; the laptop layout is under the 900px media query
-└── js/game.js      Game logic: textures, world, blocks, crafting, character, controls
-```
+1. Put the game in its own folder, for example `newgame/index.html`.
+2. Add a card for it in the `games` section of `index.html` (copy the pet game card).
+3. Add a link back to the menu in the game (`<a href="../">`).
 
-The block textures are drawn in code (16×16 pixels), so there are no image files.
+## Hosting on Netlify
 
-### Common changes
+Connect this repository in Netlify ("Add new site" → "Import an existing project"). Leave the build command empty and the publish directory as `.`. Every push to `main` updates the live site. To use elkleafarcade.com, add it under the site's "Domain management" settings in Netlify.
 
-- **Add a material:** add it to `MATS` in `js/game.js` along with a texture in the `C` section. To make it craftable, add a line to `RECIPES`.
-- **Add a starting material:** add its key to `START`.
-- **Change the world size:** change `HALF`. The island is `HALF × 2` blocks wide.
-- **Reset your world:** clear the site data for the page in your browser settings.
+## Notes
 
-## Put it online with GitHub Pages
-
-1. Make a new repository on GitHub and push this folder to it.
-2. In the repository, open **Settings → Pages**.
-3. Under **Source**, choose the `main` branch and the root folder, then save.
-4. GitHub shows the link to your game after about a minute.
-
-## Credits
-
-Uses [three.js](https://threejs.org) r128 (MIT license), loaded from cdnjs and jsDelivr, and the Bungee and Rubik fonts from Google Fonts.
+- The 3D engine (three.js r128) loads from cdnjs, with jsDelivr as a backup.
+- Fonts load from Google Fonts.
+- Game progress is saved in the browser's local storage on each device.

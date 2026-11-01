@@ -40,6 +40,7 @@ kbd{display:inline-block;min-width:1.6em;padding:1px 5px;border-radius:5px;borde
 .tb-actions{display:flex;gap:8px}
 .tb{display:inline-flex;align-items:center;gap:7px;font-family:var(--display);font-size:13px;letter-spacing:.03em;background:var(--accent);color:var(--accent-ink);border:2px solid var(--ink);
   border-radius:10px;padding:9px 12px;box-shadow:0 3px 0 var(--ink);transition:transform .08s}
+.tb{text-decoration:none}
 .tb.alt{background:var(--paper)}
 .tb.ghost{background:var(--ink);color:var(--paper)}
 .tb:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
