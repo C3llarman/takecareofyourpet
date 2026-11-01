@@ -1,192 +1,92 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Elk Leaf Arcade</title>
-<meta name="description" content="Elk Leaf Arcade: free games you can play right in your browser.">
-<meta name="theme-color" content="#16301f">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Build a House</title>
+<meta name="description" content="A 3D block-building game: place real-world blocks, craft new materials, open doors and dress up your builder.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chewy&family=Nunito:wght@600;800;900&display=swap">
-<style>
-/* Layout: arcade sign at the top, a grid of game cards, small footer */
-:root {
-  --night: #16301f;
-  --night-2: #1f3d2c;
-  --moss: #2f6b45;
-  --leaf: #f2994a;
-  --leaf-edge: #c86d22;
-  --sun: #ffc93c;
-  --cream: #fff8ec;
-  --ink: #2b2540;
-  --muted: #6d6785;
-  --font-display: "Chewy", "Comic Sans MS", "Trebuchet MS", system-ui, sans-serif;
-  --font-body: "Nunito", "Avenir Next", system-ui, -apple-system, sans-serif;
-  color-scheme: dark;
-}
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html { min-height: 100%; background: var(--night); }
-body {
-  margin: 0; min-height: 100vh; color: var(--cream); font-family: var(--font-body);
-  background:
-    radial-gradient(1200px 600px at 50% -10%, #2c5a3d 0%, transparent 70%),
-    linear-gradient(180deg, var(--night-2), var(--night));
-  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  display: flex; flex-direction: column; align-items: center;
-  overflow-x: hidden;
-}
-
-/* falling leaves in the background */
-.leaves { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
-.leaves span {
-  position: absolute; top: -40px; width: 18px; height: 18px; opacity: .55;
-  background: var(--leaf); border-radius: 0 70% 0 70%;
-  animation: fall linear infinite;
-}
-.leaves span:nth-child(3n) { background: var(--sun); }
-.leaves span:nth-child(4n) { background: #d9573b; }
-@keyframes fall {
-  0%   { transform: translate(0, -40px) rotate(0deg); }
-  50%  { transform: translate(40px, 50vh) rotate(180deg); }
-  100% { transform: translate(-20px, 105vh) rotate(360deg); }
-}
-@media (prefers-reduced-motion: reduce) { .leaves { display: none; } }
-
-main { position: relative; z-index: 1; width: min(1040px, 100%); display: grid; gap: 32px; }
-
-/* the arcade sign */
-.sign { text-align: center; display: grid; justify-items: center; gap: 10px; padding-top: 12px; }
-.sign .mascot {
-  width: clamp(120px, 30vw, 150px); height: auto; transform-origin: 50% 92%;
-  filter: drop-shadow(0 6px 0 rgba(0,0,0,.25));
-  animation: sway 4s ease-in-out infinite;
-}
-@keyframes sway { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg) translateY(-2px); } }
-@media (prefers-reduced-motion: reduce) { .sign .mascot { animation: none; } }
-.sign h1 {
-  font-family: var(--font-display); font-weight: 400; margin: 0;
-  font-size: clamp(48px, 11vw, 88px); line-height: .95; letter-spacing: .01em;
-  color: var(--cream); text-shadow: 0 5px 0 rgba(0,0,0,.3);
-}
-.sign h1 .accent { color: var(--leaf); }
-.sign p { margin: 0; font-weight: 800; font-size: 18px; color: #cfe3d4; }
-
-.section-title {
-  font-family: var(--font-display); font-weight: 400; font-size: 30px; margin: 0;
-  display: flex; align-items: center; gap: 12px; color: var(--sun);
-}
-.section-title::after { content: ""; flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.12); }
-
-/* game cards */
-.games { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; }
-.card {
-  background: var(--cream); color: var(--ink); border-radius: 26px; overflow: hidden;
-  display: flex; flex-direction: column; text-decoration: none;
-  box-shadow: 0 8px 0 rgba(0,0,0,.28);
-  transition: transform .15s ease, box-shadow .15s ease;
-}
-a.card:hover, a.card:focus-visible { transform: translateY(-4px); box-shadow: 0 12px 0 rgba(0,0,0,.28); }
-a.card:active { transform: translateY(2px); box-shadow: 0 4px 0 rgba(0,0,0,.28); }
-a.card:focus-visible { outline: 4px solid var(--sun); outline-offset: 4px; }
-.card .cover { aspect-ratio: 16 / 10; background: #bfe6ff center / cover no-repeat; position: relative; }
-.card .badge {
-  position: absolute; top: 12px; left: 12px; background: var(--ink); color: var(--sun);
-  font-weight: 900; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
-  padding: 4px 10px; border-radius: 999px;
-}
-.card .body { padding: 18px 20px 20px; display: grid; gap: 10px; flex: 1; align-content: start; }
-.card h3 { font-family: var(--font-display); font-weight: 400; font-size: 30px; margin: 0; line-height: 1; }
-.card h3 .eh { color: #4e8a3a; }
-.card h3 .d { color: #ec7f2f; } .card h3 .c { color: #7e5ff0; } .card h3 .b { color: #e2508c; }
-.card p { margin: 0; font-weight: 700; color: var(--muted); line-height: 1.45; }
-.tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.tags span { background: #ece8f6; border-radius: 999px; padding: 3px 10px; font-weight: 800; font-size: 13px; color: var(--ink); }
-.play {
-  margin-top: 6px; justify-self: start; background: var(--sun); box-shadow: 0 4px 0 #e0a514;
-  border-radius: 16px; padding: 10px 26px; font-family: var(--font-display); font-size: 24px; color: var(--ink);
-}
-
-.card.soon { background: rgba(255,255,255,.06); color: var(--cream); box-shadow: none; border: 3px dashed rgba(255,255,255,.2); }
-.card.soon { justify-content: center; text-align: center; }
-.card.soon .cover { aspect-ratio: auto; background: transparent; display: grid; place-items: center; padding-top: 28px; }
-.card.soon .cover svg { width: 72px; height: 72px; opacity: .5; }
-.card.soon .body { flex: 0 0 auto; justify-items: center; padding-bottom: 28px; }
-.card.soon p { color: #cfe3d4; }
-
-footer { position: relative; z-index: 1; margin-top: 40px; font-weight: 800; font-size: 14px; color: #9fbca8; text-align: center; }
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<div class="leaves" aria-hidden="true">
-  <span style="left:6%;  animation-duration:14s; animation-delay:-2s"></span>
-  <span style="left:18%; animation-duration:19s; animation-delay:-9s"></span>
-  <span style="left:31%; animation-duration:16s; animation-delay:-5s"></span>
-  <span style="left:44%; animation-duration:22s; animation-delay:-14s"></span>
-  <span style="left:57%; animation-duration:15s; animation-delay:-1s"></span>
-  <span style="left:69%; animation-duration:20s; animation-delay:-11s"></span>
-  <span style="left:81%; animation-duration:17s; animation-delay:-7s"></span>
-  <span style="left:93%; animation-duration:21s; animation-delay:-16s"></span>
+<!--BODY-START-->
+<div id="game"></div>
+
+<header class="topbar">
+  <h1 class="logo">Build a<span>House</span></h1>
+  <div class="tb-actions">
+    <button id="btnHelp" class="tb ghost desk-only" type="button" aria-expanded="false">Keys <kbd>H</kbd></button>
+    <button id="btnCraft" class="tb" type="button">Craft <kbd class="desk-only">C</kbd></button>
+    <button id="btnChar" class="tb alt" type="button">Character <kbd class="desk-only">P</kbd></button>
+  </div>
+</header>
+
+<aside id="help" class="help" hidden aria-label="Controls">
+  <div class="help-head"><h2>Controls</h2><button class="close" id="helpClose" type="button">Got it</button></div>
+  <dl class="keys">
+    <dt>Click</dt><dd>Place a block or open a door</dd>
+    <dt>Right-click</dt><dd>Break a block</dd>
+    <dt><kbd>Shift</kbd> + click</dt><dd>Break a block (trackpad)</dd>
+    <dt>Drag</dt><dd>Spin the camera</dd>
+    <dt>Scroll</dt><dd>Zoom in and out</dd>
+    <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Slide the camera</dd>
+    <dt><kbd>Q</kbd> <kbd>E</kbd></dt><dd>Turn the camera</dd>
+    <dt><kbd>1</kbd>–<kbd>0</kbd></dt><dd>Pick a block</dd>
+    <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Previous or next block</dd>
+    <dt><kbd>B</kbd></dt><dd>Switch Build and Break</dd>
+    <dt><kbd>C</kbd></dt><dd>Open the workbench</dd>
+    <dt><kbd>P</kbd></dt><dd>Dress your builder</dd>
+    <dt><kbd>M</kbd></dt><dd>Move your builder</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Close a panel</dd>
+  </dl>
+</aside>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div class="dock" id="dock">
+  <div class="dock-row">
+    <div class="seg" role="group" aria-label="Mode">
+      <button id="mBuild" type="button" aria-pressed="true">Build</button>
+      <button id="mBreak" type="button" aria-pressed="false">Break</button>
+    </div>
+    <p id="hint" class="hint"></p>
+  </div>
+  <div class="hotbar" id="hotbar" role="listbox" aria-label="Blocks"></div>
 </div>
 
-<main>
-  <header class="sign">
-    <img class="mascot" src="mascot.svg" width="150" height="150" alt="Elk Leaf Arcade mascot: a little elk made of autumn leaves">
-    <h1>Elk Leaf <span class="accent">Arcade</span></h1>
-    <p>Free games you can play right in your browser.</p>
-  </header>
-
-  <section aria-labelledby="games-title">
-    <h2 class="section-title" id="games-title">Pick a game</h2>
-    <div class="games" style="margin-top:18px">
-
-      <a class="card" href="acorn-run/">
-        <div class="cover" style="background-image:url('acorn-run/cover.jpg')"><span class="badge">New</span></div>
-        <div class="body">
-          <h3>Acorn <span class="d">Run</span></h3>
-          <p>Dash across floating islands as a squirrel, backflip over big gaps, collect acorns and dodge the grumpy skunks.</p>
-          <div class="tags"><span>2D</span><span>Runner</span><span>Action</span><span>Phone or keyboard</span></div>
-          <span class="play">Play</span>
-        </div>
-      </a>
-
-      <a class="card" href="cluck-patrol/">
-        <div class="cover" style="background-image:url('cluck-patrol/cover.jpg')"><span class="badge">New</span></div>
-        <div class="body">
-          <h3>Cluck <span class="d">Patrol</span></h3>
-          <p>Hop across a tropical island as a bandana-wearing chicken and stomp all 22 raccoons and foxes before the clock runs out.</p>
-          <div class="tags"><span>2D</span><span>Platformer</span><span>Action</span><span>Phone or keyboard</span></div>
-          <span class="play">Play</span>
-        </div>
-      </a>
-
-      <a class="card" href="elven-hunter/">
-        <div class="cover" style="background-image:url('elven-hunter/cover.jpg')"><span class="badge">New</span></div>
-        <div class="body">
-          <h3>Elven <span class="eh">Hunter</span></h3>
-          <p>Roam an open forest, fight spiders and goblins, and cut your kin free from their cocoons so they fight beside you.</p>
-          <div class="tags"><span>3D</span><span>Adventure</span><span>Action</span><span>Phone or keyboard</span></div>
-          <span class="play">Play</span>
-        </div>
-      </a>
-
-      <a class="card" href="pet/">
-        <div class="cover" style="background-image:url('pet/cover.jpg')"></div>
-        <div class="body">
-          <h3>Take Care of Your <span class="d">P</span><span class="c">e</span><span class="b">t</span></h3>
-          <p>Feed, pet and train your pets, explore a big city, visit the shops and make friends on the forest trails.</p>
-          <div class="tags"><span>3D</span><span>Pets</span><span>Explore</span><span>Saves your progress</span></div>
-          <span class="play">Play</span>
-        </div>
-      </a>
-
+<section class="sheet" id="sheetCraft" hidden aria-label="Workbench">
+  <div class="sheet-inner">
+    <div class="sheet-head"><h2>Workbench</h2><button class="close" type="button" data-close>Done</button></div>
+    <div class="bench">
+      <button class="slot" id="slotA" type="button" aria-label="First slot">+</button>
+      <span class="op">+</span>
+      <button class="slot" id="slotB" type="button" aria-label="Second slot">+</button>
+      <span class="op">=</span>
+      <div class="slot result" id="slotR">?</div>
+      <div class="bench-side">
+        <button class="make" id="btnMake" type="button" disabled>Craft it</button>
+        <p class="note" id="craftNote"></p>
+      </div>
     </div>
-  </section>
-</main>
+    <div><p class="label">Your materials · tap to add</p><div class="mats" id="mats"></div></div>
+    <div><p class="label">Recipe book · tap to fill the bench</p><div class="book" id="book"></div></div>
+  </div>
+</section>
 
-<footer>&copy; <span id="year">2026</span> Elk Leaf Arcade</footer>
-<script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+<section class="sheet" id="sheetChar" hidden aria-label="Character">
+  <div class="sheet-inner">
+    <div class="sheet-head"><h2>Your Builder</h2>
+      <div class="head-actions"><button class="ghost-btn" id="btnMove" type="button">Move me</button><button class="close" type="button" data-close>Done</button></div>
+    </div>
+    <div id="charOpts" class="char-opts"></div>
+  </div>
+</section>
+<!--BODY-END-->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="js/game.js"></script>
 </body>
 </html>
