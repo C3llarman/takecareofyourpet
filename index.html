@@ -2,180 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Elk Leaf Arcade</title>
-<meta name="description" content="Elk Leaf Arcade: free games you can play right in your browser.">
-<meta name="theme-color" content="#16301f">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chewy&family=Nunito:wght@600;800;900&display=swap">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#62B9EC">
+<title>Acorn Run</title>
 <style>
-/* Layout: arcade sign at the top, a grid of game cards, small footer */
-:root {
-  --night: #16301f;
-  --night-2: #1f3d2c;
-  --moss: #2f6b45;
-  --leaf: #f2994a;
-  --leaf-edge: #c86d22;
-  --sun: #ffc93c;
-  --cream: #fff8ec;
-  --ink: #2b2540;
-  --muted: #6d6785;
-  --font-display: "Chewy", "Comic Sans MS", "Trebuchet MS", system-ui, sans-serif;
-  --font-body: "Nunito", "Avenir Next", system-ui, -apple-system, sans-serif;
-  color-scheme: dark;
-}
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html { min-height: 100%; background: var(--night); }
-body {
-  margin: 0; min-height: 100vh; color: var(--cream); font-family: var(--font-body);
-  background:
-    radial-gradient(1200px 600px at 50% -10%, #2c5a3d 0%, transparent 70%),
-    linear-gradient(180deg, var(--night-2), var(--night));
-  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  display: flex; flex-direction: column; align-items: center;
-  overflow-x: hidden;
-}
-
-/* falling leaves in the background */
-.leaves { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
-.leaves span {
-  position: absolute; top: -40px; width: 18px; height: 18px; opacity: .55;
-  background: var(--leaf); border-radius: 0 70% 0 70%;
-  animation: fall linear infinite;
-}
-.leaves span:nth-child(3n) { background: var(--sun); }
-.leaves span:nth-child(4n) { background: #d9573b; }
-@keyframes fall {
-  0%   { transform: translate(0, -40px) rotate(0deg); }
-  50%  { transform: translate(40px, 50vh) rotate(180deg); }
-  100% { transform: translate(-20px, 105vh) rotate(360deg); }
-}
-@media (prefers-reduced-motion: reduce) { .leaves { display: none; } }
-
-main { position: relative; z-index: 1; width: min(1040px, 100%); display: grid; gap: 32px; }
-
-/* the arcade sign */
-.sign { text-align: center; display: grid; justify-items: center; gap: 10px; padding-top: 12px; }
-.sign svg { width: 92px; height: 92px; filter: drop-shadow(0 6px 0 rgba(0,0,0,.25)); }
-.sign h1 {
-  font-family: var(--font-display); font-weight: 400; margin: 0;
-  font-size: clamp(48px, 11vw, 88px); line-height: .95; letter-spacing: .01em;
-  color: var(--cream); text-shadow: 0 5px 0 rgba(0,0,0,.3);
-}
-.sign h1 .accent { color: var(--leaf); }
-.sign p { margin: 0; font-weight: 800; font-size: 18px; color: #cfe3d4; }
-
-.section-title {
-  font-family: var(--font-display); font-weight: 400; font-size: 30px; margin: 0;
-  display: flex; align-items: center; gap: 12px; color: var(--sun);
-}
-.section-title::after { content: ""; flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.12); }
-
-/* game cards */
-.games { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; }
-.card {
-  background: var(--cream); color: var(--ink); border-radius: 26px; overflow: hidden;
-  display: flex; flex-direction: column; text-decoration: none;
-  box-shadow: 0 8px 0 rgba(0,0,0,.28);
-  transition: transform .15s ease, box-shadow .15s ease;
-}
-a.card:hover, a.card:focus-visible { transform: translateY(-4px); box-shadow: 0 12px 0 rgba(0,0,0,.28); }
-a.card:active { transform: translateY(2px); box-shadow: 0 4px 0 rgba(0,0,0,.28); }
-a.card:focus-visible { outline: 4px solid var(--sun); outline-offset: 4px; }
-.card .cover { aspect-ratio: 16 / 10; background: #bfe6ff center / cover no-repeat; position: relative; }
-.card .badge {
-  position: absolute; top: 12px; left: 12px; background: var(--ink); color: var(--sun);
-  font-weight: 900; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
-  padding: 4px 10px; border-radius: 999px;
-}
-.card .body { padding: 18px 20px 20px; display: grid; gap: 10px; flex: 1; align-content: start; }
-.card h3 { font-family: var(--font-display); font-weight: 400; font-size: 30px; margin: 0; line-height: 1; }
-.card h3 .eh { color: #4e8a3a; }
-.card h3 .d { color: #ec7f2f; } .card h3 .c { color: #7e5ff0; } .card h3 .b { color: #e2508c; }
-.card p { margin: 0; font-weight: 700; color: var(--muted); line-height: 1.45; }
-.tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.tags span { background: #ece8f6; border-radius: 999px; padding: 3px 10px; font-weight: 800; font-size: 13px; color: var(--ink); }
-.play {
-  margin-top: 6px; justify-self: start; background: var(--sun); box-shadow: 0 4px 0 #e0a514;
-  border-radius: 16px; padding: 10px 26px; font-family: var(--font-display); font-size: 24px; color: var(--ink);
-}
-
-.card.soon { background: rgba(255,255,255,.06); color: var(--cream); box-shadow: none; border: 3px dashed rgba(255,255,255,.2); }
-.card.soon { justify-content: center; text-align: center; }
-.card.soon .cover { aspect-ratio: auto; background: transparent; display: grid; place-items: center; padding-top: 28px; }
-.card.soon .cover svg { width: 72px; height: 72px; opacity: .5; }
-.card.soon .body { flex: 0 0 auto; justify-items: center; padding-bottom: 28px; }
-.card.soon p { color: #cfe3d4; }
-
-footer { position: relative; z-index: 1; margin-top: 40px; font-weight: 800; font-size: 14px; color: #9fbca8; text-align: center; }
+  html,body{margin:0;height:100%;overflow:hidden;background:#62B9EC;
+    touch-action:none;-webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+  /* Zero-size probes: the game reads their height to keep the HUD clear of
+     notches and home indicators. Do not remove. */
+  #safe{position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top,0px);pointer-events:none;visibility:hidden}
+  #safeb{position:fixed;bottom:0;left:0;width:1px;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden}
 </style>
 </head>
 <body>
-<div class="leaves" aria-hidden="true">
-  <span style="left:6%;  animation-duration:14s; animation-delay:-2s"></span>
-  <span style="left:18%; animation-duration:19s; animation-delay:-9s"></span>
-  <span style="left:31%; animation-duration:16s; animation-delay:-5s"></span>
-  <span style="left:44%; animation-duration:22s; animation-delay:-14s"></span>
-  <span style="left:57%; animation-duration:15s; animation-delay:-1s"></span>
-  <span style="left:69%; animation-duration:20s; animation-delay:-11s"></span>
-  <span style="left:81%; animation-duration:17s; animation-delay:-7s"></span>
-  <span style="left:93%; animation-duration:21s; animation-delay:-16s"></span>
-</div>
-
-<main>
-  <header class="sign">
-    <svg viewBox="0 0 64 64" aria-hidden="true">
-      <path d="M32 58c-13-7-20-17-20-29 0-9 7-17 20-25 13 8 20 16 20 25 0 12-7 22-20 29z" fill="#f2994a"/>
-      <path d="M32 58c-13-7-20-17-20-29 0-9 7-17 20-25" fill="#c86d22" opacity=".35"/>
-      <path d="M32 56V16M32 28l-9-7M23 21l-1-6M23 21l-6 0M32 28l9-7M41 21l1-6M41 21l6 0M32 40l-11-6M32 40l11-6"
-            stroke="#16301f" stroke-width="3" stroke-linecap="round" fill="none"/>
-    </svg>
-    <h1>Elk Leaf <span class="accent">Arcade</span></h1>
-    <p>Free games you can play right in your browser.</p>
-  </header>
-
-  <section aria-labelledby="games-title">
-    <h2 class="section-title" id="games-title">Pick a game</h2>
-    <div class="games" style="margin-top:18px">
-
-      <a class="card" href="cluck-patrol/">
-        <div class="cover" style="background-image:url('cluck-patrol/cover.jpg')"><span class="badge">New</span></div>
-        <div class="body">
-          <h3>Cluck <span class="d">Patrol</span></h3>
-          <p>Hop across a tropical island as a bandana-wearing chicken and stomp all 22 raccoons and foxes before the clock runs out.</p>
-          <div class="tags"><span>2D</span><span>Platformer</span><span>Action</span><span>Phone or keyboard</span></div>
-          <span class="play">Play</span>
-        </div>
-      </a>
-
-      <a class="card" href="elven-hunter/">
-        <div class="cover" style="background-image:url('elven-hunter/cover.jpg')"><span class="badge">New</span></div>
-        <div class="body">
-          <h3>Elven <span class="eh">Hunter</span></h3>
-          <p>Roam an open forest, fight spiders and goblins, and cut your kin free from their cocoons so they fight beside you.</p>
-          <div class="tags"><span>3D</span><span>Adventure</span><span>Action</span><span>Phone or keyboard</span></div>
-          <span class="play">Play</span>
-        </div>
-      </a>
-
-      <a class="card" href="pet/">
-        <div class="cover" style="background-image:url('pet/cover.jpg')"></div>
-        <div class="body">
-          <h3>Take Care of Your <span class="d">P</span><span class="c">e</span><span class="b">t</span></h3>
-          <p>Feed, pet and train your pets, explore a big city, visit the shops and make friends on the forest trails.</p>
-          <div class="tags"><span>3D</span><span>Pets</span><span>Explore</span><span>Saves your progress</span></div>
-          <span class="play">Play</span>
-        </div>
-      </a>
-
-    </div>
-  </section>
-</main>
-
-<footer>&copy; <span id="year">2026</span> Elk Leaf Arcade</footer>
-<script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+<canvas id="c" role="img" aria-label="Acorn Run. Tap or press space to jump."></canvas>
+<div id="safe"></div>
+<div id="safeb"></div>
+<script src="src/atlas.js"></script>
+<script src="src/game.js"></script>
 </body>
 </html>
