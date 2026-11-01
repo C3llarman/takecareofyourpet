@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 240 240" role="img" aria-labelledby="mascot-title">
+  <title id="mascot-title">Elk Leaf Arcade mascot: a little elk made of autumn leaves</title>
+  <defs>
+    <!-- one leaf, 100 units long, stem at the origin, tip pointing up -->
+    <g id="lf">
+      <path d="M0 0C34-22 34-74 0-100C-34-74-34-22 0 0Z"/>
+      <path d="M0 2V-88M0-30l-12-12M0-30l12-12M0-55l-10-10M0-55l10-10" fill="none" stroke="#16301f" stroke-opacity=".28" stroke-width="5" stroke-linecap="round"/>
+    </g>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="118" cy="222" rx="70" ry="8" fill="#000" opacity=".22"/>
+
+  <!-- antlers: twigs with tiny leaves -->
+  <g fill="none" stroke="#7a4a22" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M168 60C160 44 150 34 138 24M150 37l-14 2M146 31l-2-14M160 48l-4-14"/>
+    <path d="M184 58C190 42 200 32 214 24M200 34l14 4M205 30l2-14M192 44l6-12"/>
+  </g>
+  <g>
+    <use xlink:href="#lf" transform="translate(138 24) rotate(-55) scale(.17)" fill="#ffc93c"/>
+    <use xlink:href="#lf" transform="translate(136 39) rotate(-100) scale(.15)" fill="#f2994a"/>
+    <use xlink:href="#lf" transform="translate(144 17) rotate(-10) scale(.15)" fill="#d9573b"/>
+    <use xlink:href="#lf" transform="translate(156 34) rotate(-20) scale(.13)" fill="#ffc93c"/>
+    <use xlink:href="#lf" transform="translate(214 24) rotate(55) scale(.17)" fill="#ffc93c"/>
+    <use xlink:href="#lf" transform="translate(214 38) rotate(100) scale(.15)" fill="#d9573b"/>
+    <use xlink:href="#lf" transform="translate(207 16) rotate(10) scale(.15)" fill="#f2994a"/>
+    <use xlink:href="#lf" transform="translate(198 32) rotate(25) scale(.13)" fill="#ffc93c"/>
+  </g>
+
+  <!-- back legs (darker, behind the body) -->
+  <use xlink:href="#lf" transform="translate(76 150) rotate(184) scale(.24 .68)" fill="#b85d1f"/>
+  <use xlink:href="#lf" transform="translate(146 152) rotate(178) scale(.24 .66)" fill="#b85d1f"/>
+
+  <!-- tail -->
+  <use xlink:href="#lf" transform="translate(74 124) rotate(-58) scale(.3)" fill="#ffc93c"/>
+
+  <!-- neck, behind the body -->
+  <path d="M140 132C150 112 158 96 166 84L194 90C186 108 178 130 170 150Z" fill="#b85d1f"/>
+  <use xlink:href="#lf" transform="translate(166 146) rotate(14) scale(.5)" fill="#d9573b"/>
+
+  <!-- body: a warm base, then shingled leaves with tips toward the tail -->
+  <ellipse cx="116" cy="138" rx="50" ry="28" fill="#b85d1f"/>
+  <use xlink:href="#lf" transform="translate(126 158) rotate(-100) scale(.56)" fill="#c86d22"/>
+  <use xlink:href="#lf" transform="translate(120 122) rotate(-78) scale(.54)" fill="#d9573b"/>
+  <use xlink:href="#lf" transform="translate(150 150) rotate(-94) scale(.62)" fill="#f2994a"/>
+  <use xlink:href="#lf" transform="translate(156 126) rotate(-80) scale(.6)" fill="#c86d22"/>
+  <use xlink:href="#lf" transform="translate(164 144) rotate(-88) scale(.5)" fill="#ffc93c"/>
+  <use xlink:href="#lf" transform="translate(166 132) rotate(-60) scale(.36)" fill="#d9573b"/>
+
+  <!-- front legs -->
+  <use xlink:href="#lf" transform="translate(92 154) rotate(176) scale(.25 .66)" fill="#f2994a"/>
+  <use xlink:href="#lf" transform="translate(160 154) rotate(184) scale(.25 .66)" fill="#f2994a"/>
+  <!-- little hooves -->
+  <g fill="#5a3418">
+    <ellipse cx="71" cy="218" rx="8" ry="4"/>
+    <ellipse cx="96" cy="220" rx="8" ry="4"/>
+    <ellipse cx="148" cy="218" rx="8" ry="4"/>
+    <ellipse cx="166" cy="220" rx="8" ry="4"/>
+  </g>
+
+  <!-- ears -->
+  <use xlink:href="#lf" transform="translate(166 72) rotate(-70) scale(.3)" fill="#c86d22"/>
+  <use xlink:href="#lf" transform="translate(190 70) rotate(66) scale(.3)" fill="#c86d22"/>
+
+  <!-- head: a big leaf pointing down toward the nose -->
+  <use xlink:href="#lf" transform="translate(176 52) rotate(165) scale(.62 .64)" fill="#f2994a"/>
+  <!-- muzzle -->
+  <ellipse cx="190" cy="108" rx="14" ry="11" fill="#ffe0b8"/>
+  <ellipse cx="194" cy="104" rx="5" ry="3.5" fill="#2b2540"/>
+  <!-- eyes + cheeks -->
+  <circle cx="174" cy="82" r="5.5" fill="#2b2540"/>
+  <circle cx="176" cy="80" r="2" fill="#fff"/>
+  <circle cx="194" cy="80" r="5" fill="#2b2540"/>
+  <circle cx="196" cy="78" r="1.8" fill="#fff"/>
+  <ellipse cx="168" cy="96" rx="6" ry="3.5" fill="#d9573b" opacity=".6"/>
+  <!-- smile -->
+  <path d="M184 114q6 5 12 0" fill="none" stroke="#2b2540" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

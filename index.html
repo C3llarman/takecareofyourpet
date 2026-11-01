@@ -59,7 +59,13 @@ main { position: relative; z-index: 1; width: min(1040px, 100%); display: grid; 
 
 /* the arcade sign */
 .sign { text-align: center; display: grid; justify-items: center; gap: 10px; padding-top: 12px; }
-.sign svg { width: 92px; height: 92px; filter: drop-shadow(0 6px 0 rgba(0,0,0,.25)); }
+.sign .mascot {
+  width: clamp(120px, 30vw, 150px); height: auto; transform-origin: 50% 92%;
+  filter: drop-shadow(0 6px 0 rgba(0,0,0,.25));
+  animation: sway 4s ease-in-out infinite;
+}
+@keyframes sway { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg) translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .sign .mascot { animation: none; } }
 .sign h1 {
   font-family: var(--font-display); font-weight: 400; margin: 0;
   font-size: clamp(48px, 11vw, 88px); line-height: .95; letter-spacing: .01em;
@@ -127,12 +133,7 @@ footer { position: relative; z-index: 1; margin-top: 40px; font-weight: 800; fon
 
 <main>
   <header class="sign">
-    <svg viewBox="0 0 64 64" aria-hidden="true">
-      <path d="M32 58c-13-7-20-17-20-29 0-9 7-17 20-25 13 8 20 16 20 25 0 12-7 22-20 29z" fill="#f2994a"/>
-      <path d="M32 58c-13-7-20-17-20-29 0-9 7-17 20-25" fill="#c86d22" opacity=".35"/>
-      <path d="M32 56V16M32 28l-9-7M23 21l-1-6M23 21l-6 0M32 28l9-7M41 21l1-6M41 21l6 0M32 40l-11-6M32 40l11-6"
-            stroke="#16301f" stroke-width="3" stroke-linecap="round" fill="none"/>
-    </svg>
+    <img class="mascot" src="mascot.svg" width="150" height="150" alt="Elk Leaf Arcade mascot: a little elk made of autumn leaves">
     <h1>Elk Leaf <span class="accent">Arcade</span></h1>
     <p>Free games you can play right in your browser.</p>
   </header>

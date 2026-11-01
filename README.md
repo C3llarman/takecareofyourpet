@@ -29,6 +29,7 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 |---|---|
 | `index.html` | The arcade menu page |
 | `icon.svg` | The arcade's elk leaf icon |
+| `mascot.svg` | The arcade mascot, a little elk made of leaves (shown on the menu page) |
 | `pet/index.html` | Take Care of Your Pet: page, styles and code |
 | `pet/cover.jpg` | The game's picture on the arcade menu |
 | `pet/manifest.webmanifest`, `pet/icon.svg` | Lets phones and tablets add the pet game to the home screen |
