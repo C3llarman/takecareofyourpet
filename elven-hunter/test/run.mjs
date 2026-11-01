@@ -321,6 +321,38 @@ section('Keyboard & mouse (laptop)');
   await page.keyboard.press('Tab');
   await page.waitForTimeout(250);
   ok('Tab opens skills', (await page.evaluate(() => G.state)) === 'skills');
+  await page.evaluate(() => { hide(); G.state = 'play'; });
+
+  // strafing: D must carry the hunter to the right of the screen, A to the left
+  // (the right-hand vector was once flipped, so the keys felt reversed)
+  const strafe = async (key) => {
+    const a = await page.evaluate(() => ({ x: G.player.x, z: G.player.z, t: G.t }));
+    await page.keyboard.down(key);
+    await page.waitForFunction((t) => G.t - t > 0.3, a.t, { timeout: 60000 });
+    await page.keyboard.up(key);
+    // view row 0 is the camera's screen-right axis in world space
+    return page.evaluate(([x, z]) => (G.player.x - x) * view[0] + (G.player.z - z) * view[8], [a.x, a.z]);
+  };
+  const dRight = await strafe('d'), aLeft = await strafe('a');
+  ok('D strafes right, A strafes left', dRight > 0.5 && aLeft < -0.5, `D ${dRight.toFixed(2)}, A ${aLeft.toFixed(2)} along screen-right`);
+
+  // the minimap turns with the camera: ahead is up, screen-right is right
+  const mm = await page.evaluate(() => {
+    const y = G.cam.yaw, f = rotPt(Math.sin(y) * 10, Math.cos(y) * 10, y), r = rotPt(view[0] * 10, view[8] * 10, y);
+    return { f, r };
+  });
+  ok('minimap shows what is ahead above the arrow', mm.f.y < -9 && Math.abs(mm.f.x) < 1);
+  ok('minimap is not mirrored', mm.r.x > 9 && Math.abs(mm.r.y) < 1);
+
+  // arrows fly point-first: the shaft lies along the flight path, it does not tumble
+  const arrow = await page.evaluate(() => {
+    G.ents.length = 0; MPI = 0; DRAW.length = 0;
+    const e = { kind: 'shot', x: 0, y: 5, z: 0, vx: 20, vy: 2, vz: 10, proj: 'arrow', spin: 0 };
+    pushShot(e);
+    const m = DRAW[0][1], ax = [m[4], m[5], m[6]], L = Math.hypot(...ax), v = Math.hypot(20, 2, 10);
+    return (ax[0] * 20 + ax[1] * 2 + ax[2] * 10) / (L * v);
+  });
+  ok('arrows point along their flight', arrow > 0.999, `alignment ${arrow.toFixed(4)}`);
 
   ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
   await page.close();

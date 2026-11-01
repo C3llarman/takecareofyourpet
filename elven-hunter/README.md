@@ -33,7 +33,7 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 | Move | `W` `A` `S` `D` |
 | Look | Move the mouse (click once to capture, `Esc` to release) |
 | Strike | Left click |
-| Shoot | Right click |
+| Shoot | Right click (hold to keep firing) |
 | Jump | `Space` |
 | Dash | `Shift` *(unlocked by a skill)* |
 | Drink a potion | `Q` |
@@ -163,12 +163,14 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-51 assertions run the actual game in headless Chromium with software WebGL and check
+55 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames
 - arrows flying over enemies' heads when shooting downhill
 - the attack button sitting inside the iOS gesture strip
+- `A`/`D` strafing the wrong way, and the minimap drawn mirrored
+- arrows tumbling end over end instead of flying point-first
 - holding the stick sideways walking the player in a circle (a feedback loop between
   camera-relative input and an auto-following camera)
 - terrain normals facing downward, so the ground received no sunlight at all
