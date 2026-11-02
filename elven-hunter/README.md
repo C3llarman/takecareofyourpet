@@ -4,19 +4,20 @@ An open-world, third-person forest game that runs in **one self-contained HTML f
 
 No CDN and no network calls at runtime. Rendering is done by
 [three.js](https://threejs.org) (MIT); the terrain generator and the gameplay are plain
-JavaScript. Heroes, followers and goblins are rigged, animated models from Kay Lousberg's
-CC0 [KayKit Adventurers](https://kaylousberg.itch.io/kaykit-adventurers) pack; spiders are
-Quaternius's animated spider, and the forest is planted from his Ultimate Nature Pack (both
-CC0). Every sound effect is synthesised in code; the music is "Peaceful Forest" by Samza
+JavaScript. The hunter, followers and the innkeeper are rigged, animated models from Kay
+Lousberg's CC0 [KayKit Adventurers](https://kaylousberg.itch.io/kaykit-adventurers) pack.
+Everything you fight is a monster, never a person: Quaternius's animated spider, snake and
+wasp. The forest is planted from his Ultimate Nature Pack (all CC0). Every sound effect is synthesised in code; the music is "Peaceful Forest" by Samza
 (CC0). The build bundles the slice of three.js the game uses, the models, the forest, the
-music and the game into a single ~2.9 MB file. Open it from a USB stick on a plane and it
+music and the game into a single ~3.0 MB file. Open it from a USB stick on a plane and it
 plays.
 
 The wood is 300 × 300 units of procedurally generated hills, a winding river and about
-2,700 oaks, birches, pines, bushes, ferns, mossy rocks, stumps and logs, with four
-landmarks to find. Spiders hunt the
-undergrowth, goblins hold a camp, and your kin hang in cocoons waiting to be cut down.
-Free them and they follow you and fight.
+2,700 oaks, birches, pines, bushes, ferns, mossy rocks, stumps and logs, with five
+landmarks to find. Spiders hunt the undergrowth, snakes lie in the grass, wasps swarm
+their hive, and your kin hang in cocoons waiting to be cut down. Free them and they follow
+you and fight. Bram keeps the tavern, and from level 15 an abandoned cottage can be
+bought, fixed up and farmed. Progress is saved in the browser.
 
 ---
 
@@ -70,7 +71,8 @@ src/
               the four hand-placed landmarks
   chars.js    procedural rigs — humanoid, spider, cocoon — built from primitives;
               humanoids use these only far away or while models load
-  models.js   animated models (heroes, goblins, spiders): loading, actors, layering
+  models.js   animated models (heroes, monsters): loading, actors, layering
+  home.js     the cottage, its farm, and saving / continuing
   audio.js    synthesised sound effects and the music loop (Web Audio)
   game.js     state, input, camera, combat, AI, allies, skills, HUD, particles, telemetry
 assets/       compressed models (*.glb), the forest (nature.json), music.mp3 — all CC0,
@@ -109,19 +111,54 @@ strike button, which reads **TALK** beside him). He offers:
 - **Healing potions**: 25 coins each, up to six.
 - **Hire a companion**: three fighters at the bar each visit (ranger, blade, knight,
   mage, druid or dwarf), 45–70 coins, up to your company size.
-- **Bounties**: slay spiders, slay goblins, free captives or, from level 3, slay a
-  giant spider. Progress shows in the status panel; come back for coins and XP.
+- **Gear**: five tiers of weapon (+15% damage each) and armour (+20 health and 6% less
+  damage each), 35–360 coins a tier.
+- **Bounties**: slay spiders, drive off snakes, swat wasps, free captives or, from
+  level 3, slay a giant spider. Progress shows in the status panel; come back for coins and XP.
 - **Training**: a shortcut to spend skill points.
 
 Menus pause the wood and, on a laptop, free the mouse so you can click; closing one
 captures it again.
 
+### Coin, gear and saving
+
+- **Cash flow.** Every kill pays 3–6 coins (giant spiders ~20), more as you level; a
+  freed captive with no room in your company pays 20; bounties pay 50–150. Potions are 15,
+  companions 30–45, gear tiers 35–360, so something worth buying comes along every few
+  minutes.
+- **Saving.** Your hunter, level, skills, gear, coin, potions, bounty, company and
+  cottage are saved to `localStorage` every 15 seconds, after every purchase and when the
+  page is hidden. The title offers **Continue**; starting a new hunter asks first.
+- **Death is a setback, not the end.** You wake at the Greenleaf (or your own hearth),
+  keeping everything but a tenth of your purse (40 coins at most).
+
+### The old cottage
+
+Out past the tavern, at the end of a second path, an abandoned cottage stands with half
+a roof, a door off its hinges and a notice nailed to a post. Walk up to the door (`E`, or
+tap **LOOK**). From **level 15**, with 600 coins, it's yours, and then a job at a time:
+
+| Job | Coins | What it does |
+|---|---|---|
+| Mend the roof | 120 | A whole red roof |
+| New door and windows | 100 | Lit windows; the walls are whitewashed once both are done |
+| Clear the weeds, mend the fence | 80 | A fenced yard; monsters keep their distance |
+| Dig a vegetable patch | 90 | Four plots |
+| Dig a well | 140 | Crops grow 40% faster |
+| Widen the patch | 160 | Four more plots |
+| A bed and a hearth | 120 | Rest here, mend here, and wake here; the chimney smokes |
+
+**Farming.** Plant wheat (4 coins, 1½ min, sells for 14), corn (8, 2½ min, 28) or pumpkins
+(15, 4 min, 58) in empty plots. Crops grow while you play and are drawn growing in the
+patch; ripe plots glint gold. Harvest from the cottage menu. `HOUSE_LEVEL` and the prices
+live at the top of `src/home.js`.
+
 ### Characters
 
 - **Models.** Rogue → hooded rogue with crossbow (draws a knife to strike), Warrior →
   barbarian with axe, Wizard → mage with staff. Elves get ears and dwarves a beard,
-  attached to the head bone. Followers use the knight, rogues, mage and barbarian;
-  goblins are smaller, green-tinted rogues. Spiders, cocoons and fairies stay procedural.
+  attached to the head bone. Followers use the knight, rogues, mage and barbarian; Bram is
+  the barbarian with a mug. Cocoons and fairies stay procedural.
 - **One skeleton, one set of clips.** All five KayKit characters share a 41-bone rig, so
   `assets/anims.glb` carries 14 clips once (idle, run, jump, attacks, shoot, cast, throw,
   hit, death, cheer) and every model plays them. `tools/models.mjs` strips the other 61
@@ -132,14 +169,16 @@ captures it again.
 - **Budget.** The nearest 16 humanoids and spiders within 42 units get a model ("actor", pooled and
   reused); everything else is drawn by the instanced primitive rigs, so a horde costs
   a fixed amount. Each model's six body parts are merged into one skinned mesh.
-- **Spiders.** Quaternius's animated spider on its own 39-bone rig, sharing the actor
-  pool (16 actors now). The bite starts with the wind-up, so the strike lands when the
-  warning ring closes; a hit makes it flinch. Its body takes the entity's colour (giant
-  spiders are redder). Far spiders fall back to the primitive rig.
+- **Monsters.** Quaternius's spider, snake and wasp, each on its own rig with its own
+  clips, sharing the actor pool (16 actors). Spiders and snakes start their bite with the
+  wind-up (a hiss or a rattle), so it lands as the warning ring closes; a hit makes them
+  flinch. Snakes have no death clip, so they roll over. Wasps hover at chest height and
+  fire stingers. Spiders take the entity's colour (giant ones are redder). Far monsters
+  fall back to primitive rigs.
 - **Strafing.** With the mouse captured the hunter faces the camera; the legs pick
   forward run, strafe left/right or a slower backpedal from the angle between where she
   faces and where she moves. Shadowstep plays a dodge roll in the direction you push.
-- **Death.** Slain goblins and spiders leave a body that plays its death, then sinks.
+- **Death.** Slain monsters leave a body that plays its death, then sinks.
 - **Compression.** Every model is packed with `EXT_meshopt_compression` (quantised,
   filtered); three.js's bundled `MeshoptDecoder` (~29 KB) unpacks it at load. The
   characters went from 1.8 MB to 0.8 MB, room enough for the spider, the forest and music.
@@ -167,7 +206,7 @@ captures it again.
 - **Solid world.** Trunks, larger rocks, stumps and the landmarks register circle or
   rotated-box colliders in a coarse grid. The hunter, creatures and followers are pushed
   out of them, and out of each other, so crowds spread around you instead of stacking.
-- **Minimap.** Every kind of thing has its own glyph (spider, goblin, archer, captive,
+- **Minimap.** Every kind of thing has its own glyph (spider, snake, wasp, captive,
   follower, fairy, and an icon per landmark). Undiscovered landmarks show as `?`, and
   landmarks beyond the map's edge stay pinned to its rim so you can see which way they lie.
 
@@ -186,7 +225,7 @@ captures it again.
   A 46-enemy horde costs 12 draw calls (it was 455 before three.js). Beyond 20 units,
   or past the seventh-nearest character, a reduced rig is still used to save vertices.
 - Every batch is created and every shader compiled during the loading screen, so the
-  first goblin you meet does not cause a stall.
+  first wasp you meet does not cause a stall.
 - **Adaptive resolution.** The game measures its own frame rate and scales the render
   target between 62% and 100% to hold ~60 fps, then eases back up. The HUD canvas draws
   at a lower scale than the 3D view, because Canvas2D compositing is expensive on iOS.
@@ -200,7 +239,7 @@ captures it again.
 - **Music.** One 63-second CC0 loop, mono MP3 at 48 kbps (~370 KB). It loops between its
   first and last audible samples, so MP3 padding leaves no gap at the seam.
 - **Impact.** A landed blow freezes the world for 50–75 ms (hit-stop), jolts the camera,
-  throws sparks and spider ichor or goblin blood, and pushes the foe back a step. Taking a
+  throws sparks and a splash of ichor (no blood), and pushes the foe back a step. Taking a
   hit shakes the camera harder.
 - **Particles** are tiny instanced cubes poured into the same batches as the characters,
   so hundreds cost one draw call: kills, freed captives, level-ups, fairies, potions,
@@ -256,7 +295,8 @@ software WebGL frame rates vary a lot between machines.
   Safari on iOS 15 and later.
 - **No haptics on iOS.** Safari does not implement the Vibration API. Android gets the
   full set.
-- Save data is limited to a best-depth record in `localStorage`.
+- Saves live in this browser's `localStorage`: clearing site data, or a private window,
+  loses them, and they don't follow you to another device.
 
 ## License
 

@@ -60,6 +60,9 @@ const PROPS = {
   rock4:  { f: 'Rock_Moss_6', tris: 999, lo: 50, smooth: false },
   stump:  { f: 'TreeStump_Moss', tris: 110, lo: 40, smooth: false },
   log:    { f: 'WoodLog_Moss', tris: 150, lo: 50, smooth: false },
+  // crops for the cottage's vegetable patch (drawn growing, not baked)
+  wheat:  { f: 'Wheat', tris: 120, lo: 40, smooth: true, crop: 1 },
+  corn:   { f: 'Corn_2', tris: 140, lo: 40, smooth: true, crop: 1 },
 };
 
 /* the pack's materials, as display colours matched to the game's palette
@@ -158,7 +161,7 @@ for (const [key, spec] of Object.entries(PROPS)) {
     w: +((Math.max(mx[0] - mn[0], mx[2] - mn[2])) / h).toFixed(4),    // width / height
     smooth: spec.smooth ? 1 : 0,
     ...pack(hi),
-    lo: pack(lo),                        // the stand-in drawn past the near ring
+    ...(spec.crop ? {} : { lo: pack(lo) }),   // the stand-in drawn past the near ring (crops have none)
   };
   console.log(`${key.padEnd(7)} ${spec.f.padEnd(18)} ${String(Math.round(total)).padStart(5)} -> ${String(hi.C.length).padStart(4)} / ${String(lo.C.length).padStart(3)} tris`);
 }

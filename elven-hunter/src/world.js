@@ -18,11 +18,18 @@ function fbm(x,z,oct,sc){
 }
 /* the tavern sits on a level yard at the end of a dirt path from the glade */
 var TAVERN={x:0,z:-34,ry:0.5,yard:19,flat:15,h:null};
-/* clearings kept free of trees: landmark grounds and the path to the tavern */
-var CLEAR=[[0,-34,20],[-72,48,15],[86,-56,15],[-88,-78,11]];
-function pathDist(x,z){            // distance to the glade -> tavern-door path
+/* the old cottage, out past the tavern on a quiet rise (see home.js) */
+var HOUSE={x:35,z:-60,ry:-0.9,yard:17,flat:14,h:null};
+var FLATS=[TAVERN,HOUSE];
+/* clearings kept free of trees: landmark grounds and the paths */
+var CLEAR=[[0,-34,20],[-72,48,15],[86,-56,15],[-88,-78,11],[35,-60,20]];
+function pathDist(x,z){            // distance to the nearest path: glade -> tavern door, tavern -> cottage
   var t=clamp01((z-4)/(-29-4)), px=0+1.4*t*t, pz=4+(-29-4)*t;
-  return Math.hypot(x-px,z-pz);
+  return Math.min(Math.hypot(x-px,z-pz), segDist(x,z,7,-29,30.5,-54.5));
+}
+function segDist(x,z,ax,az,bx,bz){
+  var dx=bx-ax, dz=bz-az, t=clamp01(((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz));
+  return Math.hypot(x-ax-dx*t, z-az-dz*t);
 }
 function clamp01(v){ return v<0?0:(v>1?1:v); }
 function inClearing(x,z,pad){
@@ -32,12 +39,13 @@ function inClearing(x,z,pad){
 /* world height */
 function H(x,z){
   var h=Hraw(x,z);
-  // level the tavern yard
-  var dt=Math.hypot(x-TAVERN.x,z-TAVERN.z);
-  if(dt<TAVERN.flat*2.2){
-    if(TAVERN.h===null) TAVERN.h=Hraw(TAVERN.x,TAVERN.z);
-    var w=Math.exp(-Math.pow(dt/TAVERN.flat,4));
-    h=h*(1-w)+TAVERN.h*w;
+  // level the tavern yard and the cottage's plot
+  for(var i=0;i<FLATS.length;i++){ var F=FLATS[i], dt=Math.hypot(x-F.x,z-F.z);
+    if(dt<F.flat*2.2){
+      if(F.h===null) F.h=Hraw(F.x,F.z);
+      var w=Math.exp(-Math.pow(dt/F.flat,4));
+      h=h*(1-w)+F.h*w;
+    }
   }
   return h;
 }

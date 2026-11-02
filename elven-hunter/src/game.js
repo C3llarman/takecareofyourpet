@@ -94,7 +94,7 @@ var TELE={
 
 /* ---------- state ---------- */
 var G={
-  state:'title', t:0, build:{race:'elf',cls:'rogue',skills:{},points:0},
+  state:'title', t:0, build:{race:'elf',cls:'rogue',skills:{},points:0,gear:{w:0,a:0}},
   player:null, ents:[], S:null, cam:{yaw:0.6,pitch:0.34,dist:7.0,x:0,y:0,z:0},
   msgs:[], found:{}, killed:0, freed:0, spawnT:0, hitFlash:0, best:0, tip:'', tipT:0
 };
@@ -103,12 +103,13 @@ function spentClass(){var n=0,T=SKILLS[G.build.cls];for(var i=0;i<T.length;i++)n
 function tree(){return SKILLS.shared.concat(SKILLS[G.build.cls]);}
 function recalc(){
   var r=RACES[G.build.race], c=CLASSES[G.build.cls], S={};
-  S.maxHp=Math.round(c.hp+r.hp+SK('vigor')*15+SK('iron')*22);
+  var gear=G.build.gear||{w:0,a:0};
+  S.maxHp=Math.round(c.hp+r.hp+SK('vigor')*15+SK('iron')*22+gear.a*20+(G.player?(G.player.level-1)*10:0));
   S.move=6.4*r.move*(1+0.06*SK('swift'));
-  S.melee=c.melee*r.melee*(1+0.16*SK('cleave'));
-  S.ranged=c.ranged*r.ranged*(1+0.16*SK('fletch'))*(1+0.18*SK('arcane'));
+  S.melee=c.melee*r.melee*(1+0.16*SK('cleave'))*(1+0.15*gear.w);
+  S.ranged=c.ranged*r.ranged*(1+0.16*SK('fletch'))*(1+0.18*SK('arcane'))*(1+0.15*gear.w);
   S.cd=c.cd*(1-0.12*SK('quick'));
-  S.armor=Math.pow(0.88,SK('wall'));
+  S.armor=Math.pow(0.88,SK('wall'))*Math.pow(0.94,gear.a);
   S.lifesteal=0.09*SK('blood'); S.whirl=SK('whirl')>0; S.dash=SK('dash')>0;
   S.extra=SK('twin')+SK('fork'); S.pierce=SK('pierce');
   S.burst=SK('burst')?3.0+1.4*SK('burst'):0; S.frost=SK('frost');
@@ -194,12 +195,14 @@ function buildWorld(){
   buildHive(m,-72,48);
   buildHollow(m,86,-56);
   buildStones(m,-88,-78);
+  cottageSite(m);
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
   WORLD.castShadow=true; WORLD.receiveShadow=true;
   SCENE.add(WORLD);
   // trees, rocks and undergrowth live in chunks the camera and the sun can cull
   PROPS3=chunkMeshes(WORLDMAT);
   for(var i=0;i<PROPS3.length;i++){ SCENE.add(PROPS3[i].hi); SCENE.add(PROPS3[i].lo); }
+  initCropParts(); buildCottage();
   WORLDTRIS=m.count()/3+PROPTRIS;
 }
 var WORLDTRIS=0, PROPS3=[];
@@ -238,7 +241,7 @@ function populate(){
     if(H(fx,fz)<WATER+0.4) continue; spawnFairy(fx,fz); }
   spawnKeeper();
 }
-function nearTavern(x,z,r){ return Math.hypot(x-TAVERN.x,z-TAVERN.z)<r; }
+function nearTavern(x,z,r){ return Math.hypot(x-TAVERN.x,z-TAVERN.z)<r||homeSafe(x,z,r*0.8); }
 /* Bram keeps the Greenleaf: rest, potions, hired blades and bounties */
 function spawnKeeper(){
   var k=TAVERN.keeper; if(!k) return;
@@ -454,7 +457,9 @@ function hurtEnemy(e,d,quiet){
     sfx(e.kind+'die',e.x,e.z);
     // monsters burst in a puff of ichor and dust, no blood
     burst(e.x,e.y+(e.kind==='wasp'?aimH(e):0.7*(e.scale||1)),e.z,16,ICHOR[e.kind],{up:4,spread:4,size:0.16*(e.scale||1),life:0.9});
-    if(Math.random()<0.3){ G.player.coins+=3+((Math.random()*7)|0); sfx('coin'); }
+    // every kill pays a little; giants pay well
+    var cn=(e.big?16:3)+((Math.random()*(3+G.player.level/3))|0);
+    G.player.coins+=cn; msg('+'+cn+' ◉','#ffe08a',e.x+0.6,e.y+1.6,e.z,13); sfx('coin');
     if(Math.random()<0.16){ G.player.potions++; msg('+potion','#ff9d9d',e.x,e.y+2,e.z); sfx('pickup'); }
     var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
     // leave a body that plays its death and sinks away
@@ -524,7 +529,7 @@ function breakCocoon(c,d){
     var deployed=0; for(var k=0;k<G.ents.length;k++) if(G.ents[k].kind==='ally') deployed++;
     var kind=(Math.random()*ALLYKIND.length)|0;
     if(deployed<G.S.allies){ spawnAlly(kind,c.x,c.z); }
-    else { G.player.coins+=14; msg(ALLYKIND[kind].n+' runs for the tavern','#ffe08a',c.x,c.y+2,c.z); }
+    else { G.player.coins+=20; msg(ALLYKIND[kind].n+' runs home — +20 ◉','#ffe08a',c.x,c.y+2,c.z); }
     buzz([12,40,12]);
   }
 }
@@ -532,7 +537,7 @@ function gainXp(n,x,y,z,label){
   var p=G.player; p.xp+=Math.round(n*G.S.xp);
   msg(label||('+'+n+' XP'),'#ffe08a',x,y,z);
   while(p.xp>=xpNeed(p.level)){
-    p.xp-=xpNeed(p.level); p.level++; p.maxHp+=10; p.hp=p.maxHp; G.build.points++;
+    p.xp-=xpNeed(p.level); p.level++; G.build.points++; recalc(); p.hp=p.maxHp;
     msg('LEVEL '+p.level+' — skill point','#9ff07a',p.x,p.y+2.8,p.z); buzz([20,40,20,40,40]);
     tip('Level '+p.level+'! '+(DESKTOP?'Press TAB':'Tap ★')+' to spend your skill point');
     sfx('levelup'); burst(p.x,p.y+1,p.z,30,[1.0,0.86,0.42],{up:5,spread:2.5,size:0.12,life:1.3,grav:-2});
@@ -626,9 +631,9 @@ function update(dt){
   if(p.y<WATER+0.3){ p.slowT=0.2; }
   // actions — a tap during cooldown is remembered briefly so it never feels dropped
   IN.atkBuf=Math.max(0,IN.atkBuf-dt); IN.shotBuf=Math.max(0,IN.shotBuf-dt); IN.jumpBuf=Math.max(0,IN.jumpBuf-dt);
-  if((IN.attack||IN.atkBuf>0)&&G.talk){ IN.attack=false; IN.atkBuf=0; keeperScreen(); return; }
+  if((IN.attack||IN.atkBuf>0)&&G.talk){ IN.attack=false; IN.atkBuf=0; G.talk.open(); return; }
   if(IN.attack||IN.atkBuf>0){ if(p.cdT<=0){ doAttack(); IN.atkBuf=0; } }
-  else if(!DESKTOP&&p.cdT<=0&&!p.dead&&!p.atTavern){
+  else if(!DESKTOP&&p.cdT<=0&&!p.dead&&!p.safe){
     // auto-swing (touch only): if something hostile is already in reach, the hunter
     // defends herself. With a mouse it just yanked your facing around, so it is off.
     for(var ai2=0;ai2<G.ents.length;ai2++){
@@ -651,15 +656,20 @@ function update(dt){
   followCam(dt);
   // landmarks: discovery, and the tavern as a place to rest
   p.atTavern=false;
-  // who you can talk to: Bram, when you are close and nothing hostile is
+  // what you can talk to or use: Bram, or the cottage door, when nothing hostile is close
   G.talk=null;
-  var kp=keeper();
-  if(kp&&Math.hypot(kp.x-p.x,kp.z-p.z)<3.8){
+  var kp=keeper(), hd=HT(0,4.4);
+  var cand=kp&&Math.hypot(kp.x-p.x,kp.z-p.z)<3.8?{x:kp.x,y:kp.y,z:kp.z,lift:2.55,label:'talk to Bram',tap:'TALK',open:function(){ keeperScreen(); }}:
+    (Math.hypot(hd.x-p.x,hd.z-p.z)<3.4?{x:hd.x,y:H(hd.x,hd.z),z:hd.z,lift:2.3,label:HOME.owned?'your cottage':'read the notice',tap:HOME.owned?'HOME':'LOOK',open:function(){ cottageScreen(); }}:null);
+  if(cand){
     var threat=false;
     for(var ti=0;ti<G.ents.length;ti++){ var te=G.ents[ti];
       if(FOE[te.kind]&&Math.hypot(te.x-p.x,te.z-p.z)<7){ threat=true; break; } }
-    if(!threat) G.talk=kp;
+    if(!threat) G.talk=cand;
   }
+  homeUpdate(dt);
+  p.safe=p.atTavern||p.atHome;
+  G.saveT=(G.saveT||0)+dt; if(G.saveT>15){ G.saveT=0; saveGame(); }
   for(var i=0;i<LANDMARKS.length;i++){
     var lm=LANDMARKS[i], ld=Math.hypot(p.x-lm.x,p.z-lm.z);
     if(!G.found[lm.name]&&ld<lm.r+4){
@@ -804,7 +814,7 @@ function updateEnts(dt){
         }
       }
       e.atkCd-=dt;
-      if(tdist<e.aggro&&!p.dead&&!(tgt===p&&p.atTavern)){
+      if(tdist<e.aggro&&!p.dead&&!(tgt===p&&p.safe)){
         if(e.kind==='wasp'){
           if(tdist>11) moveCreature(e,dt,tgt.x,tgt.z,spd);
           else if(tdist<7) moveCreature(e,dt,e.x-(tgt.x-e.x),e.z-(tgt.z-e.z),spd*0.7);
@@ -1060,6 +1070,7 @@ function draw(){
     pushEnt(VIS[vi][1]);
   }
   LOD=0;
+  drawFarm();
   drawFX();
   for(var k=0;k<DRAW.length;k++){ var d=DRAW[k]; batchAdd(partBatch(d[0]),d[1],d[2]); }
   batchesEnd();
@@ -1212,6 +1223,9 @@ function mapIcon(kind,x,y,s,unknown){
       hx.fillStyle=ready?'#ffd76a':'#c9b27a'; hx.beginPath(); hx.arc(0,0,3.2,0,6.3); hx.fill();
       if(ready){ hx.fillStyle='#2a1a0a'; hx.fillRect(-0.7,-2.4,1.4,3); hx.fillRect(-0.7,1.2,1.4,1.2); }
       break;
+    case 'cottage':                      // a small green-roofed house
+      hx.fillStyle=HOME.owned?'#9fdc6a':'#8a8a7a'; hx.beginPath(); hx.moveTo(-4.5,0); hx.lineTo(0,-4.5); hx.lineTo(4.5,0); hx.closePath(); hx.fill();
+      hx.fillStyle=HOME.owned?'#e8d6a8':'#6a6458'; hx.fillRect(-3.4,0,6.8,3.8); hx.strokeStyle='#2a1a0a'; hx.lineWidth=1; hx.strokeRect(-3.4,0,6.8,3.8); break;
     case 'tavern':                       // warm house
       hx.fillStyle='#f0b860'; hx.beginPath(); hx.moveTo(-5,0); hx.lineTo(0,-5); hx.lineTo(5,0); hx.lineTo(5,4.5); hx.lineTo(-5,4.5); hx.closePath(); hx.fill();
       hx.strokeStyle='#2a1a0a'; hx.lineWidth=1; hx.stroke(); break;
@@ -1357,7 +1371,7 @@ function drawHUD(){
   hx.strokeStyle='rgba(232,194,106,.55)'; hx.lineWidth=2; hx.beginPath(); hx.arc(mx,my,mr,0,6.3); hx.stroke();
   if(DESKTOP||SHOWKEY){
     var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['cocoon','Captive — free them'],
-      ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],
+      ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
       ['hollow',"Queen's Hollow"],['stones','Standing stones']];
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
@@ -1416,14 +1430,14 @@ function drawHUD(){
     if(bt.id==='potion'){ hx.fillStyle='#ff9d9d'; hx.fillText('✚'+p.potions,bt.x,bt.y+bt.r*0.16); }
     else if(bt.id==='skills'){ hx.fillStyle=G.build.points>0?'#9ff07a':'#f3e7c9';
       hx.fillText(G.build.points>0?'★'+G.build.points:'SKILL',bt.x,bt.y+bt.r*0.16); }
-    else if(bt.id==='attack'&&G.talk){ hx.fillStyle='#ffd76a'; hx.fillText('TALK',bt.x,bt.y+bt.r*0.14); }
+    else if(bt.id==='attack'&&G.talk){ hx.fillStyle='#ffd76a'; hx.fillText(G.talk.tap,bt.x,bt.y+bt.r*0.14); }
     else hx.fillText(bt.label,bt.x,bt.y+bt.r*0.14);
   }
   // talk to Bram
   if(G.talk){
-    var ks=project(G.talk.x,G.talk.y+2.55,G.talk.z);
+    var ks=project(G.talk.x,G.talk.y+G.talk.lift,G.talk.z);
     if(ks){
-      var kt=DESKTOP?'E  ·  talk to Bram':'Tap TALK';
+      var kt=DESKTOP?'E  ·  '+G.talk.label:'Tap '+G.talk.tap;
       hx.font='700 15px Georgia,serif'; hx.textAlign='center';
       var kw=hx.measureText(kt).width+22;
       hx.fillStyle='rgba(8,11,8,.72)'; roundRect(ks.x-kw/2,ks.y-19,kw,27,8); hx.fill();
@@ -1519,14 +1533,21 @@ function project(x,y,z){
 }
 
 /* ---------- screens ---------- */
-function show(html){ ui.innerHTML='<div class="card">'+html+'</div>'; ui.classList.add('on'); }
+function show(html){
+  ui.innerHTML='<div class="card">'+html+'</div>'; ui.classList.add('on');
+  // any page over the game frees a captured mouse, or its buttons could not be clicked
+  if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
+}
 function hide(){ ui.classList.remove('on'); ui.innerHTML=''; touches={}; IN.attack=false; }
+var SAVED=null;
 function titleScreen(){
-  G.state='title';
+  if(G.player&&(G.state==='dead'||G.state==='play')) saveGame();
+  G.state='title'; SAVED=loadSave();
   show('<h1>Elven Hunter</h1>'+
     '<p class="sub">An open wood. Spiders in the canopy, snakes in the grass, wasps round their hive, and your kin strung up between the trees.</p>'+
     '<p class="sub">Free them and they fight beside you.</p>'+
-    '<button class="btn" id="make">Make your hunter</button>'+
+    (SAVED?'<button class="btn" id="cont">Continue — '+RACES[SAVED.build.race].name+' '+CLASSES[SAVED.build.cls].name+', level '+SAVED.p.level+'</button>':'')+
+    '<button class="btn'+(SAVED?' alt':'')+'" id="make">'+(SAVED?'New hunter':'Make your hunter')+'</button>'+
     '<button class="btn alt" id="snd">'+sndLabel()+'</button>'+
     '<a class="btn alt" id="arcade" href="../">&larr; Back to Elk Leaf Arcade</a>'+
     (G.best?'<p class="hint">Best: level '+G.best+'</p>':'')+
@@ -1536,6 +1557,7 @@ function titleScreen(){
       : '<p class="hint"><b>Phone:</b> drag the left side to move, the right side to look, buttons to fight.<br>'+
         'Your hunter swings on her own when something gets close.</p>'));
   document.getElementById('make').onclick=makeScreen;
+  if(SAVED) document.getElementById('cont').onclick=function(){ startRun(loadSave()); };
   document.getElementById('snd').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
 }
 function makeScreen(){
@@ -1559,20 +1581,37 @@ function makeScreen(){
   var els=ui.querySelectorAll('.pick');
   for(var i=0;i<els.length;i++) els[i].onclick=function(){
     G.build[this.getAttribute('data-kind')]=this.getAttribute('data-k'); makeScreen(); };
-  document.getElementById('go').onclick=startRun;
+  // starting over replaces the saved hunter: ask once
+  document.getElementById('go').onclick=function(){
+    if(loadSave()&&!this.dataset.sure){ this.dataset.sure=1; this.textContent='Start over? This replaces your saved hunter'; return; }
+    clearSave(); startRun();
+  };
   document.getElementById('back').onclick=titleScreen;
 }
-function startRun(){
-  G.build.skills={}; G.build.points=0;
-  recalc();
+/* a new hunter (no argument), or the saved one carried on (sv from loadSave) */
+function startRun(sv){
+  if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0}}; }
+  else { G.build.skills={}; G.build.points=0; G.build.gear={w:0,a:0}; }
+  G.player=null; recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
+  homeReset();
   populate();
+  if(sv){
+    applySave(sv);
+    // carry on where you'd wake: your hearth if you have one, else the Greenleaf's yard
+    var ws=wakeSpot(), P=G.player; P.x=ws.x; P.z=ws.z; P.y=H(ws.x,ws.z); P.yaw=ws.yaw;
+    for(var ai=0,an=0;ai<G.ents.length;ai++){ var al=G.ents[ai]; if(al.kind!=='ally') continue;
+      al.x=P.x+Math.cos(an*2.1)*2.4; al.z=P.z+Math.sin(an*2.1)*2.4; al.y=H(al.x,al.z); an++; }
+  }
+  buildCottage();
   G.cam.yaw=0; G.cam.pitch=DESKTOP?0.32:0.30; G.cam.dist=DESKTOP?6.2:7.0;
   G.cam.x=G.player.x; G.cam.y=G.player.y+6; G.cam.z=G.player.z+9;
   layoutButtons();
   hide(); G.state='play';
   wantLock();                     // the Play click is a user gesture: capture the mouse now
-  tip('Follow the path north to the tavern');
+  G.cam.yaw=G.player.yaw; G.cam.x=G.player.x-Math.sin(G.cam.yaw)*8; G.cam.z=G.player.z-Math.cos(G.cam.yaw)*8;
+  tip(sv?'Welcome back, hunter':'Follow the path north to the tavern');
+  saveGame();
 }
 /* menus pause the wood; on a laptop they free the cursor so you can click */
 function menuOpen(state){
@@ -1580,7 +1619,7 @@ function menuOpen(state){
   for(var k in KEY) KEY[k]=false;
   if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
 }
-function menuClose(){ hide(); G.state='play'; wantLock(); }
+function menuClose(){ hide(); G.state='play'; wantLock(); saveGame(); }
 function skillScreen(flash){
   if(G.state==='play'||G.state==='talk') menuOpen('skills');
   else if(G.state!=='skills') return;          // (it re-draws itself after every point you spend)
@@ -1626,7 +1665,11 @@ var BOUNTIES=[
   {id:'giant', short:'Giant spider', t:'Slay a giant spider', n:function(){ return 1; }, on:['giant'],
    say:'Something huge broods out past the Queen\'s Hollow. Kill it and I\'ll make it worth your while.'}
 ];
-var HIRE_PRICE={ranger:45,blade:45,knight:70,mage:60,druid:60,dwarf:70};
+var HIRE_PRICE={ranger:30,blade:30,knight:45,mage:40,druid:40,dwarf:45};
+var POTION_PRICE=15;
+/* gear: five tiers each, priced against what a few minutes of hunting brings in */
+var GEAR_NAMES=['Plain','Honed','Fine','Masterwork','Elvensteel','Legendary'];
+var GEAR_PRICE={w:[40,85,150,240,360], a:[35,75,135,215,330]};
 function bountyReward(b){ var l=G.player.level; return {coins:20+b.n*6+l*4, xp:60+b.n*20+l*10}; }
 function bountyTick(tags){
   var b=G.bounty; if(!b||b.got>=b.n) return;
@@ -1650,7 +1693,9 @@ function keeperScreen(say){
   var hpFull=p.hp>=p.maxHp-0.5;
   var opts=[];
   opts.push({id:'rest',  t:'Rest by the fire', d:hpFull?'You are already rested':'Mend you and your company — free', off:false});
-  opts.push({id:'potion',t:'Buy a healing potion — 25 ◉', d:p.potions>=6?'Your belt is full':(p.coins<25?'Not enough coin':'You carry '+p.potions+' of 6'), off:p.potions>=6||p.coins<25});
+  opts.push({id:'potion',t:'Buy a healing potion — '+POTION_PRICE+' ◉', d:p.potions>=6?'Your belt is full':(p.coins<POTION_PRICE?'Not enough coin':'You carry '+p.potions+' of 6'), off:p.potions>=6||p.coins<POTION_PRICE});
+  var gr=G.build.gear||{w:0,a:0}, gNext=Math.min(gr.w,gr.a)<5;
+  opts.push({id:'gear', t:'Gear: better weapon and armour', d:gNext?'Weapon '+GEAR_NAMES[gr.w]+', armour '+GEAR_NAMES[gr.a]+' · next from '+Math.min(gr.w<5?GEAR_PRICE.w[gr.w]:1e9,gr.a<5?GEAR_PRICE.a[gr.a]:1e9)+' ◉':'The finest gear in the wood', off:false});
   var full=deployed()>=S.allies;
   opts.push({id:'hire',  t:'Hire a companion', d:full?'Your company is full ('+deployed()+' of '+S.allies+')':'Blades for coin ('+deployed()+' of '+S.allies+' in your company)', off:full});
   if(!b) opts.push({id:'work', t:'Ask for work', d:'Bram always has a job going', off:false});
@@ -1676,9 +1721,10 @@ function keeperDo(id){
     p.hp=p.maxHp; for(var i=0;i<G.ents.length;i++){ var a=G.ents[i]; if(a.kind==='ally') a.hp=a.maxHp; }
     sfx('potion'); keeperScreen('There. Feet up a while — you look better already.');
   } else if(id==='potion'){
-    if(p.coins<25||p.potions>=6) return;
-    p.coins-=25; p.potions++; sfx('coin'); keeperScreen('Brewed it myself. Mostly herbs.');
+    if(p.coins<POTION_PRICE||p.potions>=6) return;
+    p.coins-=POTION_PRICE; p.potions++; sfx('coin'); saveGame(); keeperScreen('Brewed it myself. Mostly herbs.');
   } else if(id==='hire'){ hireScreen(); }
+  else if(id==='gear'){ gearScreen(); }
   else if(id==='work'){
     var l=p.level, defs=BOUNTIES.filter(function(d){ return d.id!=='giant'||l>=3; });
     var d=defs[(Math.random()*defs.length)|0];
@@ -1686,10 +1732,33 @@ function keeperDo(id){
     sfx('pickup'); keeperScreen(d.say.replace('{n}',G.bounty.n));
   } else if(id==='claim'){
     var b=G.bounty, rw=bountyReward(b);
-    p.coins+=rw.coins; G.bounty=null; G.bountiesDone=(G.bountiesDone||0)+1;
+    p.coins+=rw.coins; G.bounty=null; G.bountiesDone=(G.bountiesDone||0)+1; setTimeout(saveGame,50);
     sfx('coin'); gainXp(rw.xp,k?k.x:p.x,(k?k.y:p.y)+2.6,k?k.z:p.z,'+'+rw.xp+' XP — bounty');
     keeperScreen('As promised. You\'ve earned every coin.');
   } else if(id==='train'){ skillScreen(); }
+}
+function gearScreen(say){
+  var p=G.player, gr=G.build.gear||(G.build.gear={w:0,a:0}), cls=CLASSES[G.build.cls];
+  var wName=cls.weapon==='axe'?'axe':(cls.weapon==='staff'?'staff':'blade and crossbow');
+  var html='<h1>Gear</h1><p class="sub">Bram\'s cousin works the forge out back · ◉ '+p.coins+'</p>'+(say?'<p class="say">'+say+'</p>':'')+
+    '<div class="stat"><span>Weapon</span><b>'+GEAR_NAMES[gr.w]+' '+wName+' (+'+gr.w*15+'% damage)</b></div>'+
+    '<div class="stat"><span>Armour</span><b>'+GEAR_NAMES[gr.a]+' (+'+gr.a*20+' health, '+Math.round((1-Math.pow(0.94,gr.a))*100)+'% less harm)</b></div><div class="opts">';
+  [['w','Weapon','+15% damage, melee and ranged'],['a','Armour','+20 health and 6% less damage taken']].forEach(function(g){
+    var t=gr[g[0]];
+    if(t>=5){ html+='<button class="opt off" disabled><b>'+g[1]+': '+GEAR_NAMES[5]+'</b><small>As good as it gets</small></button>'; return; }
+    var price=GEAR_PRICE[g[0]][t], off=p.coins<price;
+    html+='<button class="opt'+(off?' off':'')+'" data-g="'+g[0]+'"'+(off?' disabled':'')+'><b>'+g[1]+': '+GEAR_NAMES[t+1]+' — '+price+' ◉</b><small>'+g[2]+(off?' · not enough coin':'')+'</small></button>';
+  });
+  html+='</div><button class="btn alt" id="gback">Back to the counter</button>';
+  show(html);
+  var els=ui.querySelectorAll('.opt[data-g]');
+  for(var i=0;i<els.length;i++) els[i].onclick=function(){
+    var k=this.getAttribute('data-g'), t=gr[k], price=GEAR_PRICE[k][t];
+    if(t>=5||p.coins<price) return;
+    p.coins-=price; gr[k]=t+1; recalc(); sfx('freed'); saveGame();
+    gearScreen(k==='w'?'Feel the balance on that. Sharp as winter.':'That\'ll turn a fang or two.');
+  };
+  document.getElementById('gback').onclick=function(){ keeperScreen(); };
 }
 function hireScreen(){
   var p=G.player, S=G.S, full=deployed()>=S.allies, html='<h1>Hire a companion</h1>'+
@@ -1706,7 +1775,7 @@ function hireScreen(){
   for(var j=0;j<els.length;j++) els[j].onclick=function(){
     var o=G.offers[+this.getAttribute('data-h')], K=ALLYKIND[o.ak], price=HIRE_PRICE[K.k]||50;
     if(deployed()>=G.S.allies||p.coins<price||o.hired) return;
-    p.coins-=price; o.hired=true;
+    p.coins-=price; o.hired=true; setTimeout(saveGame,1500);
     var kp=keeper(), ax=(kp?kp.x:p.x)+1.5, az=(kp?kp.z:p.z)+1.5;
     spawnAlly(o.ak,ax,az,o.name); sfx('freed',ax,az);
     hireScreen();
@@ -1716,19 +1785,34 @@ function hireScreen(){
 function gameOver(){
   if(G.state!=='play') return;
   G.state='dead';
-  if(G.player.level>G.best){ G.best=G.player.level; try{localStorage.setItem('eh3_best',G.best);}catch(e){} }
+  var p=G.player;
+  if(p.level>G.best){ G.best=p.level; try{localStorage.setItem('eh3_best',G.best);}catch(e){} }
+  var lost=Math.min(40,Math.floor(p.coins*0.1)); p.coins-=lost; G.lost=lost;   // a gentle knock: a tenth of your purse, 40 at most
+  var ws=wakeSpot();
   var dmgList=Object.keys(TELE.dmg).sort(function(a,b){return TELE.dmg[b]-TELE.dmg[a];})
     .map(function(k){return '<div class="stat"><span>'+k+'</span><b>'+TELE.dmg[k]+' dmg</b></div>';}).join('');
   show('<h1>The wood takes you</h1>'+
-    '<p class="sub">Killed by '+(TELE.deaths.length?TELE.deaths[TELE.deaths.length-1].by:'the wood')+'</p>'+
+    '<p class="sub">Brought down by '+(TELE.deaths.length?TELE.deaths[TELE.deaths.length-1].by:'the wood')+'</p>'+
+    '<p class="say">'+(ws.home?'You wake in your own bed, aching.':'Bram found you on the path and patched you up.')+(lost?' You dropped '+lost+' coins on the way.':'')+'</p>'+
     dmgList+
-    '<div class="stat"><span>Level reached</span><b>'+G.player.level+'</b></div>'+
-    '<div class="stat"><span>Prisoners freed</span><b>'+G.freed+'</b></div>'+
-    '<div class="stat"><span>Foes slain</span><b>'+G.killed+'</b></div>'+
-    '<button class="btn" id="again">Walk in again</button>'+
+    '<div class="stat"><span>Level</span><b>'+p.level+'</b></div>'+
+    '<div class="stat"><span>Prisoners freed / foes slain</span><b>'+G.freed+' / '+G.killed+'</b></div>'+
+    '<button class="btn" id="again">'+(ws.home?'Wake at home':'Wake at the Greenleaf')+'</button>'+
     '<button class="btn alt" id="menu">Title</button>');
-  document.getElementById('again').onclick=startRun;
+  document.getElementById('again').onclick=wakeUp;
   document.getElementById('menu').onclick=titleScreen;
+  TELE.dmg={};
+  saveGame();
+}
+function wakeUp(){
+  var p=G.player, ws=wakeSpot();
+  p.dead=false; p.deadT=undefined; p.hp=p.maxHp; p.inv=3; p.vy=0; p.onGround=true; p.buff=null; p.buffT=0;
+  p.x=ws.x; p.z=ws.z; p.y=H(ws.x,ws.z); p.yaw=ws.yaw;
+  for(var i=0;i<G.ents.length;i++){ var e=G.ents[i];
+    if(e.kind==='ally'){ e.x=p.x+Math.cos(i)*2.5; e.z=p.z+Math.sin(i)*2.5; e.y=H(e.x,e.z); e.hp=e.maxHp; }
+    if(FOE[e.kind]&&Math.hypot(e.x-p.x,e.z-p.z)<25){ e.x=e.home.x; e.z=e.home.z; e.y=H(e.x,e.z); } }
+  G.cam.yaw=p.yaw; G.cam.x=p.x-Math.sin(p.yaw)*8; G.cam.z=p.z-Math.cos(p.yaw)*8; G.cam.y=p.y+5;
+  hide(); G.state='play'; wantLock(); saveGame();
 }
 
 /* ---------- boot ---------- */

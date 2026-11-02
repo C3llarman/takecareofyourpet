@@ -60,7 +60,7 @@ section('World');
     })(),
   }));
   ok('world mesh builds', w.tris > 50000, `${w.tris} triangles in one draw call`);
-  ok('four landmarks placed', w.landmarks.length === 4, w.landmarks.join(', '));
+  ok('five landmarks placed', w.landmarks.length === 5, w.landmarks.join(', '));
   ok('spawn is above water', w.spawnAboveWater);
   ok('terrain normals face up', w.upward === 1, `${Math.round(w.upward * 100)}% of sampled faces`);
   await page.close();
@@ -458,8 +458,8 @@ section('Tavern');
   ok('the strike button talks to Bram', (await page.evaluate(() => G.state)) === 'talk');
   await page.click('.opt[data-o="work"]');
   await page.click('.opt[data-o="potion"]');
-  const shop = await page.evaluate(() => ({ bounty: !!G.bounty, coins: G.player.coins, potions: G.player.potions }));
-  ok('Bram hands out a bounty and sells potions', shop.bounty && shop.coins === 175 && shop.potions === 3);
+  const shop = await page.evaluate(() => ({ bounty: !!G.bounty, coins: G.player.coins, potions: G.player.potions, price: POTION_PRICE }));
+  ok('Bram hands out a bounty and sells potions', shop.bounty && shop.coins === 200 - shop.price && shop.potions === 3, `${shop.coins} coins left`);
   await page.click('.opt[data-o="hire"]');
   await page.click('.opt[data-h]');
   ok('you can hire a companion', (await page.evaluate(() => G.ents.filter((e) => e.kind === 'ally').length)) === 1);
@@ -474,6 +474,51 @@ section('Tavern');
   ok('spending a skill point takes, and the page updates', sk.pts === 1 && sk.shown === '1' && sk.state === 'skills', `${sk.shown} left`);
   await page.click('#close');
   ok('closing the menu returns to the wood', (await page.evaluate(() => G.state)) === 'play');
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
+  await page.close();
+}
+
+/* ---------------- the cottage, the farm, gear and saving ---------------- */
+section('Home and progress');
+{
+  const page = await open(browser, LAPTOP);
+  await page.click('#make'); await page.click('#go');
+  await page.waitForTimeout(300);
+  const pay = await page.evaluate(() => { G.ents = G.ents.filter((e) => !FOE[e.kind]); const p = G.player, c0 = p.coins;
+    spawnSnake(p.x + 2, p.z + 2); hurtEnemy(G.ents[G.ents.length - 1], 1e6); return p.coins - c0; });
+  ok('every kill pays coins', pay >= 3, `+${pay}`);
+  const gear = await page.evaluate(() => { const p = G.player, m0 = G.S.melee; p.coins = 100; G.state = 'play'; keeperScreen(); keeperDo('gear');
+    document.querySelector('.opt[data-g="w"]').click(); const r = { melee: G.S.melee / m0, coins: p.coins, tier: G.build.gear.w, price: GEAR_PRICE.w[0] }; menuClose(); return r; });
+  ok('gear can be bought and makes you stronger', gear.tier === 1 && gear.melee > 1.14 && gear.coins === 100 - gear.price, `+${Math.round((gear.melee - 1) * 100)}% damage`);
+
+  const locked = await page.evaluate(() => { const p = G.player; p.coins = 5000; G.state = 'play'; cottageScreen(); cottageDo('buy');
+    const r = { owned: HOME.owned, btnOff: document.querySelector('.opt[data-o="buy"]').disabled }; menuClose(); return r; });
+  ok('the cottage needs level 15', !locked.owned && locked.btnOff);
+  const home = await page.evaluate(() => { const p = G.player; p.level = 15; recalc(); G.state = 'play'; cottageScreen(); cottageDo('buy');
+    ['roof', 'door', 'yard', 'patch', 'well', 'patch2', 'hearth'].forEach((u) => cottageDo('up:' + u));
+    cottageDo('plant:wheat'); const planted = HOME.plots.filter((q) => q.c === 'wheat').length;
+    HOME.playT += 200; const before = p.coins; cottageDo('harvest'); const r = { owned: HOME.owned, ups: Object.keys(HOME.up).length, planted, earned: p.coins - before,
+      tris: HOUSE3.geometry.attributes.position.count / 3, sell: CROPS.wheat.sell }; menuClose(); return r; });
+  ok('at level 15 you can buy the cottage and fix it up', home.owned && home.ups === 7, `${home.ups} jobs done`);
+  ok('crops grow and sell', home.planted === 8 && home.earned === 8 * home.sell, `8 plots of wheat: +${home.earned}`);
+
+  // everything you own survives a reload
+  await page.evaluate(() => { G.bounty = { def: BOUNTIES[0], n: 9, got: 4 }; saveGame(); });
+  const saved = await page.evaluate(() => ({ lvl: G.player.level, coins: G.player.coins, gear: G.build.gear.w }));
+  await page.reload(); await page.waitForFunction('window.__ready===true', { timeout: 60000 });
+  const hasCont = await page.evaluate(() => !!document.getElementById('cont'));
+  ok('the title offers to continue', hasCont);
+  await page.click('#cont'); await page.waitForTimeout(400);
+  const back = await page.evaluate(() => ({ lvl: G.player.level, coins: G.player.coins, gear: G.build.gear.w, owned: HOME.owned, ups: Object.keys(HOME.up).length,
+    bounty: G.bounty && G.bounty.got, dHome: Math.hypot(G.player.x - HOUSE.x, G.player.z - HOUSE.z) }));
+  ok('your hunter, coin, gear, bounty and cottage are saved', back.lvl === saved.lvl && back.coins === saved.coins && back.gear === saved.gear
+    && back.owned && back.ups === 7 && back.bounty === 4, JSON.stringify({ lvl: back.lvl, coins: back.coins }));
+  ok('you carry on at your own hearth', back.dHome < 8);
+  await page.evaluate(() => { G.player.inv = 0; hurtPlayer(1e6, 'test'); });
+  await page.waitForFunction(() => G.state === 'dead', null, { timeout: 10000 });
+  await page.click('#again'); await page.waitForTimeout(200);
+  const woke = await page.evaluate(() => ({ state: G.state, full: G.player.hp === G.player.maxHp, kept: G.player.level, coins: G.player.coins }));
+  ok('dying wakes you at home, keeping your level', woke.state === 'play' && woke.full && woke.kept === saved.lvl && woke.coins < saved.coins, `lost ${saved.coins - woke.coins} coins`);
   ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
   await page.close();
 }
