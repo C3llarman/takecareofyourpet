@@ -6531,7 +6531,7 @@ function drawHUD(){
   // left stick (touch only)
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
-    var keys='WASD move   ·   mouse look   ·   L-click strike   ·   R-click shoot';
+    var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot';
     var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   I stats';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
@@ -6608,7 +6608,7 @@ function titleScreen(){
     'background:#0d0a04;color:#cdbb8c;border:1px solid #3b2f16;border-radius:8px;padding:6px"></textarea>'+
     (G.best?'<p class="hint">Best: level '+G.best+'</p>':'')+
     (DESKTOP
-      ? '<p class="hint"><b>Laptop:</b> WASD to move · move the mouse to look · left-click strike · right-click shoot<br>'+
+      ? '<p class="hint"><b>Laptop:</b> WASD to move · move the mouse to look · E or left-click strike · F or right-click shoot<br>'+
         'Space jump · Shift dash · Q potion · Tab skills · scroll to zoom · Esc frees the cursor</p>'
       : '<p class="hint"><b>Phone:</b> drag the left side to move, the right side to look, buttons to fight.<br>'+
         'Your hunter swings on her own when something gets close.</p>'));
@@ -6780,8 +6780,9 @@ addEventListener('keydown',function(e){
   if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0) e.preventDefault();
   KEY[e.key]=true; KEY[e.key.toLowerCase&&e.key.toLowerCase()]=true;
   if(e.key===' ') IN.jump=true;
-  if(e.key==='j'||e.key==='J') IN.attack=true;
-  if(e.key==='k'||e.key==='K'){ IN.shoot=true; IN.shootHeld=true; }
+  if(e.key==='j'||e.key==='J'){ IN.attack=true; IN.atkBuf=0.45; }
+  // keyboard combat beside WASD: E strikes, F shoots (J / K too); hold either to repeat
+  if(e.key==='k'||e.key==='K'||e.key==='f'||e.key==='F'){ IN.shoot=true; IN.shotBuf=0.45; IN.shootHeld=true; }
   if(e.key==='q'||e.key==='Q') usePotion();
   if(e.key==='c'||e.key==='C'||e.key==='Shift') IN.dash=true;
   if(e.key==='i'||e.key==='I') SHOWDBG=!SHOWDBG;
@@ -6792,7 +6793,7 @@ addEventListener('keydown',function(e){
 addEventListener('keyup',function(e){
   KEY[e.key]=false; if(e.key.toLowerCase) KEY[e.key.toLowerCase()]=false;
   if(e.key==='j'||e.key==='J'||e.key==='e'||e.key==='E') IN.attack=false;
-  if(e.key==='k'||e.key==='K') IN.shootHeld=false;
+  if(e.key==='k'||e.key==='K'||e.key==='f'||e.key==='F') IN.shootHeld=false;
 });
 /* ---------- laptop / desktop input ---------- */
 function wantLock(){

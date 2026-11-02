@@ -312,6 +312,16 @@ section('Keyboard & mouse (laptop)');
   ok('left click strikes', click.strikeQueued);
   ok('right click shoots', click.shootQueued);
 
+  const keys = await page.evaluate(() => {
+    IN.attack = false; IN.atkBuf = 0; IN.shoot = false; IN.shotBuf = 0; IN.shootHeld = false;
+    const kd = (k) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    const ku = (k) => window.dispatchEvent(new KeyboardEvent('keyup', { key: k, bubbles: true }));
+    kd('e'); const strike = IN.attack; ku('e'); const released = !IN.attack;
+    kd('f'); const shoot = IN.shoot && IN.shootHeld; ku('f'); const stop = !IN.shootHeld;
+    return { strike, released, shoot, stop };
+  });
+  ok('E strikes, F shoots (hold to repeat)', keys.strike && keys.released && keys.shoot && keys.stop);
+
   const d0 = await page.evaluate(() => G.cam.dist);
   await page.mouse.wheel(0, 400);
   await page.waitForTimeout(150);

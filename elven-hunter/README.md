@@ -32,8 +32,8 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 |---|---|
 | Move | `W` `A` `S` `D` |
 | Look | Move the mouse (click once to capture, `Esc` to release) |
-| Strike | Left click |
-| Shoot | Right click (hold to keep firing) |
+| Strike | `E` or left click (hold to keep swinging) |
+| Shoot | `F` or right click (hold to keep firing) |
 | Jump | `Space` |
 | Dash | `Shift` *(unlocked by a skill)* |
 | Drink a potion | `Q` |
