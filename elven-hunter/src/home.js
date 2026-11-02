@@ -251,6 +251,10 @@ function saveGame(){
     killed:G.killed, freed:G.freed, found:G.found, bounty:G.bounty?{id:G.bounty.def.id,n:G.bounty.n,got:G.bounty.got}:null,
     bountiesDone:G.bountiesDone||0,
     allies:G.ents.filter(function(e){ return e.kind==='ally'; }).map(function(e){ return {ak:e.ak,name:e.name}; }),
+    // the captives and fairies still out there, so freeing one stays done after a reload
+    cocoons:G.ents.filter(function(e){ return e.kind==='cocoon'; }).map(function(e){ return [Math.round(e.x*10)/10,Math.round(e.z*10)/10,e.bounty?1:0]; }),
+    fairies:G.ents.filter(function(e){ return e.kind==='fairy'; }).map(function(e){ return [Math.round(e.x*10)/10,Math.round(e.z*10)/10,e.col]; }),
+    timers:[Math.round(G.cocoonT||150),Math.round(G.fairyT||180)],
     home:{owned:HOME.owned,up:HOME.up,plots:HOME.plots,playT:Math.round(HOME.playT)}};
   try{ localStorage.setItem(SAVE_KEY,JSON.stringify(sv)); }catch(e){}
 }
@@ -270,6 +274,13 @@ function applySave(sv){
   if(sv.home){ HOME.owned=!!sv.home.owned; HOME.up=sv.home.up||{}; HOME.playT=sv.home.playT||0;
     if(sv.home.plots) for(var j=0;j<8&&j<sv.home.plots.length;j++) HOME.plots[j]=sv.home.plots[j]; }
   (sv.allies||[]).forEach(function(a,k){ spawnAlly(a.ak,p.x+Math.cos(k*2.1)*2,p.z+Math.sin(k*2.1)*2,a.name); });
+  // the wood as you left it: only the captives and fairies you hadn't reached yet
+  if(sv.cocoons){ G.ents=G.ents.filter(function(e){ return e.kind!=='cocoon'; });
+    sv.cocoons.forEach(function(c){ spawnCocoon(c[0],c[1],!!c[2]); }); }
+  if(sv.fairies){ G.ents=G.ents.filter(function(e){ return e.kind!=='fairy'; });
+    sv.fairies.forEach(function(f){ spawnFairy(f[0],f[1],f[2]); }); }
+  if(sv.timers){ G.cocoonT=sv.timers[0]; G.fairyT=sv.timers[1]; }
+  bountyTargets();          // a hunt in progress gets its quarry back (a giant is not saved)
 }
 /* where you wake: your own hearth once you have one, otherwise the Greenleaf's yard */
 function wakeSpot(){

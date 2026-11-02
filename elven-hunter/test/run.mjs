@@ -502,6 +502,25 @@ section('Home and progress');
   ok('at level 15 you can buy the cottage and fix it up', home.owned && home.ups === 7, `${home.ups} jobs done`);
   ok('crops grow and sell', home.planted === 8 && home.earned === 8 * home.sell, `8 plots of wheat: +${home.earned}`);
 
+  // the wood refills, and a bounty brings its own quarry
+  const quarry = await page.evaluate(() => {
+    const p = G.player, far = (e) => Math.hypot(e.x - p.x, e.z - p.z);
+    G.ents = G.ents.filter((e) => e.kind !== 'cocoon' && e.kind !== 'fairy');
+    G.cocoonT = 0.001; G.fairyT = 0.001; refillWood(0.01);
+    const refill = { cocoons: G.ents.filter((e) => e.kind === 'cocoon').map(far), fairies: countKind('fairy') };
+    G.bounty = null; const fr = BOUNTIES.find((b) => b.id === 'freed'); G.bounty = { def: fr, n: 3, got: 0 }; bountyTargets();
+    const tagged = G.ents.filter((e) => e.kind === 'cocoon' && e.bounty).map(far);
+    const gi = BOUNTIES.find((b) => b.id === 'giant'); G.bounty = { def: gi, n: 1, got: 0 }; bountyTargets();
+    const giant = G.ents.find((e) => e.kind === 'spider' && e.big && e.bounty);
+    G.bounty = null;
+    return { refill, tagged, giant: giant ? Math.hypot(giant.x - 86, giant.z + 56) : -1 };
+  });
+  ok('captives and fairies come back over time, out of sight', quarry.refill.cocoons.length === 1 && quarry.refill.cocoons[0] >= 40 && quarry.refill.fairies === 1,
+    `new captive ${quarry.refill.cocoons[0] | 0} units away`);
+  ok('a rescue bounty strings up its own captives', quarry.tagged.length === 3 && quarry.tagged.every((d) => d >= 35));
+  ok('a giant-spider bounty puts one by the Queen\'s Hollow', quarry.giant >= 0 && quarry.giant < 30, `${quarry.giant | 0} units from the Hollow`);
+  const left = await page.evaluate(() => { const c = G.ents.filter((e) => e.kind === 'cocoon'); breakCocoon(c[0], 1e6); return countKind('cocoon'); });
+
   // everything you own survives a reload
   await page.evaluate(() => { G.bounty = { def: BOUNTIES[0], n: 9, got: 4 }; saveGame(); });
   const saved = await page.evaluate(() => ({ lvl: G.player.level, coins: G.player.coins, gear: G.build.gear.w }));
@@ -510,10 +529,11 @@ section('Home and progress');
   ok('the title offers to continue', hasCont);
   await page.click('#cont'); await page.waitForTimeout(400);
   const back = await page.evaluate(() => ({ lvl: G.player.level, coins: G.player.coins, gear: G.build.gear.w, owned: HOME.owned, ups: Object.keys(HOME.up).length,
-    bounty: G.bounty && G.bounty.got, dHome: Math.hypot(G.player.x - HOUSE.x, G.player.z - HOUSE.z) }));
+    bounty: G.bounty && G.bounty.got, dHome: Math.hypot(G.player.x - HOUSE.x, G.player.z - HOUSE.z), cocoons: countKind('cocoon') }));
   ok('your hunter, coin, gear, bounty and cottage are saved', back.lvl === saved.lvl && back.coins === saved.coins && back.gear === saved.gear
     && back.owned && back.ups === 7 && back.bounty === 4, JSON.stringify({ lvl: back.lvl, coins: back.coins }));
   ok('you carry on at your own hearth', back.dHome < 8);
+  ok('a freed captive stays freed after a reload', back.cocoons === left, `${back.cocoons} captives still out there`);
   await page.evaluate(() => { G.player.inv = 0; hurtPlayer(1e6, 'test'); });
   await page.waitForFunction(() => G.state === 'dead', null, { timeout: 10000 });
   await page.click('#again'); await page.waitForTimeout(200);

@@ -6099,6 +6099,10 @@ function saveGame(){
     killed:G.killed, freed:G.freed, found:G.found, bounty:G.bounty?{id:G.bounty.def.id,n:G.bounty.n,got:G.bounty.got}:null,
     bountiesDone:G.bountiesDone||0,
     allies:G.ents.filter(function(e){ return e.kind==='ally'; }).map(function(e){ return {ak:e.ak,name:e.name}; }),
+    // the captives and fairies still out there, so freeing one stays done after a reload
+    cocoons:G.ents.filter(function(e){ return e.kind==='cocoon'; }).map(function(e){ return [Math.round(e.x*10)/10,Math.round(e.z*10)/10,e.bounty?1:0]; }),
+    fairies:G.ents.filter(function(e){ return e.kind==='fairy'; }).map(function(e){ return [Math.round(e.x*10)/10,Math.round(e.z*10)/10,e.col]; }),
+    timers:[Math.round(G.cocoonT||150),Math.round(G.fairyT||180)],
     home:{owned:HOME.owned,up:HOME.up,plots:HOME.plots,playT:Math.round(HOME.playT)}};
   try{ localStorage.setItem(SAVE_KEY,JSON.stringify(sv)); }catch(e){}
 }
@@ -6118,6 +6122,13 @@ function applySave(sv){
   if(sv.home){ HOME.owned=!!sv.home.owned; HOME.up=sv.home.up||{}; HOME.playT=sv.home.playT||0;
     if(sv.home.plots) for(var j=0;j<8&&j<sv.home.plots.length;j++) HOME.plots[j]=sv.home.plots[j]; }
   (sv.allies||[]).forEach(function(a,k){ spawnAlly(a.ak,p.x+Math.cos(k*2.1)*2,p.z+Math.sin(k*2.1)*2,a.name); });
+  // the wood as you left it: only the captives and fairies you hadn't reached yet
+  if(sv.cocoons){ G.ents=G.ents.filter(function(e){ return e.kind!=='cocoon'; });
+    sv.cocoons.forEach(function(c){ spawnCocoon(c[0],c[1],!!c[2]); }); }
+  if(sv.fairies){ G.ents=G.ents.filter(function(e){ return e.kind!=='fairy'; });
+    sv.fairies.forEach(function(f){ spawnFairy(f[0],f[1],f[2]); }); }
+  if(sv.timers){ G.cocoonT=sv.timers[0]; G.fairyT=sv.timers[1]; }
+  bountyTargets();          // a hunt in progress gets its quarry back (a giant is not saved)
 }
 /* where you wake: your own hearth once you have one, otherwise the Greenleaf's yard */
 function wakeSpot(){
@@ -6301,12 +6312,52 @@ function spawnWasp(x,z){
 function spawnBeast(x,z,ranged){ if(ranged) spawnWasp(x,z); else spawnSnake(x,z); }
 /* where on a foe to aim: wasps fly at chest height */
 function aimH(o){ return (o.kind==='wasp'?(o.hover||1.25):1.0)*(o.scale||1); }
-function spawnCocoon(x,z){
+function spawnCocoon(x,z,bounty){
   G.ents.push({kind:'cocoon',x:x,y:H(x,z),z:z,scale:1,hp:34,maxHp:34,seed:Math.random()*6,
-    anchor:0,hurtT:0});
+    anchor:0,hurtT:0,bounty:!!bounty});
 }
-function spawnFairy(x,z){
-  G.ents.push({kind:'fairy',x:x,y:H(x,z)+1.8,z:z,col:(Math.random()*4)|0,t:Math.random()*6,bx:0,by:0});
+function spawnFairy(x,z,col){
+  G.ents.push({kind:'fairy',x:x,y:H(x,z)+1.8,z:z,col:col===undefined?(Math.random()*4)|0:col,t:Math.random()*6,bx:0,by:0});
+}
+function countKind(k){ var n=0; for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind===k) n++; return n; }
+/* somewhere out in the wood, out of sight of the hunter: dry, off the paths, away
+   from the tavern and the cottage, not inside a trunk or a rock. Near (cx,cz) if given. */
+function wildSpot(minD,cx,cz,rad){
+  var p=G.player;
+  for(var i=0;i<40;i++){
+    var x,z;
+    if(cx!==undefined){ var a=Math.random()*6.283, d=(rad||20)*(0.35+Math.random()*0.65); x=cx+Math.cos(a)*d; z=cz+Math.sin(a)*d; }
+    else { x=(Math.random()*2-1)*WHALF*0.85; z=(Math.random()*2-1)*WHALF*0.85; }
+    if(Math.hypot(x,z)>WHALF*0.9||H(x,z)<WATER+0.5||nearTavern(x,z,26)||pathDist(x,z)<3||solidAt(x,z,0.5)) continue;
+    if(p&&Math.hypot(x-p.x,z-p.z)<minD) continue;
+    return {x:x,z:z};
+  }
+  return null;
+}
+/* the wood keeps giving: new captives are strung up and fairies drift in over time,
+   always somewhere you aren't looking */
+var CAPTIVE_SPOTS=[[86,-56],[-72,48],[-88,-78],null];
+function refillWood(dt){
+  G.cocoonT=(G.cocoonT===undefined?150:G.cocoonT)-dt;
+  if(G.cocoonT<=0){ G.cocoonT=150;
+    if(countKind('cocoon')<10){ var c=CAPTIVE_SPOTS[(Math.random()*CAPTIVE_SPOTS.length)|0];
+      var s=c?wildSpot(40,c[0],c[1],28):wildSpot(40); if(s) spawnCocoon(s.x,s.z); } }
+  G.fairyT=(G.fairyT===undefined?180:G.fairyT)-dt;
+  if(G.fairyT<=0){ G.fairyT=180;
+    if(countKind('fairy')<8){ var f=wildSpot(40); if(f) spawnFairy(f.x,f.z); } }
+}
+/* a bounty brings its own quarry: captives strung up for a rescue job, a giant
+   brooding by the Queen's Hollow for a hunt. Tagged so the map can point to them. */
+function bountyTargets(){
+  var b=G.bounty; if(!b||b.got>=b.n) return;
+  var need=b.n-b.got, have=0, i;
+  if(b.def.id==='freed'){
+    for(i=0;i<G.ents.length;i++) if(G.ents[i].kind==='cocoon'&&G.ents[i].bounty) have++;
+    for(i=have;i<need;i++){ var s=wildSpot(35); if(s) spawnCocoon(s.x,s.z,true); }
+  } else if(b.def.id==='giant'){
+    for(i=0;i<G.ents.length;i++) if(G.ents[i].kind==='spider'&&G.ents[i].big&&G.ents[i].bounty) have++;
+    if(!have){ var g=wildSpot(30,86,-56,22)||wildSpot(30); if(g){ spawnSpider(g.x,g.z,true); G.ents[G.ents.length-1].bounty=true; } }
+  }
 }
 function spawnAlly(kind,x,z,name){
   var K=ALLYKIND[kind];
@@ -6800,6 +6851,7 @@ function update(dt){
     if(!threat) G.talk=cand;
   }
   homeUpdate(dt);
+  refillWood(dt);
   p.safe=p.atTavern||p.atHome;
   G.saveT=(G.saveT||0)+dt; if(G.saveT>15){ G.saveT=0; saveGame(); }
   for(var i=0;i<LANDMARKS.length;i++){
@@ -7488,6 +7540,13 @@ function drawHUD(){
     mapIcon(en.kind==='spider'&&en.big?'bigspider':(en.kind==='npc'?'keeper':en.kind),mx+rp.x,my+rp.y,ms);
   }
   hx.restore();
+  // a bounty's quarry: a pulsing gold ring, pinned to the rim when it is off the map
+  for(var bq2=0;bq2<G.ents.length;bq2++){ var be=G.ents[bq2]; if(!be.bounty) continue;
+    var bdx=(be.x-p.x)*sc, bdz=(be.z-p.z)*sc, brp=rotPt(bdx,bdz,G.cam.yaw), bl=Math.hypot(brp.x,brp.y);
+    if(bl>mr-6){ brp.x*=(mr-6)/bl; brp.y*=(mr-6)/bl; }
+    hx.strokeStyle='rgba(255,215,106,'+(0.55+0.45*Math.sin(G.t*5))+')'; hx.lineWidth=2;
+    hx.beginPath(); hx.arc(mx+brp.x,my+brp.y,5.5*ms,0,6.3); hx.stroke();
+  }
   for(var L=0;L<LANDMARKS.length;L++){
     var lm=LANDMARKS[L], dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
     var rot=rotPt(dx,dz,G.cam.yaw), rl=Math.hypot(rot.x,rot.y), edge=rl>mr-7;
@@ -7725,7 +7784,7 @@ function startRun(sv){
   if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0}}; }
   else { G.build.skills={}; G.build.points=0; G.build.gear={w:0,a:0}; }
   G.player=null; recalc();
-  G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
+  G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0; G.cocoonT=150; G.fairyT=180;
   homeReset();
   populate();
   if(sv){
@@ -7808,7 +7867,9 @@ function bountyTick(tags){
   if(tags.indexOf(b.def.on[0])<0) return;
   b.got++;
   var p=G.player;
-  if(b.got>=b.n){ tip('Bounty done — Bram has your reward'); sfx('discover'); msg('Bounty done!','#ffd76a',p.x,p.y+2.8,p.z); }
+  if(b.got>=b.n){
+    for(var i=0;i<G.ents.length;i++) G.ents[i].bounty=false;      // the map stops pointing
+    tip('Bounty done — Bram has your reward'); sfx('discover'); msg('Bounty done!','#ffd76a',p.x,p.y+2.8,p.z); }
   else msg(b.def.short+' '+b.got+'/'+b.n,'#ffd76a',p.x,p.y+3.0,p.z,14);
 }
 function deployed(){ var n=0; for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind==='ally') n++; return n; }
@@ -7861,7 +7922,8 @@ function keeperDo(id){
     var l=p.level, defs=BOUNTIES.filter(function(d){ return d.id!=='giant'||l>=3; });
     var d=defs[(Math.random()*defs.length)|0];
     G.bounty={def:d,n:d.n(l),got:0};
-    sfx('pickup'); keeperScreen(d.say.replace('{n}',G.bounty.n));
+    bountyTargets();
+    sfx('pickup'); keeperScreen(d.say.replace('{n}',G.bounty.n)+(d.id==='freed'||d.id==='giant'?' I\'ve marked where on your map.':''));
   } else if(id==='claim'){
     var b=G.bounty, rw=bountyReward(b);
     p.coins+=rw.coins; G.bounty=null; G.bountiesDone=(G.bountiesDone||0)+1; setTimeout(saveGame,50);

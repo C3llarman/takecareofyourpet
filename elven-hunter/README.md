@@ -129,6 +129,15 @@ captures it again.
 - **Saving.** Your hunter, level, skills, gear, coin, potions, bounty, company and
   cottage are saved to `localStorage` every 15 seconds, after every purchase and when the
   page is hidden. The title offers **Continue**; starting a new hunter asks first.
+- **The wood refills.** Monsters top back up to 46 (one every 7 seconds, 46–72 units
+  away). A new captive is strung up every 2½ minutes while there are fewer than 10, and a
+  fairy drifts in every 3 minutes while there are fewer than 8, always at least 40 units
+  from you, near a landmark or out in the wild, never on a path or by the tavern or cottage.
+- **Bounties bring their quarry.** "Free N captives" strings up N fresh cocoons and "Slay a
+  giant spider" puts one by the Queen's Hollow; both are ringed in gold on the minimap,
+  pinned to its rim when off the edge, until the bounty is done.
+- **The wood is saved too.** The captives and fairies still out there are saved with your
+  hunter, so ones you've freed stay freed after a reload.
 - **Death is a setback, not the end.** You wake at the Greenleaf (or your own hearth),
   keeping everything but a tenth of your purse (40 coins at most).
 
