@@ -448,25 +448,29 @@ function tubeLog(){
   }
   return (LOGMESH=m);
 }
-function buildCamp(m,x,z){
-  var y=H(x,z);
-  var hide=[0.33,0.31,0.20], wood=[0.28,0.20,0.13], fire=[0.95,0.55,0.20];
-  for(var i=0;i<4;i++){
-    var a=i/4*6.28+0.4, tx=x+Math.cos(a)*6.5, tz=z+Math.sin(a)*6.5, ty=H(tx,tz);
-    addMesh(m,coneMesh(hide,5),tx,ty,tz,a,3.4,2.8,3.4);
-    collCircle(tx,tz,1.4);
-  }
-  addMesh(m,coneMesh(fire,6),x,y+0.1,z,0,1.5,1.4,1.5);
-  for(var k=0;k<6;k++){
-    var a2=k/6*6.28, rx=x+Math.cos(a2)*1.5, rz=z+Math.sin(a2)*1.5;
-    addMesh(m,ROCK,rx,H(rx,rz),rz,a2,0.7,0.5,0.7);
-  }
-  for(var p=0;p<3;p++){ // spikes
-    var a3=p/3*6.28+1.1, sx=x+Math.cos(a3)*9, sz=z+Math.sin(a3)*9;
-    addMesh(m,coneMesh(wood,5,0.5,0.05),sx,H(sx,sz),sz,0,0.7,3.4,0.7);
-    collCircle(sx,sz,0.35);
-  }
-  LANDMARKS.push({x:x,z:z,r:13,name:'Goblin Camp',kind:'camp'});
+/* the wasps' hive: a great papery nest hanging from a dead tree, broken comb
+   scattered beneath it, and long grass where the snakes lie */
+function buildHive(m,x,z){
+  var y=H(x,z), paper=[0.78,0.66,0.44], paperD=[0.62,0.50,0.32], comb=[0.95,0.74,0.25], bark=[0.30,0.23,0.17];
+  // the dead tree
+  addMesh(m,coneMesh(bark,8,0.5,0.32),x,y-0.2,z,0,1.4,8.5,1.4);
+  collCircle(x,z,0.75);
+  for(var br=0;br<4;br++){ var ba=br/4*6.283+0.4;
+    var bm=coneMesh(bark,6,0.5,0.15), bx=x+Math.cos(ba)*0.4, bz=z+Math.sin(ba)*0.4;
+    // a branch leaning out: lay a narrow cone along the direction by squashing a tilted copy
+    addMesh(m,bm,bx+Math.cos(ba)*1.2,y+5.4+br*0.6,bz+Math.sin(ba)*1.2,ba,0.35,2.6,0.35); }
+  // the nest: stacked papery layers
+  var ny=y+3.2, nx=x+1.6, nz=z+0.6;
+  for(var l=0;l<5;l++){ var ls=1.0-Math.abs(l-1.6)*0.22;
+    addMesh(m,blobMesh(l%2?paper:paperD,0.06,2),nx,ny+l*0.55,nz,l*0.7,1.6*ls,0.75,1.6*ls); }
+  addMesh(m,blobMesh([0.16,0.12,0.08],0,1),nx+1.05,ny+0.6,nz+0.6,0,0.28,0.32,0.28);   // the entrance
+  addMesh(m,boxMesh(bark),nx,ny+2.6,nz,0,0.18,1.6,0.18);                                 // hanging stalk
+  // broken comb on the ground
+  for(var c2=0;c2<7;c2++){ var ca=c2/7*6.283+0.9, cr=4+(c2%3)*1.8, cx=x+Math.cos(ca)*cr, cz=z+Math.sin(ca)*cr;
+    addMesh(m,coneMesh(comb,6,0.5,0.5),cx,H(cx,cz)-0.1,cz,ca,1.0+(c2%2)*0.5,0.35,1.0+(c2%2)*0.5); }
+  for(var k=0;k<6;k++){ var a2=k/6*6.28+0.2, rx=x+Math.cos(a2)*8.5, rz=z+Math.sin(a2)*8.5;
+    addMesh(m,ROCK,rx,H(rx,rz)-0.1,rz,a2,1.0,0.7,1.0); collCircle(rx,rz,0.6,0.6); }
+  LANDMARKS.push({x:x,z:z,r:13,name:'The Wasp Hive',kind:'hive'});
 }
 function buildHollow(m,x,z){
   var y=H(x,z);

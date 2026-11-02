@@ -146,15 +146,28 @@ function spawnSpider(x,z,big){
     look:{body:big?[0.26,0.10,0.11]:[0.20,0.13,0.12],dark:[0.13,0.09,0.09],eye:[0.95,0.25,0.18]},
     aggro:big?22:15, atkCd:0, wind:0, hurtT:0, home:{x:x,z:z}, wander:Math.random()*6.28, wanderT:0, big:big});
 }
-function spawnGoblin(x,z,kind){
-  var hp=42*(1+G.player.level*0.10);
-  G.ents.push({kind:'goblin',gk:kind||'spear',x:x,y:H(x,z),z:z,vy:0,yaw:Math.random()*6.28,scale:0.78,
-    hp:hp,maxHp:hp,dmg:9*Math.min(1.6,0.55+G.player.level*0.07),speed:0,walkPhase:Math.random()*6,onGround:true,
-    look:{skin:SKIN.goblin,hair:HAIR.black,pants:[0.24,0.22,0.16],boot:[0.22,0.16,0.10],
-      tunic:[0.33,0.30,0.18],sleeve:[0.33,0.30,0.18],belt:[0.26,0.19,0.12],metal:[0.62,0.60,0.56],
-      cloak:null,weapon:kind==='bow'?'bow':'spear',ears:1},
-    aggro:kind==='bow'?26:19, atkCd:0, wind:0, hurtT:0, home:{x:x,z:z}, wander:Math.random()*6.28, wanderT:0});
+/* what you fight: all monsters, no people. Spiders, snakes in the grass (bite up
+   close) and wasps (hover and fire stingers from range) */
+var FOE={spider:1,snake:1,wasp:1};
+function lvlHp(b){ return b*(1+G.player.level*0.10); }
+function lvlDmg(b){ return b*Math.min(1.6,0.55+G.player.level*0.07); }
+function spawnSnake(x,z){
+  var hp=lvlHp(40);
+  G.ents.push({kind:'snake',x:x,y:H(x,z),z:z,vy:0,yaw:Math.random()*6.28,scale:0.85+Math.random()*0.25,
+    hp:hp,maxHp:hp,dmg:lvlDmg(9),speed:0,walkPhase:Math.random()*6,onGround:true,
+    look:{body:[0.28,0.52,0.34],belly:[0.50,0.66,0.42],eye:[0.95,0.80,0.20]},
+    aggro:17, atkCd:0, wind:0, hurtT:0, home:{x:x,z:z}, wander:Math.random()*6.28, wanderT:0});
 }
+function spawnWasp(x,z){
+  var hp=lvlHp(30);
+  G.ents.push({kind:'wasp',x:x,y:H(x,z),z:z,vy:0,yaw:Math.random()*6.28,scale:0.9+Math.random()*0.2,hover:1.25,
+    hp:hp,maxHp:hp,dmg:lvlDmg(8),speed:0,walkPhase:Math.random()*6,onGround:true,
+    look:{body:[0.12,0.10,0.08],stripe:[0.92,0.72,0.18],wing:[0.70,0.86,0.92]},
+    aggro:24, atkCd:0, wind:0, hurtT:0, home:{x:x,z:z}, wander:Math.random()*6.28, wanderT:0});
+}
+function spawnBeast(x,z,ranged){ if(ranged) spawnWasp(x,z); else spawnSnake(x,z); }
+/* where on a foe to aim: wasps fly at chest height */
+function aimH(o){ return (o.kind==='wasp'?(o.hover||1.25):1.0)*(o.scale||1); }
 function spawnCocoon(x,z){
   G.ents.push({kind:'cocoon',x:x,y:H(x,z),z:z,scale:1,hp:34,maxHp:34,seed:Math.random()*6,
     anchor:0,hurtT:0});
@@ -178,7 +191,7 @@ function buildWorld(){
   scatterWorld(m);
   LANDMARKS.length=0;
   buildTavern(m,0,-34);
-  buildCamp(m,-72,48);
+  buildHive(m,-72,48);
   buildHollow(m,86,-56);
   buildStones(m,-88,-78);
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
@@ -207,11 +220,11 @@ function populate(){
     var dd=Math.hypot(x,z);
     if(dd<34||H(x,z)<WATER+0.5||nearTavern(x,z,32)) continue;
     spawnSpider(x,z, dd>70&&r()<0.09); }
-  // goblins at the camp
+  // wasps swarm their hive, snakes lie in the grass around it
   for(var k=0;k<13;k++){ var a2=r()*6.28,d2=3+r()*13;
-    spawnGoblin(-72+Math.cos(a2)*d2,48+Math.sin(a2)*d2, r()<0.3?'bow':'spear'); }
+    spawnBeast(-72+Math.cos(a2)*d2,48+Math.sin(a2)*d2, r()<0.45); }
   for(var k2=0;k2<8;k2++){ var gx=(r()*2-1)*WHALF*0.7, gz=(r()*2-1)*WHALF*0.7;
-    if(Math.hypot(gx,gz)<40||H(gx,gz)<WATER+0.5||nearTavern(gx,gz,32)) continue; spawnGoblin(gx,gz,r()<0.3?'bow':'spear'); }
+    if(Math.hypot(gx,gz)<40||H(gx,gz)<WATER+0.5||nearTavern(gx,gz,32)) continue; spawnBeast(gx,gz,r()<0.3); }
   // prisoners
   var spots=[[86,-56],[-72,48],[0,0],[-88,-78]];
   for(var p=0;p<14;p++){
@@ -365,7 +378,7 @@ function doAttack(){
   var reach=3.6, hit=0, hitSpider=false, kills=0;
   for(var i=0;i<G.ents.length;i++){
     var e=G.ents[i];
-    if(e.kind!=='spider'&&e.kind!=='goblin'&&e.kind!=='cocoon') continue;
+    if(!FOE[e.kind]&&e.kind!=='cocoon') continue;
     var dx=e.x-p.x, dz=e.z-p.z, d=Math.hypot(dx,dz);
     if(d>reach+(e.scale||1)) continue;
     if(!S.whirl){
@@ -393,7 +406,7 @@ function aimTarget(p,maxD){
   var fx=Math.sin(p.yaw), fz=Math.cos(p.yaw);
   for(var i=0;i<G.ents.length;i++){
     var o=G.ents[i];
-    if(o.kind!=='spider'&&o.kind!=='goblin'&&o.kind!=='cocoon') continue;
+    if(!FOE[o.kind]&&o.kind!=='cocoon') continue;
     var dx=o.x-p.x, dz=o.z-p.z, d=Math.hypot(dx,dz);
     if(d<0.4||d>maxD) continue;
     var dot=(dx*fx+dz*fz)/d;
@@ -415,7 +428,7 @@ function doShoot(){
   var sy=p.y+1.35*p.scale;
   var aimY=0;
   if(tgt){
-    var tx=tgt.x-p.x, tz=tgt.z-p.z, ty=(tgt.y+1.0*(tgt.scale||1))-sy;
+    var tx=tgt.x-p.x, tz=tgt.z-p.z, ty=(tgt.y+aimH(tgt))-sy;
     var hd=Math.hypot(tx,tz)||1;
     aimY=ty/hd;
     p.yaw=Math.atan2(tx,tz);                    // snap to face the target
@@ -437,16 +450,15 @@ function hurtEnemy(e,d,quiet){
   if(!quiet) msg(''+Math.round(d),'#fff1d0',e.x+(Math.random()-0.5)*0.6,e.y+2.0*(e.scale||1),e.z,13);
   if(e.hp<=0){
     G.killed++; gainXp(50,e.x,e.y+2,e.z);
-    bountyTick(e.kind==='spider'?(e.big?['spider','giant']:['spider']):['goblin']);
-    sfx(e.kind==='spider'?'spiderdie':'goblindie',e.x,e.z);
-    // spiders burst in dark ichor, goblins in a puff of dust and rags
-    burst(e.x,e.y+0.7*(e.scale||1),e.z,e.kind==='spider'?18:14,e.kind==='spider'?[0.30,0.42,0.16]:[0.48,0.40,0.28],
-      {up:4,spread:4,size:0.16*(e.scale||1),life:0.9});
+    bountyTick(e.kind==='spider'?(e.big?['spider','giant']:['spider']):[e.kind]);
+    sfx(e.kind+'die',e.x,e.z);
+    // monsters burst in a puff of ichor and dust, no blood
+    burst(e.x,e.y+(e.kind==='wasp'?aimH(e):0.7*(e.scale||1)),e.z,16,ICHOR[e.kind],{up:4,spread:4,size:0.16*(e.scale||1),life:0.9});
     if(Math.random()<0.3){ G.player.coins+=3+((Math.random()*7)|0); sfx('coin'); }
     if(Math.random()<0.16){ G.player.potions++; msg('+potion','#ff9d9d',e.x,e.y+2,e.z); sfx('pickup'); }
     var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
     // leave a body that plays its death and sinks away
-    G.ents.push({kind:'corpse',of:e.kind,gk:e.gk,big:e.big,x:e.x,y:e.y,z:e.z,yaw:e.yaw,scale:e.scale,
+    G.ents.push({kind:'corpse',of:e.kind,hover:e.hover,big:e.big,x:e.x,y:e.y,z:e.z,yaw:e.yaw,scale:e.scale,
       look:e.look,t:0,deadT:0.001,speed:0,walkPhase:e.walkPhase});
   }
 }
@@ -484,16 +496,18 @@ function drawFX(){
 }
 function shake(a){ G.shakeA=Math.max(G.shakeA||0,a); }
 /* a hit on a foe: sparks where the blow lands, and a splash of what it bleeds */
+var ICHOR={spider:[0.32,0.46,0.18],snake:[0.36,0.58,0.40],wasp:[0.92,0.78,0.26]};
 function impact(e,nx,nz,hy){
-  var y=(hy!==undefined)?hy:e.y+1.0*(e.scale||1), x=e.x-nx*0.5*(e.scale||1), z=e.z-nz*0.5*(e.scale||1);
+  var y=(hy!==undefined)?hy:e.y+aimH(e), x=e.x-nx*0.5*(e.scale||1), z=e.z-nz*0.5*(e.scale||1);
   burst(x,y,z,6,[1.0,0.92,0.62],{up:3,spread:3.5,size:0.07,life:0.3});
-  burst(x,y,z,5,e.kind==='spider'?[0.32,0.46,0.18]:[0.60,0.18,0.14],{up:2.5,spread:2.5,size:0.10,life:0.6});
+  burst(x,y,z,5,ICHOR[e.kind]||[0.4,0.4,0.3],{up:2.5,spread:2.5,size:0.10,life:0.6});
 }
 /* an arrow or axe that misses stays where it lands for a while; bolts fizzle out */
 var STUCK_MAX=40;
 function landShot(e,ground){
   sfx(e.proj==='bolt'&&e.kind==='shot'?'ehit':'thunk',e.x,e.z);
   if(e.proj==='bolt'&&e.kind==='shot'){ burst(e.x,e.y,e.z,10,[0.6,0.9,1.0],{up:2,spread:3,size:0.09,life:0.45}); return; }
+  if(e.proj==='sting') return;
   burst(e.x,e.y,e.z,5,ground?[0.45,0.38,0.26]:[0.50,0.36,0.22],{up:1.6,spread:1.8,size:0.07,life:0.4});
   var n=0; for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind==='stuck') n++;
   if(n>=STUCK_MAX) for(var j=0;j<G.ents.length;j++) if(G.ents[j].kind==='stuck'){ G.ents.splice(j,1); break; }
@@ -619,7 +633,7 @@ function update(dt){
     // defends herself. With a mouse it just yanked your facing around, so it is off.
     for(var ai2=0;ai2<G.ents.length;ai2++){
       var ae=G.ents[ai2];
-      if(ae.kind!=='spider'&&ae.kind!=='goblin') continue;
+      if(!FOE[ae.kind]) continue;
       if(Math.hypot(ae.x-p.x,ae.z-p.z)<2.8+(ae.scale||1)){ doAttack(); break; }
     }
   }
@@ -643,7 +657,7 @@ function update(dt){
   if(kp&&Math.hypot(kp.x-p.x,kp.z-p.z)<3.8){
     var threat=false;
     for(var ti=0;ti<G.ents.length;ti++){ var te=G.ents[ti];
-      if((te.kind==='spider'||te.kind==='goblin')&&Math.hypot(te.x-p.x,te.z-p.z)<7){ threat=true; break; } }
+      if(FOE[te.kind]&&Math.hypot(te.x-p.x,te.z-p.z)<7){ threat=true; break; } }
     if(!threat) G.talk=kp;
   }
   for(var i=0;i<LANDMARKS.length;i++){
@@ -664,12 +678,12 @@ function update(dt){
   G.spawnT-=dt;
   if(G.spawnT<=0){
     G.spawnT=7;
-    var alive=0; for(var k=0;k<G.ents.length;k++){var e=G.ents[k]; if(e.kind==='spider'||e.kind==='goblin') alive++;}
+    var alive=0; for(var k=0;k<G.ents.length;k++){var e=G.ents[k]; if(FOE[e.kind]) alive++;}
     if(alive<46){
       var a=Math.random()*6.28, d=46+Math.random()*26;
       var sx=p.x+Math.cos(a)*d, sz=p.z+Math.sin(a)*d, sd2=Math.hypot(sx,sz);
       if(sd2>34&&sd2<WHALF*0.9&&H(sx,sz)>WATER+0.5&&!nearTavern(sx,sz,32)){
-        if(Math.random()<0.6) spawnSpider(sx,sz,sd2>70&&Math.random()<0.08); else spawnGoblin(sx,sz,Math.random()<0.3?'bow':'spear');
+        if(Math.random()<0.6) spawnSpider(sx,sz,sd2>70&&Math.random()<0.08); else spawnBeast(sx,sz,Math.random()<0.35);
       }
     }
   }
@@ -700,7 +714,7 @@ var BODIES=[];
 function separate(){
   var p=G.player; BODIES.length=0; BODIES.push(p);
   for(var i=0;i<G.ents.length;i++){ var e=G.ents[i];
-    if((e.kind==='spider'||e.kind==='goblin'||e.kind==='ally')&&Math.abs(e.x-p.x)<60&&Math.abs(e.z-p.z)<60) BODIES.push(e); }
+    if((FOE[e.kind]||e.kind==='ally')&&Math.abs(e.x-p.x)<60&&Math.abs(e.z-p.z)<60) BODIES.push(e); }
   for(var a=0;a<BODIES.length;a++){ var A=BODIES[a], ra=bodyR(A);
     for(var b=a+1;b<BODIES.length;b++){ var B=BODIES[b];
       var dx=B.x-A.x, dz=B.z-A.z, R=ra+bodyR(B);
@@ -739,7 +753,7 @@ function updateEnts(dt){
         if(e.y<gy-0.05||solidAt(e.x,e.z,e.y-gy)){ landShot(e,e.y<gy-0.05); gone=true; break; }
         for(var k=0;k<G.ents.length;k++){
           var o=G.ents[k];
-          if(o.kind!=='spider'&&o.kind!=='goblin'&&o.kind!=='cocoon') continue;
+          if(!FOE[o.kind]&&o.kind!=='cocoon') continue;
           if(e.hits.indexOf(o)>=0) continue;
           var rr=(o.scale||1)*1.1+0.6;
           if(Math.hypot(o.x-e.x,o.z-e.z)<rr && e.y>o.y-0.7 && e.y<o.y+2.7*(o.scale||1)){
@@ -749,7 +763,7 @@ function updateEnts(dt){
               hurtEnemy(o,e.dmg,e.ally);
               if(e.frost) o.slowT=1.4*e.frost;
               if(e.burst){ for(var bq=0;bq<G.ents.length;bq++){ var o2=G.ents[bq];
-                if((o2.kind==='spider'||o2.kind==='goblin')&&o2!==o&&Math.hypot(o2.x-e.x,o2.z-e.z)<e.burst) hurtEnemy(o2,e.dmg*0.55,e.ally); } }
+                if(FOE[o2.kind]&&o2!==o&&Math.hypot(o2.x-e.x,o2.z-e.z)<e.burst) hurtEnemy(o2,e.dmg*0.55,e.ally); } }
             }
             e.hits.push(o);
             if(e.pierce>0) e.pierce--; else gone=true;
@@ -777,9 +791,10 @@ function updateEnts(dt){
     }
     if(pd>96&&e.kind!=='ally'){ continue; }   // sleep distant creatures
 
-    if(e.kind==='spider'||e.kind==='goblin'){
+    if(FOE[e.kind]){
       e.slowT=Math.max(0,(e.slowT||0)-dt);
-      var spd=(e.kind==='spider'?(e.big?3.4:4.2):3.8)*(e.slowT>0?0.5:1);
+      var spd=(e.kind==='spider'?(e.big?3.4:4.2):(e.kind==='wasp'?4.4:3.8))*(e.slowT>0?0.5:1);
+      if(e.kind==='wasp') e.hover=1.25+Math.sin(G.t*2.2+e.walkPhase)*0.18;
       // pick target: taunting ally, else player
       var tgt=p, tdist=pd;
       for(var a=0;a<G.ents.length;a++){ var al=G.ents[a];
@@ -790,16 +805,16 @@ function updateEnts(dt){
       }
       e.atkCd-=dt;
       if(tdist<e.aggro&&!p.dead&&!(tgt===p&&p.atTavern)){
-        if(e.kind==='goblin'&&e.gk==='bow'){
+        if(e.kind==='wasp'){
           if(tdist>11) moveCreature(e,dt,tgt.x,tgt.z,spd);
           else if(tdist<7) moveCreature(e,dt,e.x-(tgt.x-e.x),e.z-(tgt.z-e.z),spd*0.7);
           else { e.speed*=0.7; var ty=Math.atan2(tgt.x-e.x,tgt.z-e.z); e.yaw+=(((ty-e.yaw+9.42)%6.28)-3.14)*Math.min(1,dt*6); }
           if(e.atkCd<=0&&tdist<22){
-            e.atkCd=2.2; e.atkT=0.4; e.atkDur=0.4; sfx('goblinshoot',e.x,e.z);
-            var gx=tgt.x-e.x, gz=tgt.z-e.z, gy=(tgt.y+1.1)-(e.y+1.2);
+            e.atkCd=2.2; e.atkT=0.4; e.atkDur=0.4; sfx('sting',e.x,e.z);
+            var wy=e.y+aimH(e)-0.25, gx=tgt.x-e.x, gz=tgt.z-e.z, gy=(tgt.y+1.1)-wy;
             var gL=Math.hypot(gx,gy,gz)||1;
-            G.ents.push({kind:'eshot',x:e.x+gx/gL,y:e.y+1.2,z:e.z+gz/gL,
-              vx:gx/gL*22,vy:gy/gL*22,vz:gz/gL*22,life:2.4,aimed:1,dmg:e.dmg,src:'goblin archer'});
+            G.ents.push({kind:'eshot',x:e.x+gx/gL,y:wy,z:e.z+gz/gL,proj:'sting',
+              vx:gx/gL*20,vy:gy/gL*20,vz:gz/gL*20,life:2.4,aimed:1,dmg:e.dmg,src:'wasp sting'});
           }
         } else {
           if(e.wind>0){
@@ -807,7 +822,7 @@ function updateEnts(dt){
             if(e.wind<=0){
               e.atkT=0.3; e.atkDur=0.3;
               if(tdist<2.4+(e.scale||1)){
-                if(tgt===p) hurtPlayer(e.dmg,e.kind==='spider'?(e.big?'giant spider':'spider'):'goblin');
+                if(tgt===p) hurtPlayer(e.dmg,e.kind==='spider'?(e.big?'giant spider':'spider'):e.kind);
                 else tgt.hp-=e.dmg;
               }
             }
@@ -818,7 +833,7 @@ function updateEnts(dt){
               e.yaw+=(((fy-e.yaw+9.42)%6.28)-3.14)*Math.min(1,dt*8); }
             if(tdist<1.6+(e.scale||1)&&e.atkCd<=0){
               e.atkCd=e.big?1.9:1.35; e.wind=e.big?0.55:0.38;
-              if(e.kind==='spider') sfx('hissup',e.x,e.z); else sfx('swing',e.x,e.z);
+              sfx(e.kind==='snake'?'rattle':'hissup',e.x,e.z);
             }
           }
         }
@@ -861,7 +876,7 @@ function updateEnts(dt){
       // find a foe
       var foe=null,bd2=1e9;
       for(var f=0;f<G.ents.length;f++){ var o3=G.ents[f];
-        if(o3.kind!=='spider'&&o3.kind!=='goblin') continue;
+        if(!FOE[o3.kind]) continue;
         var d3=Math.hypot(o3.x-e.x,o3.z-e.z);
         if(d3<Math.max(K.range+3,14)&&d3<bd2){bd2=d3;foe=o3;}
       }
@@ -880,7 +895,7 @@ function updateEnts(dt){
         else if(foe&&bd2<K.range+1.2){
           e.cd=K.rate; e.atkT=e.atkDur=0.4;
           if(K.range>6){
-            var ax=foe.x-e.x, az=foe.z-e.z, ay=(foe.y+1.0*(foe.scale||1))-(e.y+1.3);
+            var ax=foe.x-e.x, az=foe.z-e.z, ay=(foe.y+aimH(foe))-(e.y+1.3);
             var aL=Math.hypot(ax,ay,az)||1;
             G.ents.push({kind:'shot',x:e.x+ax/aL,y:e.y+1.3,z:e.z+az/aL,
               vx:ax/aL*34,vy:ay/aL*34,vz:az/aL*34,life:1.6,aimed:1,dmg:K.dmg,
@@ -905,7 +920,7 @@ function followCam(dt){
   var asp=W/Math.max(1,H2);
   var crowd=0;
   for(var ci=0;ci<G.ents.length;ci++){ var ce=G.ents[ci];
-    if(ce.kind!=='spider'&&ce.kind!=='goblin') continue;
+    if(!FOE[ce.kind]) continue;
     var cd2=Math.hypot(ce.x-p.x,ce.z-p.z);
     if(cd2<9) crowd=Math.max(crowd,(ce.scale||1)*(1-cd2/9));
   }
@@ -973,7 +988,7 @@ function initScene(){
 function warmActors(){
   if(!MODELS_READY) return;
   var specs=[{model:'barbarian',weapons:[]},{model:'knight',weapons:[]},{model:'mage',weapons:[]},
-    {model:'rogue',weapons:[],ears:true},{model:'rogue_hooded',weapons:[],beard:true},{model:'spider',weapons:[]}];
+    {model:'rogue',weapons:[],ears:true},{model:'rogue_hooded',weapons:[],beard:true},{model:'spider',weapons:[]},{model:'snake',weapons:[]},{model:'wasp',weapons:[]}];
   for(var i=0;i<specs.length;i++) if(MODELS[specs[i].model]){
     var a=makeActor(specs[i]); a.spec='warm'; a.group.visible=true; a.group.position.set(0,-50,0);
   }
@@ -1087,6 +1102,11 @@ function pushShot(e){
     DRAW.push(['box',axisMat(x+ax*0.32,y+ay*0.32,z+az*0.32,bx,by,bz,vx,0,vz,-0.06,0.05,0.34,0.24),[0.74,0.76,0.80]]);
     return;
   }
+  if(e.proj==='sting'){                 // a wasp's stinger: short, dark, gold-tipped
+    DRAW.push(['box',axisMat(x,y,z,ux,uy,uz,vx,0,vz,-0.42,0.06,0.42,0.06),[0.14,0.11,0.08]]);
+    DRAW.push(['cone',axisMat(x,y,z,ux,uy,uz,vx,0,vz,0,0.10,0.18,0.10),[0.95,0.78,0.25]]);
+    return;
+  }
   // arrow: origin is the tip end of the shaft
   var enemy=e.kind==='eshot'||e.enemy, len=0.95;
   var shaft=enemy?[0.30,0.22,0.14]:[0.62,0.48,0.30];
@@ -1104,7 +1124,10 @@ function mat(){ if(MPI>=MPOOL.length) MPOOL.push(m4()); return MPOOL[MPI++]; }
 function pushEnt(e){
   RIG.length=0;
   var root=mat();
-  if(e.kind==='spider'||(e.kind==='corpse'&&e.of==='spider')) spiderRig(RIG,e,G.t);
+  var rk=e.kind==='corpse'?e.of:e.kind;
+  if(rk==='spider') spiderRig(RIG,e,G.t);
+  else if(rk==='snake') snakeRig(RIG,e,G.t);
+  else if(rk==='wasp') waspRig(RIG,e,G.t);
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
   else if(e.kind==='shot'||e.kind==='eshot'||e.kind==='stuck'){ pushShot(e); return; }
   else if(e.kind==='fairy'){
@@ -1169,11 +1192,11 @@ function mapIcon(kind,x,y,s,unknown){
       hx.strokeStyle='#d6584a'; hx.beginPath();
       hx.moveTo(-r*1.7,-r*0.9); hx.lineTo(r*1.7,r*0.9); hx.moveTo(-r*1.7,r*0.9); hx.lineTo(r*1.7,-r*0.9); hx.stroke();
       hx.fillStyle='#d6584a'; hx.beginPath(); hx.arc(0,0,r,0,6.3); hx.fill(); break;
-    case 'goblin':                       // orange diamond
-      hx.fillStyle='#e8913a'; hx.beginPath(); hx.moveTo(0,-3.4); hx.lineTo(3.4,0); hx.lineTo(0,3.4); hx.lineTo(-3.4,0); hx.closePath(); hx.fill(); break;
-    case 'archer':                       // orange diamond with a dark bow-mark
-      hx.fillStyle='#e8913a'; hx.beginPath(); hx.moveTo(0,-3.6); hx.lineTo(3.6,0); hx.lineTo(0,3.6); hx.lineTo(-3.6,0); hx.closePath(); hx.fill();
-      hx.fillStyle='#2a1a0a'; hx.fillRect(-0.7,-2,1.4,4); break;
+    case 'snake':                        // a green squiggle
+      hx.strokeStyle='#6fd08a'; hx.lineWidth=2; hx.beginPath(); hx.moveTo(-3.5,2); hx.quadraticCurveTo(-1.5,-3,0,0); hx.quadraticCurveTo(1.5,3,3.5,-2); hx.stroke(); break;
+    case 'wasp':                         // a yellow dot with a black band
+      hx.fillStyle='#f0c43a'; hx.beginPath(); hx.arc(0,0,3.2,0,6.3); hx.fill();
+      hx.fillStyle='#1a1408'; hx.fillRect(-3.2,-0.8,6.4,1.6); break;
     case 'cocoon':                       // white ring: someone to rescue
       hx.strokeStyle='#eef6f6'; hx.lineWidth=1.8; hx.beginPath(); hx.arc(0,0,3,0,6.3); hx.stroke();
       hx.fillStyle='#eef6f6'; hx.beginPath(); hx.arc(0,0,1,0,6.3); hx.fill(); break;
@@ -1192,9 +1215,10 @@ function mapIcon(kind,x,y,s,unknown){
     case 'tavern':                       // warm house
       hx.fillStyle='#f0b860'; hx.beginPath(); hx.moveTo(-5,0); hx.lineTo(0,-5); hx.lineTo(5,0); hx.lineTo(5,4.5); hx.lineTo(-5,4.5); hx.closePath(); hx.fill();
       hx.strokeStyle='#2a1a0a'; hx.lineWidth=1; hx.stroke(); break;
-    case 'camp':                         // tent
-      hx.fillStyle='#c0603a'; hx.beginPath(); hx.moveTo(-5,4); hx.lineTo(0,-5); hx.lineTo(5,4); hx.closePath(); hx.fill();
-      hx.strokeStyle='#2a1a0a'; hx.lineWidth=1; hx.stroke(); break;
+    case 'hive':                         // honeycomb hexagon
+      hx.fillStyle='#e0a63a'; hx.beginPath();
+      for(var hk=0;hk<6;hk++){ var ha=hk/6*6.283+0.52; hx.lineTo(Math.cos(ha)*5,Math.sin(ha)*5); }
+      hx.closePath(); hx.fill(); hx.strokeStyle='#2a1a0a'; hx.lineWidth=1; hx.stroke(); break;
     case 'hollow':                       // web
       hx.strokeStyle='#c9a0e8'; hx.lineWidth=1.2; hx.beginPath(); hx.arc(0,0,4.6,0,6.3); hx.arc(0,0,2.2,0,6.3);
       for(var w=0;w<4;w++){ var wa=w/4*3.1416; hx.moveTo(Math.cos(wa)*5,Math.sin(wa)*5); hx.lineTo(-Math.cos(wa)*5,-Math.sin(wa)*5); }
@@ -1234,8 +1258,8 @@ function drawHUD(){
   // enemy health bars
   for(var k=0;k<G.ents.length;k++){
     var e=G.ents[k];
-    if((e.kind!=='spider'&&e.kind!=='goblin'&&e.kind!=='cocoon'&&e.kind!=='ally')||e.hp>=e.maxHp) continue;
-    var sp=project(e.x,e.y+2.3*(e.scale||1),e.z); if(!sp) continue;
+    if((!FOE[e.kind]&&e.kind!=='cocoon'&&e.kind!=='ally')||e.hp>=e.maxHp) continue;
+    var sp=project(e.x,e.y+(e.kind==='wasp'?2.7:2.3)*(e.scale||1),e.z); if(!sp) continue;
     var w=Math.max(22,40-sp.d*0.25);
     hx.fillStyle='rgba(0,0,0,.55)'; hx.fillRect(sp.x-w/2-1,sp.y-1,w+2,6);
     hx.fillStyle=(e.kind==='ally')?'#7fbf5a':(e.kind==='cocoon'?'#cfe8e8':'#d6584a');
@@ -1315,7 +1339,7 @@ function drawHUD(){
     var ddx=(en.x-p.x)*sc, ddz=(en.z-p.z)*sc;
     if(Math.hypot(ddx,ddz)>mr) continue;
     var rp=rotPt(ddx,ddz,G.cam.yaw);
-    mapIcon(en.kind==='goblin'?(en.gk==='bow'?'archer':'goblin'):(en.kind==='spider'&&en.big?'bigspider':(en.kind==='npc'?'keeper':en.kind)),mx+rp.x,my+rp.y,ms);
+    mapIcon(en.kind==='spider'&&en.big?'bigspider':(en.kind==='npc'?'keeper':en.kind),mx+rp.x,my+rp.y,ms);
   }
   hx.restore();
   for(var L=0;L<LANDMARKS.length;L++){
@@ -1332,8 +1356,8 @@ function drawHUD(){
   hx.fillStyle='#f3e7c9'; hx.beginPath(); hx.moveTo(mx,my-5); hx.lineTo(mx-3.6,my+4); hx.lineTo(mx+3.6,my+4); hx.closePath(); hx.fill();
   hx.strokeStyle='rgba(232,194,106,.55)'; hx.lineWidth=2; hx.beginPath(); hx.arc(mx,my,mr,0,6.3); hx.stroke();
   if(DESKTOP||SHOWKEY){
-    var keyItems=[['spider','Spider'],['goblin','Goblin'],['archer','Goblin archer'],['cocoon','Captive — free them'],
-      ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['camp','Goblin camp'],
+    var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['cocoon','Captive — free them'],
+      ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],
       ['hollow',"Queen's Hollow"],['stones','Standing stones']];
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
@@ -1500,7 +1524,7 @@ function hide(){ ui.classList.remove('on'); ui.innerHTML=''; touches={}; IN.atta
 function titleScreen(){
   G.state='title';
   show('<h1>Elven Hunter</h1>'+
-    '<p class="sub">An open wood. Spiders in the canopy, goblins at the fire, and your kin strung up between the trees.</p>'+
+    '<p class="sub">An open wood. Spiders in the canopy, snakes in the grass, wasps round their hive, and your kin strung up between the trees.</p>'+
     '<p class="sub">Free them and they fight beside you.</p>'+
     '<button class="btn" id="make">Make your hunter</button>'+
     '<button class="btn alt" id="snd">'+sndLabel()+'</button>'+
@@ -1593,8 +1617,10 @@ function skillScreen(flash){
 var BOUNTIES=[
   {id:'spiders', short:'Spiders slain', t:'Slay {n} spiders', n:function(l){ return 6+Math.min(6,l); }, on:['spider'],
    say:'The spiders creep closer every night. Thin them out — {n} of them — and the drinks are on me.'},
-  {id:'goblins', short:'Goblins slain', t:'Slay {n} goblins', n:function(l){ return 4+Math.min(5,(l/2)|0); }, on:['goblin'],
-   say:'Goblins robbed the supply cart again. Teach {n} of them some manners.'},
+  {id:'snakes', short:'Snakes', t:'Drive off {n} snakes', n:function(l){ return 5+Math.min(5,(l/2)|0); }, on:['snake'],
+   say:'Snakes in the cellar, snakes on the path. Deal with {n} of them and I\'ll sleep easier.'},
+  {id:'wasps', short:'Wasps', t:'Swat {n} wasps', n:function(l){ return 5+Math.min(5,(l/2)|0); }, on:['wasp'],
+   say:'Those wasps have been at my honey again. Swat {n} of them for me?'},
   {id:'freed', short:'Captives freed', t:'Free {n} captives', n:function(){ return 3; }, on:['freed'],
    say:'Folk have gone missing in the webs. Cut {n} of them down and send them home.'},
   {id:'giant', short:'Giant spider', t:'Slay a giant spider', n:function(){ return 1; }, on:['giant'],

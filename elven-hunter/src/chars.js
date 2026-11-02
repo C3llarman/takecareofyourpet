@@ -160,6 +160,30 @@ function spiderRig(out,e,t){
   out.push(['limbT',-0.13*s,bodyY*0.78,fz,0.5,0,0.25,0.10*s,0.40*s,0.10*s,cb]);
   out.push(['limbT', 0.13*s,bodyY*0.78,fz,0.5,0,-0.25,0.10*s,0.40*s,0.10*s,cb]);
 }
+/* far-away stand-ins for the monster models (and what draws them while loading) */
+function snakeRig(out,e,t){
+  var s=e.scale||1, c=e.look.body, cb=e.look.belly, ph=(e.walkPhase||0)*1.6;
+  var n=(typeof LOD!=='undefined'&&LOD)?4:7;
+  for(var i=0;i<n;i++){                       // body: a wriggling chain from the tail up to the neck
+    var k=i/(n-1), z=(-1.1+k*1.3)*s, x=Math.sin(ph-k*3.2)*0.28*s*(1-k*0.6), r=(0.20+0.08*Math.sin(k*3.1))*s;
+    out.push(['blobR',x,r*0.9,z,0,0,0, r*1.1,r*0.9,r*1.3,(i&1)?c:cb]);
+  }
+  // reared neck and head
+  out.push(['limbT',0,0.30*s,0.25*s, -0.5,0,0, 0.30*s,0.75*s,0.30*s,c]);
+  out.push(['blobR',0,0.95*s,0.55*s,0,0,0, 0.32*s,0.24*s,0.42*s,c]);
+  out.push(['box',-0.11*s,1.02*s,0.80*s,0,0,0,0.07*s,0.07*s,0.05*s,e.look.eye]);
+  out.push(['box', 0.11*s,1.02*s,0.80*s,0,0,0,0.07*s,0.07*s,0.05*s,e.look.eye]);
+}
+function waspRig(out,e,t){
+  var s=e.scale||1, L=e.look, hy=(e.hover||1.25)*s, flap=Math.sin(t*38+(e.walkPhase||0))*0.5;
+  out.push(['blobR',0,hy,0.10*s,0,0,0, 0.34*s,0.30*s,0.36*s,L.body]);              // thorax
+  out.push(['blobR',0,hy-0.10*s,-0.42*s,0.35,0,0, 0.30*s,0.30*s,0.48*s,L.stripe]); // abdomen
+  out.push(['blobR',0,hy-0.16*s,-0.62*s,0.35,0,0, 0.22*s,0.22*s,0.30*s,L.body]);
+  out.push(['blobR',0,hy+0.05*s,0.48*s,0,0,0, 0.24*s,0.22*s,0.22*s,L.stripe]);    // head
+  if(typeof LOD!=='undefined'&&LOD) return;
+  for(var sd=-1;sd<=1;sd+=2)                                                      // wings, a blur
+    out.push(['blobR',sd*0.42*s,hy+0.28*s,0,0,0,sd*(0.3+flap), 0.50*s,0.04*s,0.22*s,L.wing]);
+}
 function cocoonRig(out,e,t){
   var s=e.scale||1, sway=Math.sin(t*1.1+(e.seed||0))*0.08;
   var web=[0.84,0.86,0.84];

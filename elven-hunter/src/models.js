@@ -6,13 +6,18 @@
    keep the cheap instanced primitive rig from chars.js, which is also what
    draws them while the models are still loading.
 
-   Spiders are Quaternius's animated spider (CC0): its own rig and five clips
-   (Attack, Death, Idle, Jump, Walk), sharing the same actor pool. */
+   The monsters are Quaternius's animated spider, snake and wasp (CC0), each on its
+   own rig with its own clips, sharing the same actor pool. */
 
 var MODELS={}, CLIPS={}, MODELS_READY=false;
 var MODEL_H=1.95;                 // the hunter's height in world units
 var ACTOR_MAX=16, ACTOR_RANGE=42;
-var SPIDER_W=3.1;                 // a scale-1 spider's leg span in world units
+/* how big each monster stands at scale 1: measured across (x) or up (y) */
+var CREATURES={
+  spider:{axis:'x',size:3.1,walk:'Walk',idle:'Idle',flinch:'Jump',tint:true},
+  snake: {axis:'y',size:1.45,walk:'Walk',idle:'Idle',flinch:'Jump'},
+  wasp:  {axis:'x',size:1.75,walk:'Flying',idle:'Flying',center:true}     // hangs centred on its hover height
+};
 
 function b64buf(s){
   var bin=atob(s), n=bin.length, u=new Uint8Array(n);
@@ -50,7 +55,7 @@ function prepModels(raw){
   }
   for(var n in raw){
     if(n==='anims') continue;
-    if(n==='spider'){ prepSpider(raw[n]); continue; }
+    if(CREATURES[n]){ prepCreature(n,raw[n]); continue; }
     var scene=raw[n].scene, skinned=[], rigid=[];
     scene.traverse(function(o){
       if(!o.isMesh) return;
@@ -77,28 +82,34 @@ function prepModels(raw){
   }
   MODELS_READY=!!(MODELS.rogue&&CLIPS.Idle);
 }
-var SPIDER_CLIPS={};
-function prepSpider(g){
-  g.animations.forEach(function(c){ SPIDER_CLIPS[c.name]=c; });
+var CREATURE_CLIPS={};
+var SPIDER_CLIPS=CREATURE_CLIPS.spider={};
+function prepCreature(name,g){
+  var C=CREATURES[name], clips=CREATURE_CLIPS[name]||(CREATURE_CLIPS[name]={});
+  g.animations.forEach(function(c){ clips[c.name]=c; });
   var scene=g.scene;
   scene.traverse(function(o){
     if(!o.isMesh) return;
     var mats=Array.isArray(o.material)?o.material:[o.material];
     var lm=mats.map(function(m){
-      // body takes the entity's colour per actor; the eyes stay a hot red
-      return new THREE.MeshLambertMaterial({color:m.name==='marking'?new THREE.Color(0.95,0.22,0.15):new THREE.Color(0.2,0.13,0.12),
-        name:m.name});
+      if(C.tint)        // the spider's body takes each spider's colour; the eyes stay a hot red
+        return new THREE.MeshLambertMaterial({color:m.name==='marking'?new THREE.Color(0.95,0.22,0.15):new THREE.Color(0.2,0.13,0.12),name:m.name});
+      // the others keep their colours, shown as authored (the game's output is not colour managed)
+      var c=m.color, f=function(v){ return Math.pow(v,1/2.2); };
+      return new THREE.MeshLambertMaterial({color:new THREE.Color(f(c.r),f(c.g),f(c.b)),name:m.name});
     });
     o.material=Array.isArray(o.material)?lm:lm[0];
     o.castShadow=true; o.receiveShadow=true; o.frustumCulled=false;
   });
-  // measure the walking pose, not the bind pose, so the size is what you see
+  // measure the moving pose, not the bind pose, so the size is what you see
   var mix=new THREE.AnimationMixer(scene);
-  if(SPIDER_CLIPS.Walk){ mix.clipAction(SPIDER_CLIPS.Walk).play(); mix.update(0.3); }
+  if(clips[C.walk]){ mix.clipAction(clips[C.walk]).play(); mix.update(0.3); }
   scene.updateMatrixWorld(true);
   var box=new THREE.Box3().setFromObject(scene,true);
   mix.stopAllAction(); mix.uncacheRoot(scene);
-  MODELS.spider={scene:scene, k:SPIDER_W/Math.max(0.01,box.max.x-box.min.x), lift:-box.min.y, weapons:[], spider:true};
+  var ext=C.axis==='y'?box.max.y-box.min.y:box.max.x-box.min.x;
+  MODELS[name]={scene:scene, k:C.size/Math.max(0.01,ext), lift:C.center?-(box.min.y+box.max.y)/2:-box.min.y,
+    weapons:[], creature:name};
 }
 
 /* which model, tint, weapons and extras an entity wears */
@@ -113,10 +124,9 @@ function actorSpec(e){
   }
   if(e.kind==='npc')                  // the innkeeper: a barbarian with a mug, in warm tones
     return {model:'barbarian', weapons:['Mug'], beard:true, tint:[1.0,0.88,0.74], key:'keeper'};
-  if(e.kind==='spider'||(e.kind==='corpse'&&e.of==='spider'))
-    return {model:'spider', weapons:[], tint:e.look&&e.look.body, key:e.big?'bigspider':'spider'};
-  if(e.kind==='goblin'||(e.kind==='corpse'&&e.of==='goblin'))
-    return {model:'rogue', weapons:e.gk==='bow'?['1H_Crossbow']:['Knife','Knife_Offhand'], ears:true, tint:[0.62,0.86,0.48], key:'goblin'};
+  var ck=e.kind==='corpse'?e.of:e.kind;
+  if(ck==='spider') return {model:'spider', weapons:[], tint:e.look&&e.look.body, key:e.big?'bigspider':'spider'};
+  if(ck==='snake'||ck==='wasp') return {model:ck, weapons:[], key:ck};
   var K=ALLYKIND[e.ak]||ALLYKIND[0];
   switch(K.k){
     case 'ranger': return {model:'rogue_hooded', weapons:['1H_Crossbow'], ears:!!e.look.ears};
@@ -165,7 +175,7 @@ function makeActor(spec){
   }
   var group=new THREE.Group(); group.add(root);
   root.scale.setScalar(T.k); root.position.y=T.lift*T.k;
-  var a={spider:!!T.spider, held:held, wNorm:spec.weapons, wMelee:spec.melee||null, wCur:spec.weapons, key:spec.key||spec.model, group:group, root:root, mats:mats, mixer:new THREE.AnimationMixer(root),
+  var a={creature:T.creature||null, held:held, wNorm:spec.weapons, wMelee:spec.melee||null, wCur:spec.weapons, key:spec.key||spec.model, group:group, root:root, mats:mats, mixer:new THREE.AnimationMixer(root),
     acts:{}, ent:null, used:false, ov:null, ovT:0, lastAtk:0, base:null, dead:false};
   SCENE.add(group);
   ACTORS.push(a);
@@ -174,7 +184,7 @@ function makeActor(spec){
 function act(a,name){
   var x=a.acts[name];
   if(!x){
-    var c=(a.spider?SPIDER_CLIPS:CLIPS)[name]; if(!c) return null;
+    var c=(a.creature?CREATURE_CLIPS[a.creature]:CLIPS)[name]; if(!c) return null;
     x=a.acts[name]=a.mixer.clipAction(c);
     x.weight=0; x.enabled=true; x.play(); x.tw=0;
   }
@@ -190,7 +200,6 @@ function attackClip(e){
     if(e.atkKind==='throw') return 'Throw';
     return G.S&&G.S.whirl?'2H_Melee_Attack_Spin':'1H_Melee_Attack_Chop';
   }
-  if(e.kind==='goblin') return e.gk==='bow'?'1H_Ranged_Shoot':'1H_Melee_Attack_Slice_Diagonal';
   var K=ALLYKIND[e.ak]||{};
   if(K.k==='ranger') return '1H_Ranged_Shoot';
   if(K.k==='mage'||K.k==='druid') return 'Spellcast_Shoot';
@@ -208,36 +217,44 @@ function moveClip(e){
 }
 /* Per frame: pick a looping base (idle / run / jump / cheer / death), and lay a
    one-shot over the upper body for attacks and hits, so you can run and shoot. */
-function animateSpider(a,e,dt){
+function animateCreature(a,e,dt){
+  var C=CREATURES[a.creature], clips=CREATURE_CLIPS[a.creature];
   var dead=(e.kind==='corpse');
   var spd=e.speed||0;
-  var base=dead?'Death':(spd>0.4?'Walk':'Idle');
-  // the bite is telegraphed: it starts with the wind-up, so the strike lands as it ends
+  var base=dead?(clips.Death?'Death':C.idle):(spd>0.4?C.walk:C.idle);
   if(!dead&&e.wind>0&&!a.ov){
-    var c=SPIDER_CLIPS.Attack, full=(e.big?0.55:0.38)+0.3;
+    // a bite is telegraphed: it starts with the wind-up, so it lands as the ring closes
+    var c=clips.Attack, full=(e.big?0.55:0.38)+0.3;
     if(c){ a.ov='Attack'; var x=act(a,'Attack'); x.reset(); x.setLoop(THREE.LoopOnce,1); x.clampWhenFinished=true;
       x.timeScale=c.duration/full; a.ovT=full; }
-  } else if(!dead&&e.hurtT>0.15&&!a.ov){
-    a.ov='Jump'; var h=act(a,'Jump'); h.reset(); h.setLoop(THREE.LoopOnce,1); h.clampWhenFinished=true;
-    h.timeScale=2.4; a.ovT=SPIDER_CLIPS.Jump?SPIDER_CLIPS.Jump.duration/2.4*0.5:0;   // a quick flinch
+  } else if(!dead&&e.atkT>0&&e.atkT>=a.lastAtk+1e-4&&clips.Attack){
+    // a wasp fires its stinger
+    a.ov='Attack'; var xs=act(a,'Attack'); xs.reset(); xs.setLoop(THREE.LoopOnce,1); xs.clampWhenFinished=true;
+    xs.timeScale=1.4; a.ovT=clips.Attack.duration/1.4;
+  } else if(!dead&&e.hurtT>0.15&&!a.ov&&C.flinch&&clips[C.flinch]){
+    a.ov=C.flinch; var h=act(a,C.flinch); h.reset(); h.setLoop(THREE.LoopOnce,1); h.clampWhenFinished=true;
+    h.timeScale=2.4; a.ovT=clips[C.flinch].duration/2.4*0.5;   // a quick flinch
   }
+  a.lastAtk=e.atkT||0;
   a.ovT-=dt; if(a.ovT<=0) a.ov=null;
   for(var k in a.acts) a.acts[k].tw=0;
   act(a,(a.ov&&!dead)?a.ov:base).tw=1;
-  if(dead&&!a.dead){ a.dead=true; var d=act(a,'Death'); d.reset(); d.setLoop(THREE.LoopOnce,1); d.clampWhenFinished=true; }
-  var w=a.acts.Walk; if(w) w.timeScale=clamp(spd/3.4,0.6,1.8);
+  if(dead&&!a.dead){ a.dead=true; if(clips.Death){ var d=act(a,'Death'); d.reset(); d.setLoop(THREE.LoopOnce,1); d.clampWhenFinished=true; } }
+  var w=a.acts[C.walk]; if(w&&C.walk!==C.idle) w.timeScale=clamp(spd/3.4,0.6,1.8);
   var rate=Math.min(1,dt*14);
   for(var k2 in a.acts){ var x2=a.acts[k2]; x2.weight+=(x2.tw-x2.weight)*rate; if(x2.weight<0.002&&x2.tw===0) x2.weight=0; x2.setEffectiveWeight(x2.weight); }
-  a.mixer.update(dt);
-  a.group.position.set(e.x,e.y,e.z);
-  a.group.rotation.set(0,e.yaw||0,0);
+  a.mixer.update(dead&&!clips.Death?0:dt);
+  var hy=(a.creature==='wasp')?(dead?Math.max(0,(e.hover||1.25)*(1-e.t/0.5)):(e.hover||1.25))*(e.scale||1):0;
+  a.group.position.set(e.x,e.y+hy,e.z);
+  // a snake has no death clip: it rolls over instead
+  a.group.rotation.set(0,e.yaw||0,(dead&&!clips.Death)?Math.min(1,e.t/0.4)*1.6:0);
   a.group.scale.setScalar(e.scale||1);
   var flash=e.hurtT>0?Math.min(1,e.hurtT/0.18)*0.6:0;
   for(var i=0;i<a.mats.length;i++) a.mats[i].emissive.setRGB(flash,flash*0.15,flash*0.1);
   a.group.visible=true;
 }
 function animateActor(a,e,dt){
-  if(a.spider){ animateSpider(a,e,dt); return; }
+  if(a.creature){ animateCreature(a,e,dt); return; }
   var dead=(e.kind==='corpse')||(e.dead===true);
   var air=e.onGround===false;
   var spd=e.speed||0;
@@ -296,8 +313,8 @@ function animateActor(a,e,dt){
 /* Hand out actors to the nearest humanoids; everyone else falls back to the
    instanced primitive rig. Returns the set of entities that got one. */
 var ACTOR_OF=new Map(), HUMANS=[];
-function isHumanoid(e){ return e.kind==='player'||e.kind==='ally'||e.kind==='goblin'||e.kind==='npc'||(e.kind==='corpse'&&e.of==='goblin'); }
-function hasModel(e){ return isHumanoid(e)||(MODELS.spider&&(e.kind==='spider'||(e.kind==='corpse'&&e.of==='spider'))); }
+function isHumanoid(e){ return e.kind==='player'||e.kind==='ally'||e.kind==='npc'; }
+function hasModel(e){ var ck=e.kind==='corpse'?e.of:e.kind; return isHumanoid(e)||(!!CREATURES[ck]&&!!MODELS[ck]); }
 function assignActors(dt){
   ACTOR_OF.clear();
   if(!MODELS_READY||!G.player){ for(var z=0;z<ACTORS.length;z++) if(ACTORS[z].ent) releaseActor(ACTORS[z]); return ACTOR_OF; }

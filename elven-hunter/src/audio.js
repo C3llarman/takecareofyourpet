@@ -145,11 +145,16 @@ function sfx(name,x,z,v){
     case 'spiderdie':
       b=sndBus(0.9*P.g,P.pan,0.6);
       tone(b,'sawtooth',900*r,140,t,0.42,0.2); hiss(b,'bandpass',3000,700,2,t,0.35,0.35); break;
-    case 'goblindie':
-      b=sndBus(0.9*P.g,P.pan,0.6);
-      tone(b,'square',520*r,150,t,0.32,0.16); tone(b,'square',540*r,160,t+0.02,0.3,0.1); break;
-    case 'goblinshoot':
-      b=sndBus(0.6*P.g,P.pan,0.3); tone(b,'triangle',240*r,170,t,0.18,0.3); break;
+    case 'snakedie':                      // a long hiss that trails away
+      b=sndBus(0.8*P.g,P.pan,0.7); hiss(b,'highpass',3600,1400,0.8,t,0.5,0.4,0.02); tone(b,'sine',300*r,120,t,0.3,0.12); break;
+    case 'waspdie':                       // the buzz drops out of the air
+      b=sndBus(0.8*P.g,P.pan,0.6); tone(b,'sawtooth',230*r,70,t,0.45,0.16); tone(b,'square',236*r,72,t,0.45,0.06); break;
+    case 'rattle':                        // a snake coils to strike: the warning
+      b=sndBus(0.7*P.g,P.pan,0.5);
+      for(var ri=0;ri<5;ri++) hiss(b,'bandpass',4200,3800,3,t+ri*0.055,0.04,0.45);
+      break;
+    case 'sting':                         // a wasp fires a stinger
+      b=sndBus(0.6*P.g,P.pan,0.35); tone(b,'sawtooth',420*r,900*r,t,0.12,0.12); hiss(b,'highpass',4000,7000,0.7,t,0.06,0.2); break;
     case 'jump':
       b=sndBus(0.35,0,0.2); hiss(b,'bandpass',400,1100,1,t,0.12,0.4,0.02); break;
     case 'land':

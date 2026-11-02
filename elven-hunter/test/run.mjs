@@ -384,7 +384,7 @@ section('Characters');
     playerActor: ACTOR_OF.has(G.player),
     ears: (() => { const a = ACTOR_OF.get(G.player); let n = 0; a && a.root.getObjectByName('head').children.forEach((c) => { if (c.isMesh) n++; }); return n; })(),
   }));
-  ok('character models load', m.ready && m.models === 6 && m.spider, `${m.models} models (5 heroes + the spider), ${m.clips} clips (incl. upper/lower masks)`);
+  ok('character models load', m.ready && m.models === 8 && m.spider, `${m.models} models (5 heroes + 3 monsters), ${m.clips} clips (incl. upper/lower masks)`);
   ok('the hunter is a skinned model', m.playerActor);
   ok('an elf has ears', m.ears === 2);
 
@@ -404,7 +404,7 @@ section('Characters');
   const corpse = await page.evaluate(() => new Promise((res) => {
     G.ents.length = 0;
     const y = G.player.yaw;
-    spawnGoblin(G.player.x + Math.sin(y) * 2, G.player.z + Math.cos(y) * 2, 'spear');
+    spawnWasp(G.player.x + Math.sin(y) * 2, G.player.z + Math.cos(y) * 2);
     hurtEnemy(G.ents[0], 1e6);
     const c = G.ents.find((e) => e.kind === 'corpse'), t0 = G.t;
     let died = false;
@@ -415,7 +415,7 @@ section('Characters');
     };
     requestAnimationFrame(wait);
   }));
-  ok('a slain goblin plays its death, then clears away', corpse.had && corpse.died && corpse.gone);
+  ok('a slain wasp plays its death, then clears away', corpse.had && corpse.died && corpse.gone);
 
   const shadows = await page.evaluate(() => ({ on: R3.shadowMap.enabled, sun: SUN.castShadow, world: WORLD.receiveShadow }));
   ok('real shadows are on', shadows.on && shadows.sun && shadows.world);
@@ -439,12 +439,15 @@ section('Tavern');
       flat: Math.max(...hs) - Math.min(...hs), pathClear: [0, 0.2, 0.4, 0.6, 0.8, 0.95].every((t) => !solidAt(1.4 * t * t, 4 - 33 * t, 1.0)) };
   });
   ok('the innkeeper stands at the tavern', yard.keeper);
+  const foes = await page.evaluate(() => { const k = {}; G.ents.forEach((e) => { if (FOE[e.kind]) k[e.kind] = (k[e.kind] || 0) + 1; });
+    return { kinds: k, humans: G.ents.some((e) => e.kind === 'goblin') || typeof spawnGoblin !== 'undefined' }; });
+  ok('every foe is a monster', !foes.humans && foes.kinds.spider > 0 && foes.kinds.snake > 0 && foes.kinds.wasp > 0, JSON.stringify(foes.kinds));
   ok('the tavern yard is level', yard.flat < 0.6, `${yard.flat.toFixed(2)} units of rise across the yard`);
   ok('the path to the tavern is clear', yard.pathClear);
   ok('no diagnostics button in the game', yard.noButtons);
 
   const talk = await page.evaluate(() => new Promise((res) => {
-    const k = keeper(), p = G.player; G.ents = G.ents.filter((e) => e.kind !== 'spider' && e.kind !== 'goblin');
+    const k = keeper(), p = G.player; G.ents = G.ents.filter((e) => !FOE[e.kind]);
     p.x = k.x + Math.sin(k.yaw) * 2.2; p.z = k.z + Math.cos(k.yaw) * 2.2; p.y = H(p.x, p.z); p.coins = 200;
     const t0 = G.t; const tick = () => { if (G.t - t0 > 0.3) res({ talk: !!G.talk }); else requestAnimationFrame(tick); }; tick();
   }));
@@ -488,12 +491,12 @@ section('Feel');
   ok('the music loop decodes and plays', music && snd.dur > 60, `${snd.dur.toFixed(1)} s loop`);
   const fxErr = await page.evaluate(() => {
     const errs = [];
-    ['swing', 'hit', 'squish', 'bow', 'zap', 'throw', 'thunk', 'ehit', 'hurt', 'hissup', 'spiderdie', 'goblindie', 'goblinshoot',
+    ['swing', 'hit', 'squish', 'bow', 'zap', 'throw', 'thunk', 'ehit', 'hurt', 'hissup', 'spiderdie', 'snakedie', 'waspdie', 'rattle', 'sting',
       'jump', 'land', 'step', 'dash', 'coin', 'potion', 'pickup', 'levelup', 'fairy', 'freed', 'discover', 'death', 'click']
       .forEach((n) => { try { SND.last = {}; SND.voices = 0; sfx(n, G.player.x + 1, G.player.z + 1); } catch (e) { errs.push(n + ': ' + e.message); } });
     return errs;
   });
-  ok('every sound effect plays', fxErr.length === 0, fxErr.join(' | ') || '26 synthesised effects');
+  ok('every sound effect plays', fxErr.length === 0, fxErr.join(' | ') || '28 synthesised effects');
 
   // strafing: with the mouse captured, the hunter keeps facing the camera and steps sideways
   const wait = (s) => page.evaluate(() => G.t).then((t0) => page.waitForFunction(([t, s]) => G.t - t > s, [t0, s], { timeout: 60000 }));
@@ -521,8 +524,8 @@ section('Feel');
 
   const sp = await page.evaluate(() => new Promise((res) => { G.ents.length = 0; const p = G.player;
     spawnSpider(p.x + 4, p.z + 4, false); G.ents[0].aggro = 0;
-    requestAnimationFrame(() => requestAnimationFrame(() => { const a = ACTOR_OF.get(G.ents[0]); res({ model: !!(a && a.spider) }); })); }));
-  ok('spiders near you are animated models', sp.model);
+    requestAnimationFrame(() => requestAnimationFrame(() => { const a = ACTOR_OF.get(G.ents[0]); res({ model: !!(a && a.creature === 'spider') }); })); }));
+  ok('monsters near you are animated models', sp.model);
 
   ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
   await page.close();
@@ -562,7 +565,7 @@ section('Rendering');
   await page.evaluate(() => {
     G.ents.length = 0;
     for (let i = 0; i < 30; i++) { const a = i / 30 * 6.28, d = 5 + i % 18; spawnSpider(G.player.x + Math.cos(a) * d, G.player.z + Math.sin(a) * d, i % 9 === 0); }
-    for (let i = 0; i < 16; i++) { const a = i / 16 * 6.28, d = 6 + i % 14; spawnGoblin(G.player.x + Math.cos(a) * d, G.player.z + Math.sin(a) * d, 'spear'); }
+    for (let i = 0; i < 16; i++) { const a = i / 16 * 6.28, d = 6 + i % 14; spawnBeast(G.player.x + Math.cos(a) * d, G.player.z + Math.sin(a) * d, i % 2 === 0); }
   });
   await page.waitForTimeout(500);
   const horde = await page.evaluate(() => ({ draws: R3.info.render.calls, parts: DRAW.length + SHAD.length }));
