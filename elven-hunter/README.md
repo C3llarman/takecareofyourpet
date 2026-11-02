@@ -3,14 +3,18 @@
 An open-world, third-person forest game that runs in **one self-contained HTML file**.
 
 No CDN and no network calls at runtime. Rendering is done by
-[three.js](https://threejs.org) (MIT); the terrain generator, the character rigs and the
-gameplay are plain JavaScript. Heroes, followers and goblins are rigged, animated
-models from Kay Lousberg's CC0 [KayKit Adventurers](https://kaylousberg.itch.io/kaykit-adventurers)
-pack. The build bundles the slice of three.js the game uses, the models and the game into
-a single ~3.1 MB file. Open it from a USB stick on a plane and it plays.
+[three.js](https://threejs.org) (MIT); the terrain generator and the gameplay are plain
+JavaScript. Heroes, followers and goblins are rigged, animated models from Kay Lousberg's
+CC0 [KayKit Adventurers](https://kaylousberg.itch.io/kaykit-adventurers) pack; spiders are
+Quaternius's animated spider, and the forest is planted from his Ultimate Nature Pack (both
+CC0). Every sound effect is synthesised in code; the music is "Peaceful Forest" by Samza
+(CC0). The build bundles the slice of three.js the game uses, the models, the forest, the
+music and the game into a single ~2.9 MB file. Open it from a USB stick on a plane and it
+plays.
 
 The wood is 300 × 300 units of procedurally generated hills, a winding river and about
-3,600 scattered trees, rocks and ferns, with four landmarks to find. Spiders hunt the
+2,700 oaks, birches, pines, bushes, ferns, mossy rocks, stumps and logs, with four
+landmarks to find. Spiders hunt the
 undergrowth, goblins hold a camp, and your kin hang in cocoons waiting to be cut down.
 Free them and they follow you and fight.
 
@@ -30,14 +34,15 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 
 | Action | Input |
 |---|---|
-| Move | `W` `A` `S` `D` |
+| Move | `W` `A` `S` `D` — with the mouse captured you strafe and backpedal, facing where you look |
 | Look | Move the mouse (click once to capture, `Esc` to release) |
 | Strike | `E` or left click (hold to keep swinging) |
 | Shoot | `F` or right click (hold to keep firing) |
 | Jump | `Space` |
-| Dash | `Shift` *(unlocked by a skill)* |
+| Dash | `Shift` *(unlocked by a skill; rolls the way you are pushing)* |
 | Drink a potion | `Q` |
 | Skills | `Tab` |
+| Sound | `M` cycles all on → effects only → off (also a button on the title and skills screens) |
 | Diagnostics overlay | `I` |
 | Zoom | Scroll wheel |
 
@@ -66,14 +71,19 @@ src/
               the four hand-placed landmarks
   chars.js    procedural rigs — humanoid, spider, cocoon — built from primitives;
               humanoids use these only far away or while models load
-  models.js   animated character models: loading, actors, animation layering
-  game.js     state, input, camera, combat, AI, allies, skills, HUD, telemetry
-assets/       slimmed KayKit models (*.glb, CC0) + shared animation clips
+  models.js   animated models (heroes, goblins, spiders): loading, actors, layering
+  audio.js    synthesised sound effects and the music loop (Web Audio)
+  game.js     state, input, camera, combat, AI, allies, skills, HUD, particles, telemetry
+assets/       compressed models (*.glb), the forest (nature.json), music.mp3 — all CC0,
+              see assets/CREDITS.md
 tools/
-  build.mjs   bundles three.js with esbuild, inlines it, the models (base64) and
-              the modules into index.html
-  models.mjs  rebuilds assets/ from the KayKit pack (fetches it if needed)
-  serve.mjs   dependency-free static server
+  build.mjs      bundles three.js with esbuild, inlines it, the assets (base64) and
+                 the modules into index.html
+  models.mjs     rebuilds the KayKit characters and clips (fetches the pack if needed)
+  creatures.mjs  rebuilds the spider from Quaternius's model
+  nature.mjs     simplifies and packs the Quaternius nature props
+  music.mjs      re-encodes the music loop (needs ffmpeg)
+  serve.mjs      dependency-free static server
 test/
   run.mjs     headless suite driving the real game in Chromium
 ```
@@ -98,10 +108,20 @@ are bundled.
 - **Layered animation.** Each clip also exists as an upper-body and a lower-body half.
   An attack or hit plays on the upper body while the legs keep their run or idle, so you
   can shoot on the move. Weights cross-fade every frame.
-- **Budget.** The nearest 12 humanoids within 42 units get a model ("actor", pooled and
+- **Budget.** The nearest 16 humanoids and spiders within 42 units get a model ("actor", pooled and
   reused); everything else is drawn by the instanced primitive rigs, so a horde costs
   a fixed amount. Each model's six body parts are merged into one skinned mesh.
+- **Spiders.** Quaternius's animated spider on its own 39-bone rig, sharing the actor
+  pool (16 actors now). The bite starts with the wind-up, so the strike lands when the
+  warning ring closes; a hit makes it flinch. Its body takes the entity's colour (giant
+  spiders are redder). Far spiders fall back to the primitive rig.
+- **Strafing.** With the mouse captured the hunter faces the camera; the legs pick
+  forward run, strafe left/right or a slower backpedal from the angle between where she
+  faces and where she moves. Shadowstep plays a dodge roll in the direction you push.
 - **Death.** Slain goblins and spiders leave a body that plays its death, then sinks.
+- **Compression.** Every model is packed with `EXT_meshopt_compression` (quantised,
+  filtered); three.js's bundled `MeshoptDecoder` (~29 KB) unpacks it at load. The
+  characters went from 1.8 MB to 0.8 MB, room enough for the spider, the forest and music.
 
 ### Rendering notes
 
@@ -130,8 +150,16 @@ are bundled.
   follower, fairy, and an icon per landmark). Undiscovered landmarks show as `?`, and
   landmarks beyond the map's edge stay pinned to its rim so you can see which way they lie.
 
-- Everything static — terrain, water, every tree and rock — is baked into **one vertex
-  buffer and drawn in a single call** (~132k triangles).
+- **The forest.** `tools/nature.mjs` flattens each Quaternius prop, simplifies it per
+  colour with meshoptimizer (a tree goes from 1,300–3,000 triangles to 150–340), and
+  stores it as 16-bit positions and indices with one palette colour per triangle: 21 props
+  in ~70 KB, no textures. Each prop also gets a ~50-triangle stand-in.
+- **Chunks and level of detail.** Terrain, water and landmarks are one buffer; the props
+  are baked into an 8 × 8 grid of indexed chunk meshes, each built twice (full detail and
+  stand-ins). Chunks within 58 units of the camera draw full detail, further ones the
+  stand-ins, and those past the fog are skipped. The camera and the sun's shadow pass also
+  cull chunks they cannot see. A typical frame draws 160–220k triangles including
+  shadows, less than the old single-buffer world, for a much fuller wood.
 - Characters are assembled per frame from a handful of shared primitive meshes and
   poured into **instanced batches**: one draw call per part shape, whatever the crowd.
   A 46-enemy horde costs 12 draw calls (it was 455 before three.js). Beyond 20 units,
@@ -141,6 +169,23 @@ are bundled.
 - **Adaptive resolution.** The game measures its own frame rate and scales the render
   target between 62% and 100% to hold ~60 fps, then eases back up. The HUD canvas draws
   at a lower scale than the 3D view, because Canvas2D compositing is expensive on iOS.
+
+### Sound and feel
+
+- **Synthesised effects.** Swings, hits, bow twangs, bolts, arrows thudding into wood,
+  spider hisses, footsteps, landings, pickups, potions, level-ups and more are built from
+  oscillators and filtered noise at play time: zero bytes of audio. Sounds are panned by
+  where they are on screen and fade with distance; a compressor keeps a melee from clipping.
+- **Music.** One 63-second CC0 loop, mono MP3 at 48 kbps (~370 KB). It loops between its
+  first and last audible samples, so MP3 padding leaves no gap at the seam.
+- **Impact.** A landed blow freezes the world for 50–75 ms (hit-stop), jolts the camera,
+  throws sparks and spider ichor or goblin blood, and pushes the foe back a step. Taking a
+  hit shakes the camera harder.
+- **Particles** are tiny instanced cubes poured into the same batches as the characters,
+  so hundreds cost one draw call: kills, freed captives, level-ups, fairies, potions,
+  dashes and landing dust.
+- **Arrows stick.** A missed arrow or axe stays in the ground, a trunk or a rock for a few
+  seconds; bolts fizzle out in sparks.
 
 ### Diagnostics
 
@@ -163,7 +208,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-55 assertions run the actual game in headless Chromium with software WebGL and check
+69 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames
@@ -183,10 +228,9 @@ software WebGL frame rates vary a lot between machines.
 
 ## Known limitations
 
-- **Spiders are still built from primitives**; the KayKit pack has no spider. A CC0
-  rigged spider would slot into the same actor system.
-- **Size.** The models are embedded as base64, so the file is ~3.1 MB. Mesh quantisation
-  (`KHR_mesh_quantization`) could roughly halve the model share if that matters.
+- **Size.** Assets are embedded as base64, so the file is ~2.9 MB (about 0.5 MB of that is
+  the music). Dropping the music would take it to ~2.4 MB.
+- **Animations** are the one asset meshopt barely shrinks (~250 KB for 20 clips).
 - **Needs WebGL 2** (three.js dropped WebGL 1). Every current browser has it, including
   Safari on iOS 15 and later.
 - **No haptics on iOS.** Safari does not implement the Vibration API. Android gets the
@@ -197,4 +241,5 @@ software WebGL frame rates vary a lot between machines.
 
 MIT — see [LICENSE](LICENSE). Character models and animations: KayKit Adventurers by
 Kay Lousberg, CC0 — see [assets/LICENSE-KayKit-Adventurers.txt](assets/LICENSE-KayKit-Adventurers.txt).
-three.js: MIT, notice kept in the bundle.
+Spider and nature props: Quaternius, CC0. Music: "Peaceful Forest" by Samza, CC0. See
+[assets/CREDITS.md](assets/CREDITS.md). three.js: MIT, notice kept in the bundle.

@@ -98,6 +98,11 @@ section('Gameplay');
 
   const shot = await page.evaluate(() => new Promise((res) => {
     G.ents.length = 0;
+    // arrows now stick in trunks and rocks: shoot down a lane that is clear of them
+    const p = G.player, clear = (a) => { for (let d = 0.5; d < 10; d += 0.25) {
+      const x = p.x + Math.sin(a) * d, z = p.z + Math.cos(a) * d; if (solidAt(x, z, 1.3)) return false; } return true; };
+    for (let k = 0; k < 64 && !clear(p.yaw); k++) p.yaw += 0.1;
+    G.cam.yaw = p.yaw;            // with the mouse captured, shots go where the camera looks
     const y = G.player.yaw;
     spawnSpider(G.player.x + Math.sin(y) * 9, G.player.z + Math.cos(y) * 9, false);
     const sp = G.ents[0], hp0 = sp.hp;
@@ -375,11 +380,11 @@ section('Characters');
   await page.evaluate(() => startRun());
   await page.waitForTimeout(400);
   const m = await page.evaluate(() => ({
-    ready: MODELS_READY, models: Object.keys(MODELS).length, clips: Object.keys(CLIPS).length,
+    ready: MODELS_READY, models: Object.keys(MODELS).length, clips: Object.keys(CLIPS).length, spider: !!MODELS.spider && !!SPIDER_CLIPS.Walk,
     playerActor: ACTOR_OF.has(G.player),
     ears: (() => { const a = ACTOR_OF.get(G.player); let n = 0; a && a.root.getObjectByName('head').children.forEach((c) => { if (c.isMesh) n++; }); return n; })(),
   }));
-  ok('character models load', m.ready && m.models === 5, `${m.models} models, ${m.clips} clips (incl. upper/lower masks)`);
+  ok('character models load', m.ready && m.models === 6 && m.spider, `${m.models} models (5 heroes + the spider), ${m.clips} clips (incl. upper/lower masks)`);
   ok('the hunter is a skinned model', m.playerActor);
   ok('an elf has ears', m.ears === 2);
 
@@ -415,6 +420,79 @@ section('Characters');
   const shadows = await page.evaluate(() => ({ on: R3.shadowMap.enabled, sun: SUN.castShadow, world: WORLD.receiveShadow }));
   ok('real shadows are on', shadows.on && shadows.sun && shadows.world);
   ok('no runtime errors', page.__errors.length === 0, page.__errors.join(' | '));
+  await page.close();
+}
+
+/* ---------------- feel: sound, strafing, impact ---------------- */
+section('Feel');
+{
+  const page = await open(browser, LAPTOP);
+  await page.click('#make'); await page.click('#go');
+  await page.mouse.click(720, 430);                     // a real click: unlocks audio, captures the mouse
+  await page.waitForFunction('window.LOCKED===true', { timeout: 4000 }).catch(() => {});
+  const music = await page.waitForFunction(() => SND.musicBuf && SND.musicSrc, null, { timeout: 20000 }).then(() => true).catch(() => false);
+  const snd = await page.evaluate(() => ({ state: SND.ctx && SND.ctx.state, dur: SND.musicBuf ? SND.musicBuf.duration : 0 }));
+  ok('sound starts on the first click', snd.state === 'running', snd.state || 'no context');
+  ok('the music loop decodes and plays', music && snd.dur > 60, `${snd.dur.toFixed(1)} s loop`);
+  const fxErr = await page.evaluate(() => {
+    const errs = [];
+    ['swing', 'hit', 'squish', 'bow', 'zap', 'throw', 'thunk', 'ehit', 'hurt', 'hissup', 'spiderdie', 'goblindie', 'goblinshoot',
+      'jump', 'land', 'step', 'dash', 'coin', 'potion', 'pickup', 'levelup', 'fairy', 'freed', 'discover', 'death', 'click']
+      .forEach((n) => { try { SND.last = {}; SND.voices = 0; sfx(n, G.player.x + 1, G.player.z + 1); } catch (e) { errs.push(n + ': ' + e.message); } });
+    return errs;
+  });
+  ok('every sound effect plays', fxErr.length === 0, fxErr.join(' | ') || '26 synthesised effects');
+
+  // strafing: with the mouse captured, the hunter keeps facing the camera and steps sideways
+  const wait = (s) => page.evaluate(() => G.t).then((t0) => page.waitForFunction(([t, s]) => G.t - t > s, [t0, s], { timeout: 60000 }));
+  await page.evaluate(() => { G.ents.length = 0; G.cam.yaw = 0.7; G.player.yaw = 0.7; });
+  await page.keyboard.down('d'); await wait(0.6);
+  const st = await page.evaluate(() => { const a = ACTOR_OF.get(G.player);
+    return { yaw: G.player.yaw, cam: G.cam.yaw, clips: Object.keys(a.acts).filter((k) => a.acts[k].weight > 0.5) }; });
+  await page.keyboard.up('d');
+  ok('strafing keeps facing where you look', Math.abs(st.yaw - st.cam) < 0.05, `body ${st.yaw.toFixed(2)}, camera ${st.cam.toFixed(2)}`);
+  ok('strafing plays the strafe animation', st.clips.some((c) => /Strafe_Right/.test(c)), st.clips.join(', '));
+  await page.keyboard.down('s'); await wait(0.6);
+  const back = await page.evaluate(() => { const a = ACTOR_OF.get(G.player); return Object.keys(a.acts).filter((k) => a.acts[k].weight > 0.5); });
+  await page.keyboard.up('s');
+  ok('backing away plays the backpedal', back.some((c) => /Walking_Backwards/.test(c)), back.join(', '));
+
+  const hit = await page.evaluate(() => { G.ents.length = 0; FX.length = 0; const p = G.player;
+    spawnSpider(p.x + Math.sin(G.cam.yaw) * 2, p.z + Math.cos(G.cam.yaw) * 2, false); p.cdT = 0; doAttack();
+    return { stop: G.hitStop, fx: FX.length, shake: G.shakeA }; });
+  ok('a landed blow has hit-stop, shake and sparks', hit.stop > 0 && hit.fx > 5 && hit.shake > 0.05, `${hit.fx} particles`);
+
+  const stuck = await page.evaluate(() => new Promise((res) => { G.ents.length = 0; const p = G.player;
+    G.ents.push({ kind: 'shot', x: p.x + 2, y: p.y + 0.5, z: p.z + 2, vx: 5, vy: -10, vz: 5, life: 2, aimed: 1, dmg: 1, pierce: 0, hits: [], proj: 'arrow', spin: 0 });
+    const t0 = G.t; const tick = () => { if (G.t - t0 > 0.4) res(G.ents.map((e) => e.kind)); else requestAnimationFrame(tick); }; tick(); }));
+  ok('a missed arrow sticks where it lands', stuck.includes('stuck'), stuck.join(', '));
+
+  const sp = await page.evaluate(() => new Promise((res) => { G.ents.length = 0; const p = G.player;
+    spawnSpider(p.x + 4, p.z + 4, false); G.ents[0].aggro = 0;
+    requestAnimationFrame(() => requestAnimationFrame(() => { const a = ACTOR_OF.get(G.ents[0]); res({ model: !!(a && a.spider) }); })); }));
+  ok('spiders near you are animated models', sp.model);
+
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
+  await page.close();
+}
+
+/* ---------------- the forest ---------------- */
+section('Forest');
+{
+  const page = await open(browser, LAPTOP);
+  await page.evaluate(() => startRun());
+  await page.waitForTimeout(400);
+  const f = await page.evaluate(() => {
+    const near = PROPS3.filter((c) => Math.hypot(c.cx - G.cam.x, c.cz - G.cam.z) < LOD_NEAR);
+    const far = PROPS3.filter((c) => { const d = Math.hypot(c.cx - G.cam.x, c.cz - G.cam.z); return d > LOD_NEAR + 5 && d < 130; });
+    return { kinds: Object.keys(PROPN).length, props: Object.values(PROPN).reduce((a, b) => a + b, 0), chunks: PROPS3.length,
+      nearHi: near.length > 0 && near.every((c) => c.hi.visible && !c.lo.visible),
+      farLo: far.length > 0 && far.every((c) => c.lo.visible && !c.hi.visible) };
+  });
+  ok('the wood is planted with the nature pack', f.kinds >= 15 && f.props > 2000, `${f.props} props of ${f.kinds} kinds in ${f.chunks} chunks`);
+  ok('near chunks draw full detail, far ones the stand-ins', f.nearHi && f.farLo);
+  const size = (await import('node:fs')).statSync(PAGE.replace('file://', '')).size / 1024 / 1024;
+  ok('the whole game stays small', size < 3.2, `${size.toFixed(2)} MB with models, forest and music`);
   await page.close();
 }
 

@@ -20,7 +20,9 @@ import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NodeIO } from '@gltf-transform/core';
-import { prune, resample, dedup } from '@gltf-transform/functions';
+import { prune, resample, dedup, meshopt } from '@gltf-transform/functions';
+import { EXTMeshoptCompression, KHRMeshQuantization } from '@gltf-transform/extensions';
+import { MeshoptEncoder } from 'meshoptimizer';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'assets');
@@ -44,11 +46,21 @@ export const CLIPS = [
   '1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', '2H_Melee_Attack_Spin',
   '1H_Ranged_Shoot', 'Spellcast_Shoot', 'Throw',
   'Hit_A', 'Death_A', 'Cheer', 'Dodge_Forward',
+  // real strafing: the hunter keeps facing where you look and steps sideways or back
+  'Running_Strafe_Left', 'Running_Strafe_Right', 'Walking_Backwards',
+  'Dodge_Left', 'Dodge_Right', 'Dodge_Backward',
 ];
 // helpers in the rig that are not part of the deforming skeleton
 const HELPER = /IK|control-|kneeIK|elbowIK|handIK|heelIK/;
 
-const io = new NodeIO();
+await MeshoptEncoder.ready;
+const io = new NodeIO().registerExtensions([EXTMeshoptCompression, KHRMeshQuantization])
+  .registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
+// EXT_meshopt_compression: quantised, filtered and packed; three.js's MeshoptDecoder
+// (bundled, ~29 KB) unpacks it at load. Roughly halves every model.
+// One quantisation volume for the whole model: the body parts share one skin, and the
+// game merges them into one mesh, so they must also share one dequantisation.
+const squeeze = () => meshopt({ encoder: MeshoptEncoder, level: 'medium', quantizationVolume: 'scene' });
 function disposeAnim(a) {
   for (const s of a.listSamplers()) s.dispose();
   for (const c of a.listChannels()) c.dispose();
@@ -65,7 +77,8 @@ for (const name of CHARACTERS) {
   const doc = await io.read(join(SRC, `${name}.glb`));
   for (const a of doc.getRoot().listAnimations()) disposeAnim(a);
   dropOrphans(doc);
-  await doc.transform(prune(), dedup());
+  // integer vertex data (KHR_mesh_quantization): about half the bytes, no visible change
+  await doc.transform(prune(), dedup(), squeeze());
   const out = join(OUT, `${name.toLowerCase()}.glb`);
   await io.write(out, doc);
   console.log(`${name.padEnd(13)} ${(statSync(out).size / 1024).toFixed(0)} KB`);
@@ -90,7 +103,7 @@ for (const name of CHARACTERS) {
   for (const n of root.listNodes()) if (n.getMesh()) n.setMesh(null).setSkin(null);
   for (const m of root.listMeshes()) m.dispose();
   dropOrphans(doc);
-  await doc.transform(resample({ tolerance: 5e-4 }), prune({ keepLeaves: true }), dedup());
+  await doc.transform(resample({ tolerance: 5e-4 }), prune({ keepLeaves: true }), dedup(), squeeze());
   dropOrphans(doc);
   const out = join(OUT, 'anims.glb');
   await io.write(out, doc);

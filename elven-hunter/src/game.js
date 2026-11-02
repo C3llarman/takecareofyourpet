@@ -184,9 +184,20 @@ function buildWorld(){
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
   WORLD.castShadow=true; WORLD.receiveShadow=true;
   SCENE.add(WORLD);
-  WORLDTRIS=m.count()/3;
+  // trees, rocks and undergrowth live in chunks the camera and the sun can cull
+  PROPS3=chunkMeshes(WORLDMAT);
+  for(var i=0;i<PROPS3.length;i++){ SCENE.add(PROPS3[i].hi); SCENE.add(PROPS3[i].lo); }
+  WORLDTRIS=m.count()/3+PROPTRIS;
 }
-var WORLDTRIS=0;
+var WORLDTRIS=0, PROPS3=[];
+/* level of detail per chunk: full models near the camera, stand-ins further out,
+   nothing past the fog (it would be drawn in solid fog colour anyway) */
+var LOD_NEAR=58;
+function cullProps(cx,cz){
+  var far=133+CHUNK*0.71;
+  for(var i=0;i<PROPS3.length;i++){ var ch=PROPS3[i], d=Math.hypot(ch.cx-cx,ch.cz-cz);
+    ch.hi.visible=d<LOD_NEAR; ch.lo.visible=d>=LOD_NEAR&&d<far; }
+}
 function populate(){
   G.ents.length=0;
   var r=mulberry(4242);
@@ -329,7 +340,8 @@ function usePotion(){
   var p=G.player; if(!p||G.state!=='play') return;
   if(p.potions<=0||p.hp>=p.maxHp) return;
   p.potions--; p.hp=Math.min(p.maxHp,p.hp+Math.round(p.maxHp*0.45));
-  msg('+health','#8ff08a',p.x,p.y+2.4,p.z); buzz(20);
+  msg('+health','#8ff08a',p.x,p.y+2.4,p.z); buzz(20); sfx('potion');
+  burst(p.x,p.y+1.2,p.z,14,[0.55,1.0,0.5],{up:3,spread:2,size:0.13,life:0.8,grav:-1.5});
 }
 function doAttack(){
   var p=G.player, S=G.S;
@@ -339,7 +351,8 @@ function doAttack(){
   var lock=aimTarget(p,5.4);
   if(lock) p.yaw=Math.atan2(lock.x-p.x,lock.z-p.z);
   p.cdT=0.45; p.atkT=p.atkDur=0.42; p.atkKind='melee';
-  var reach=3.6, hit=0;
+  sfx('swing',p.x,p.z);
+  var reach=3.6, hit=0, hitSpider=false, kills=0;
   for(var i=0;i<G.ents.length;i++){
     var e=G.ents[i];
     if(e.kind!=='spider'&&e.kind!=='goblin'&&e.kind!=='cocoon') continue;
@@ -352,13 +365,18 @@ function doAttack(){
     var dmg=(10+p.level*2.6)*S.melee;
     if(e.kind==='cocoon') breakCocoon(e,dmg);
     else {
+      if(e.kind==='spider') hitSpider=true;
+      impact(e,dx/(d||1),dz/(d||1));
       hurtEnemy(e,dmg); if(S.lifesteal) p.hp=Math.min(p.maxHp,p.hp+dmg*S.lifesteal);
+      if(e.hp<=0) kills++;
       if(e.hp>0&&d>0.01){ var kb=e.big?0.25:0.6; e.x+=dx/d*kb; e.z+=dz/d*kb; collide(e,bodyR(e)); }
     }
     hit++;
   }
   G.lock=lock||null;
-  if(hit) buzz(18);
+  if(hit){ buzz(18); sfx(hitSpider?'squish':'hit',p.x,p.z);
+    // a hit lands with weight: the world stalls for a blink and the camera jolts
+    G.hitStop=Math.max(G.hitStop||0,kills?0.075:0.05); shake(kills?0.22:0.14); }
 }
 function aimTarget(p,maxD){
   var best=null,bs=-1;
@@ -380,6 +398,7 @@ function doShoot(){
   if(p.cdT>0||p.dead) return;
   p.cdT=S.cd; p.atkT=p.atkDur=0.34;
   p.atkKind=(S.proj==='arrow')?'bow':(S.proj==='bolt'?'cast':'throw');
+  sfx(S.proj==='arrow'?'bow':(S.proj==='bolt'?'zap':'throw'),p.x,p.z);
   var n=1+S.extra, sp=(S.proj==='bolt')?30:(S.proj==='axe'?26:38);
   if(DESKTOP&&LOCKED) p.yaw=G.cam.yaw;
   var tgt=aimTarget(p,34); G.lock=tgt||null;
@@ -408,18 +427,74 @@ function hurtEnemy(e,d,quiet){
   if(!quiet) msg(''+Math.round(d),'#fff1d0',e.x+(Math.random()-0.5)*0.6,e.y+2.0*(e.scale||1),e.z,13);
   if(e.hp<=0){
     G.killed++; gainXp(50,e.x,e.y+2,e.z);
-    if(Math.random()<0.3){ G.player.coins+=3+((Math.random()*7)|0); }
-    if(Math.random()<0.16){ G.player.potions++; msg('+potion','#ff9d9d',e.x,e.y+2,e.z); }
+    sfx(e.kind==='spider'?'spiderdie':'goblindie',e.x,e.z);
+    // spiders burst in dark ichor, goblins in a puff of dust and rags
+    burst(e.x,e.y+0.7*(e.scale||1),e.z,e.kind==='spider'?18:14,e.kind==='spider'?[0.30,0.42,0.16]:[0.48,0.40,0.28],
+      {up:4,spread:4,size:0.16*(e.scale||1),life:0.9});
+    if(Math.random()<0.3){ G.player.coins+=3+((Math.random()*7)|0); sfx('coin'); }
+    if(Math.random()<0.16){ G.player.potions++; msg('+potion','#ff9d9d',e.x,e.y+2,e.z); sfx('pickup'); }
     var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
     // leave a body that plays its death and sinks away
     G.ents.push({kind:'corpse',of:e.kind,gk:e.gk,big:e.big,x:e.x,y:e.y,z:e.z,yaw:e.yaw,scale:e.scale,
       look:e.look,t:0,deadT:0.001,speed:0,walkPhase:e.walkPhase});
   }
 }
+/* ---------- feel: particles, shake, hit-stop ---------- */
+var FX=[], FX_MAX=320;
+/* n bits flying out of (x,y,z): opt.up = upward speed, spread = sideways speed,
+   size, life, grav (negative floats up), flat = dust that hugs the ground */
+function burst(x,y,z,n,col,opt){
+  opt=opt||{};
+  for(var i=0;i<n;i++){
+    if(FX.length>=FX_MAX) FX.shift();
+    var a=Math.random()*6.283, sp=(opt.spread||2)*(0.3+Math.random()*0.7);
+    FX.push({x:x,y:y,z:z,vx:Math.cos(a)*sp,vy:(opt.up||2)*(0.4+Math.random()*0.8)*(opt.flat?0.3:1),vz:Math.sin(a)*sp,
+      t:0,life:(opt.life||0.7)*(0.6+Math.random()*0.6),size:(opt.size||0.12)*(0.6+Math.random()*0.8),
+      col:[col[0]*(0.85+Math.random()*0.3),col[1]*(0.85+Math.random()*0.3),col[2]*(0.85+Math.random()*0.3)],
+      grav:opt.grav===undefined?12:opt.grav, spin:Math.random()*6, flat:!!opt.flat});
+  }
+}
+function updateFX(dt){
+  for(var i=FX.length-1;i>=0;i--){ var f=FX[i];
+    f.t+=dt; if(f.t>=f.life){ FX.splice(i,1); continue; }
+    f.vy-=f.grav*dt; var drag=f.flat?Math.exp(-dt*5):Math.exp(-dt*1.2);
+    f.vx*=drag; f.vz*=drag; f.x+=f.vx*dt; f.y+=f.vy*dt; f.z+=f.vz*dt; f.spin+=dt*8;
+    var g=H(f.x,f.z); if(f.y<g+0.02){ f.y=g+0.02; f.vy*=-0.3; f.vx*=0.6; f.vz*=0.6; }
+  }
+}
+function drawFX(){
+  for(var i=0;i<FX.length;i++){ var f=FX[i], k=f.t/f.life;
+    // sparks shrink away; dust swells a little first
+    var s=f.size*(f.flat?(1+k*1.5)*(1-k):(1-k*k));
+    if(s<0.01) continue;
+    var m=mat(); m4trs(m,f.x,f.y-s*0.5,f.z,f.spin,f.spin*0.7,0,s,s,s);
+    DRAW.push(['box',m,f.col]);
+  }
+}
+function shake(a){ G.shakeA=Math.max(G.shakeA||0,a); }
+/* a hit on a foe: sparks where the blow lands, and a splash of what it bleeds */
+function impact(e,nx,nz,hy){
+  var y=(hy!==undefined)?hy:e.y+1.0*(e.scale||1), x=e.x-nx*0.5*(e.scale||1), z=e.z-nz*0.5*(e.scale||1);
+  burst(x,y,z,6,[1.0,0.92,0.62],{up:3,spread:3.5,size:0.07,life:0.3});
+  burst(x,y,z,5,e.kind==='spider'?[0.32,0.46,0.18]:[0.60,0.18,0.14],{up:2.5,spread:2.5,size:0.10,life:0.6});
+}
+/* an arrow or axe that misses stays where it lands for a while; bolts fizzle out */
+var STUCK_MAX=40;
+function landShot(e,ground){
+  sfx(e.proj==='bolt'&&e.kind==='shot'?'ehit':'thunk',e.x,e.z);
+  if(e.proj==='bolt'&&e.kind==='shot'){ burst(e.x,e.y,e.z,10,[0.6,0.9,1.0],{up:2,spread:3,size:0.09,life:0.45}); return; }
+  burst(e.x,e.y,e.z,5,ground?[0.45,0.38,0.26]:[0.50,0.36,0.22],{up:1.6,spread:1.8,size:0.07,life:0.4});
+  var n=0; for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind==='stuck') n++;
+  if(n>=STUCK_MAX) for(var j=0;j<G.ents.length;j++) if(G.ents[j].kind==='stuck'){ G.ents.splice(j,1); break; }
+  var vx=e.vx, vy=e.vy, vz=e.vz;
+  if(e.proj==='axe'){ var hl=Math.hypot(vx,vz)||1; vx=vx/hl; vz=vz/hl; vy=-0.6; }   // axes bite in blade-first
+  G.ents.push({kind:'stuck',x:e.x,y:e.y,z:e.z,vx:vx,vy:vy,vz:vz,proj:e.proj||'arrow',enemy:e.kind==='eshot',life:7,spin:0});
+}
 function breakCocoon(c,d){
   c.hp-=d; c.hurtT=0.18;
   if(c.hp<=0){
     G.freed++; gainXp(100,c.x,c.y+2.4,c.z,'+100 XP — FREED');
+    sfx('freed',c.x,c.z); burst(c.x,c.y+1.4,c.z,22,[0.92,0.94,0.90],{up:3,spread:3.5,size:0.15,life:1.1});
     var i=G.ents.indexOf(c); if(i>=0) G.ents.splice(i,1);
     var deployed=0; for(var k=0;k<G.ents.length;k++) if(G.ents[k].kind==='ally') deployed++;
     var kind=(Math.random()*ALLYKIND.length)|0;
@@ -435,6 +510,7 @@ function gainXp(n,x,y,z,label){
     p.xp-=xpNeed(p.level); p.level++; p.maxHp+=10; p.hp=p.maxHp; G.build.points++;
     msg('LEVEL '+p.level+' — skill point','#9ff07a',p.x,p.y+2.8,p.z); buzz([20,40,20,40,40]);
     tip('Level '+p.level+'! '+(DESKTOP?'Press TAB':'Tap ★')+' to spend your skill point');
+    sfx('levelup'); burst(p.x,p.y+1,p.z,30,[1.0,0.86,0.42],{up:5,spread:2.5,size:0.12,life:1.3,grav:-2});
   }
 }
 function xpNeed(l){ return Math.round(190*Math.pow(l,1.17)); }
@@ -444,8 +520,9 @@ function hurtPlayer(d,src){
   if(p.buff===2) d*=0.5;
   d*=G.S.armor;
   p.hp-=d; p.inv=0.95; p.hurtT=0.3; G.hitFlash=0.5; buzz([30,40,30]);
+  sfx('hurt'); shake(0.3);
   TELE.hurt(src||'unknown',d);
-  if(p.hp<=0){ p.hp=0; p.dead=true; p.deadT=0; TELE.died(p.level,src||'unknown'); setTimeout(gameOver,1500); }
+  if(p.hp<=0){ p.hp=0; p.dead=true; p.deadT=0; TELE.died(p.level,src||'unknown'); sfx('death'); setTimeout(gameOver,1500); }
 }
 
 /* ---------- update ---------- */
@@ -461,6 +538,8 @@ function update(dt){
   if(p.atkT>0) p.atkT-=dt;
   if(p.buffT>0){ p.buffT-=dt; if(p.buffT<=0) p.buff=null; }
   if(p.buff===3&&p.hp<p.maxHp) p.hp=Math.min(p.maxHp,p.hp+6*dt);
+  updateFX(dt);
+  G.shakeA=(G.shakeA||0)*Math.exp(-dt*9);
   if(p.dead){ p.deadT+=dt; p.speed=0; followCam(dt); return; }
 
   // movement frame: latched when you start pushing, so the auto-camera can't
@@ -483,16 +562,22 @@ function update(dt){
   var L=Math.hypot(wx,wz);
   var spd=S.move*(p.buff===0?1.25:1)*(p.slowT>0?0.55:1);
   if(p.dashT>0) spd=26;
+  // with the mouse captured the hunter keeps facing where you look and strafes or
+  // backs away; otherwise (touch, or a free cursor) she turns to run where you push
+  var aimLock=DESKTOP&&LOCKED;
+  p.strafe=aimLock;
   if(L>0.01){
     wx/=L; wz/=L;
-    var tgt=Math.atan2(wx,wz);
+    var tgt=aimLock?cy:Math.atan2(wx,wz);
     var dy=((tgt-p.yaw+Math.PI*3)%(Math.PI*2))-Math.PI;
     p.yaw+=dy*Math.min(1,dt*13);
-    var mvs=spd*Math.min(1,L);
-    p.x+=wx*mvs*dt; p.z+=wz*mvs*dt; p.speed=mvs;
+    var fwd=wx*Math.sin(p.yaw)+wz*Math.cos(p.yaw);
+    var mvs=spd*Math.min(1,L)*(aimLock&&fwd<-0.3?0.72:1);      // backpedalling is slower
+    p.x+=wx*mvs*dt; p.z+=wz*mvs*dt; p.speed=mvs; p.mvx=wx; p.mvz=wz;
     p.walkPhase+=dt*mvs*1.5;
   } else { p.speed*=0.72; if(p.dashT<=0) p.speed=0; }
-  if(p.dashT>0){ p.x+=Math.sin(p.yaw)*spd*dt; p.z+=Math.cos(p.yaw)*spd*dt; p.inv=Math.max(p.inv,0.2); }
+  if(p.dashT>0){ p.x+=Math.sin(p.dashDir)*spd*dt; p.z+=Math.cos(p.dashDir)*spd*dt; p.inv=Math.max(p.inv,0.2); }
+  p.dodgeT=Math.max(0,(p.dodgeT||0)-dt);
   p.slowT=Math.max(0,(p.slowT||0)-dt);
   // bounds
   var bd=Math.hypot(p.x,p.z), lim=WHALF*0.95;
@@ -500,10 +585,18 @@ function update(dt){
   collide(p,0.42*(p.scale||1));   // trunks, rocks and walls are solid
   // gravity / jump
   var gh=H(p.x,p.z);
-  if((IN.jump||IN.jumpBuf>0)&&p.onGround){ p.vy=8.9; p.onGround=false; IN.jumpBuf=0; }
+  if((IN.jump||IN.jumpBuf>0)&&p.onGround){ p.vy=8.9; p.onGround=false; IN.jumpBuf=0; sfx('jump'); }
   IN.jump=false;
   p.vy-=24*dt; p.y+=p.vy*dt;
-  if(p.y<=gh){ p.y=gh; p.vy=0; p.onGround=true; }
+  if(p.y<=gh){
+    if(!p.onGround&&p.vy<-5){                 // touching down: a thump and a puff of dust
+      sfx('land',0,0,clamp(-p.vy/12,0.4,1));
+      burst(p.x,gh+0.1,p.z,10,[0.55,0.50,0.40],{up:1.2,spread:3,size:0.18,life:0.5,flat:1});
+    }
+    p.y=gh; p.vy=0; p.onGround=true;
+  }
+  // footsteps follow the stride
+  if(p.onGround&&p.speed>1){ var stp=Math.floor(p.walkPhase/Math.PI); if(stp!==p.lastStep){ p.lastStep=stp; sfx('step',0,0,clamp(p.speed/7,0.5,1)); } }
   // water slows
   if(p.y<WATER+0.3){ p.slowT=0.2; }
   // actions — a tap during cooldown is remembered briefly so it never feels dropped
@@ -519,7 +612,13 @@ function update(dt){
     }
   }
   if(IN.shoot||IN.shotBuf>0||IN.shootHeld){ IN.shoot=false; if(p.cdT<=0){ doShoot(); IN.shotBuf=0; } }
-  if(IN.dash){ IN.dash=false; if(S.dash&&p.dashCd<=0){ p.dashCd=1.6; p.dashT=0.19; msg('Shadowstep','#bff0ff',p.x,p.y+2.4,p.z);} }
+  if(IN.dash){ IN.dash=false; if(S.dash&&p.dashCd<=0){ p.dashCd=1.6; p.dashT=0.19; msg('Shadowstep','#bff0ff',p.x,p.y+2.4,p.z);
+    // dash the way you are pushing (or straight ahead), and roll to match
+    p.dashDir=L>0.01?Math.atan2(wx,wz):p.yaw;
+    var dl=((p.dashDir-p.yaw+Math.PI*3)%(Math.PI*2))-Math.PI;
+    p.dodge=Math.abs(dl)<0.8?'Dodge_Forward':(Math.abs(dl)>2.35?'Dodge_Backward':(dl>0?'Dodge_Left':'Dodge_Right'));
+    p.dodgeT=0.42; p.dodgeN=(p.dodgeN||0)+1;
+    sfx('dash'); burst(p.x,p.y+1,p.z,12,[0.70,0.85,1.0],{up:1,spread:2.5,size:0.14,life:0.5}); } }
 
   updateEnts(dt);
   separate();
@@ -529,7 +628,7 @@ function update(dt){
   for(var i=0;i<LANDMARKS.length;i++){
     var lm=LANDMARKS[i], ld=Math.hypot(p.x-lm.x,p.z-lm.z);
     if(!G.found[lm.name]&&ld<lm.r+4){
-      G.found[lm.name]=1; tip('Discovered: '+lm.name);
+      G.found[lm.name]=1; tip('Discovered: '+lm.name); sfx('discover');
       gainXp(60,p.x,p.y+3,p.z,'+60 XP — discovery');
     }
     if(lm.kind==='tavern'&&ld<lm.r+3){
@@ -619,7 +718,8 @@ function updateEnts(dt){
       for(var st=0;st<steps&&!gone;st++){
         e.x+=e.vx*sdt; e.y+=e.vy*sdt; e.z+=e.vz*sdt;
         if(e.proj!=='bolt'&&!e.aimed) e.vy-=11*sdt;
-        if(e.y<H(e.x,e.z)-0.2){ gone=true; break; }
+        var gy=H(e.x,e.z);
+        if(e.y<gy-0.05||solidAt(e.x,e.z,e.y-gy)){ landShot(e,e.y<gy-0.05); gone=true; break; }
         for(var k=0;k<G.ents.length;k++){
           var o=G.ents[k];
           if(o.kind!=='spider'&&o.kind!=='goblin'&&o.kind!=='cocoon') continue;
@@ -628,6 +728,7 @@ function updateEnts(dt){
           if(Math.hypot(o.x-e.x,o.z-e.z)<rr && e.y>o.y-0.7 && e.y<o.y+2.7*(o.scale||1)){
             if(o.kind==='cocoon') breakCocoon(o,e.dmg);
             else {
+              if(!e.ally){ sfx('ehit',o.x,o.z); var sl=Math.hypot(e.vx,e.vz)||1; impact(o,e.vx/sl,e.vz/sl,e.y); }
               hurtEnemy(o,e.dmg,e.ally);
               if(e.frost) o.slowT=1.4*e.frost;
               if(e.burst){ for(var bq=0;bq<G.ents.length;bq++){ var o2=G.ents[bq];
@@ -642,11 +743,13 @@ function updateEnts(dt){
       if(gone||e.life<=0) G.ents.splice(i,1);
       continue;
     }
+    if(e.kind==='stuck'){ e.life-=dt; if(e.life<=0) G.ents.splice(i,1); continue; }
     if(e.kind==='fairy'){
       e.t+=dt; e.bx=Math.sin(e.t*0.9)*2.2; e.by=Math.sin(e.t*1.7)*0.5;
       if(pd<2.6){
         p.buff=e.col; p.buffT=26;
-        msg(FAIRYNAME[e.col],'#bff0ff',e.x,e.y+1.4,e.z);
+        msg(FAIRYNAME[e.col],'#bff0ff',e.x,e.y+1.4,e.z); sfx('fairy');
+        burst(e.x+e.bx,e.y+e.by,e.z,24,FAIRYCOL[e.col],{up:2,spread:3,size:0.12,life:1.0,grav:-1});
         buzz([12,30,12]); G.ents.splice(i,1);
       }
       continue;
@@ -675,7 +778,7 @@ function updateEnts(dt){
           else if(tdist<7) moveCreature(e,dt,e.x-(tgt.x-e.x),e.z-(tgt.z-e.z),spd*0.7);
           else { e.speed*=0.7; var ty=Math.atan2(tgt.x-e.x,tgt.z-e.z); e.yaw+=(((ty-e.yaw+9.42)%6.28)-3.14)*Math.min(1,dt*6); }
           if(e.atkCd<=0&&tdist<22){
-            e.atkCd=2.2; e.atkT=0.4; e.atkDur=0.4;
+            e.atkCd=2.2; e.atkT=0.4; e.atkDur=0.4; sfx('goblinshoot',e.x,e.z);
             var gx=tgt.x-e.x, gz=tgt.z-e.z, gy=(tgt.y+1.1)-(e.y+1.2);
             var gL=Math.hypot(gx,gy,gz)||1;
             G.ents.push({kind:'eshot',x:e.x+gx/gL,y:e.y+1.2,z:e.z+gz/gL,
@@ -698,6 +801,7 @@ function updateEnts(dt){
               e.yaw+=(((fy-e.yaw+9.42)%6.28)-3.14)*Math.min(1,dt*8); }
             if(tdist<1.6+(e.scale||1)&&e.atkCd<=0){
               e.atkCd=e.big?1.9:1.35; e.wind=e.big?0.55:0.38;
+              if(e.kind==='spider') sfx('hissup',e.x,e.z); else sfx('swing',e.x,e.z);
             }
           }
         }
@@ -716,7 +820,8 @@ function updateEnts(dt){
       for(var q2=0;q2<st2;q2++){
         e.x+=e.vx*sd2; e.y+=e.vy*sd2; e.z+=e.vz*sd2; if(!e.aimed) e.vy-=11*sd2;
         if(Math.hypot(e.x-p.x,e.z-p.z)<1.2 && e.y>p.y-0.2 && e.y<p.y+2.4){ hurtPlayer(e.dmg,e.src||'arrow'); hit=true; break; }
-        if(e.y<H(e.x,e.z)-0.2){ hit=true; break; }
+        var gy2=H(e.x,e.z);
+        if(e.y<gy2-0.05||solidAt(e.x,e.z,e.y-gy2)){ landShot(e,e.y<gy2-0.05); hit=true; break; }
       }
       if(hit||e.life<=0) G.ents.splice(i,1);
       continue;
@@ -842,7 +947,7 @@ function initScene(){
 function warmActors(){
   if(!MODELS_READY) return;
   var specs=[{model:'barbarian',weapons:[]},{model:'knight',weapons:[]},{model:'mage',weapons:[]},
-    {model:'rogue',weapons:[],ears:true},{model:'rogue_hooded',weapons:[],beard:true}];
+    {model:'rogue',weapons:[],ears:true},{model:'rogue_hooded',weapons:[],beard:true},{model:'spider',weapons:[]}];
   for(var i=0;i<specs.length;i++) if(MODELS[specs[i].model]){
     var a=makeActor(specs[i]); a.spec='warm'; a.group.visible=true; a.group.position.set(0,-50,0);
   }
@@ -873,7 +978,10 @@ function draw(){
   m4persp(proj,fov,W/H2,0.35,260);
   m4look(view,c.x,c.y,c.z,p.x,p.y+1.5,p.z);
   CAM3.fov=fov*180/Math.PI; CAM3.aspect=W/H2; CAM3.updateProjectionMatrix();
-  CAM3.position.set(c.x,c.y,c.z); CAM3.lookAt(p.x,p.y+1.5,p.z);
+  var sa=(G.shakeA||0)>0.01?G.shakeA:0;
+  var shx=(Math.random()-0.5)*sa, shy=(Math.random()-0.5)*sa, shz=(Math.random()-0.5)*sa;
+  CAM3.position.set(c.x+shx,c.y+shy,c.z+shz); CAM3.lookAt(p.x+shx*0.4,p.y+1.5+shy*0.4,p.z+shz*0.4);
+  cullProps(c.x,c.z);
   SKY.position.set(c.x,c.y,c.z);
   WORLDU.uTime.value=G.t;
   WORLDU.uCam.value.set(c.x,c.y,c.z);
@@ -886,7 +994,7 @@ function draw(){
   SUN.position.set(p.x+SUNDIR[0]*80,p.y+SUNDIR[1]*80,p.z+SUNDIR[2]*80);
   SUN.target.position.set(p.x,p.y,p.z); SUN.target.updateMatrixWorld();
   for(var si=0;si<G.ents.length;si++){ var se=G.ents[si];
-    if(se.kind==='shot'||se.kind==='eshot'||se.kind==='fairy') continue;
+    if(se.kind==='shot'||se.kind==='eshot'||se.kind==='fairy'||se.kind==='stuck') continue;
     var sd=Math.hypot(se.x-c.x,se.z-c.z);
     if(sd>50||Math.hypot(se.x-p.x,se.z-p.z)<SHADOWR-4) continue;
     addShadow(se); }
@@ -911,6 +1019,7 @@ function draw(){
     pushEnt(VIS[vi][1]);
   }
   LOD=0;
+  drawFX();
   for(var k=0;k<DRAW.length;k++){ var d=DRAW[k]; batchAdd(partBatch(d[0]),d[1],d[2]); }
   batchesEnd();
   R3.render(SCENE,CAM3);
@@ -933,6 +1042,7 @@ function pushShot(e){
   var h=Math.hypot(ux,uz), vx, vz;
   if(h>1e-3){ vx=uz/h; vz=-ux/h; } else { vx=1; vz=0; }   // horizontal, square to the flight
   var x=e.x, y=e.y, z=e.z;
+  if(e.kind==='stuck'){ var sk=e.proj==='axe'?0.15:0.28; x+=ux*sk; y+=uy*sk; z+=uz*sk; }   // the head is buried
   if(e.proj==='bolt'&&e.kind==='shot'){
     var g=0.30+Math.sin(G.t*30+e.x)*0.04;
     var m=mat(); m4trs(m,x,y,z,0,G.t*9,0,g,g,g); DRAW.push(['blob',m,[0.55,0.85,1.0]]);
@@ -940,7 +1050,7 @@ function pushShot(e){
     var m3=mat(); m4trs(m3,x-ux*0.65,y-uy*0.65,z-uz*0.65,0,0,0,g*0.35,g*0.35,g*0.35); DRAW.push(['blob',m3,[0.45,0.70,1.0]]);
     return;
   }
-  if(e.proj==='axe'&&e.kind==='shot'){
+  if(e.proj==='axe'&&e.kind!=='eshot'){
     // spin in the vertical plane that contains the flight path
     var a=e.spin||0, ca=Math.cos(a), sa=Math.sin(a);
     // "up" square to the flight, in that plane
@@ -952,7 +1062,7 @@ function pushShot(e){
     return;
   }
   // arrow: origin is the tip end of the shaft
-  var enemy=e.kind==='eshot', len=0.95;
+  var enemy=e.kind==='eshot'||e.enemy, len=0.95;
   var shaft=enemy?[0.30,0.22,0.14]:[0.62,0.48,0.30];
   var head=enemy?[0.42,0.40,0.38]:[0.80,0.82,0.86];
   var fl=enemy?[0.20,0.20,0.18]:(e.proj==='arrow'?[0.92,0.90,0.84]:[0.85,0.30,0.25]);
@@ -970,7 +1080,7 @@ function pushEnt(e){
   var root=mat();
   if(e.kind==='spider'||(e.kind==='corpse'&&e.of==='spider')) spiderRig(RIG,e,G.t);
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
-  else if(e.kind==='shot'||e.kind==='eshot'){ pushShot(e); return; }
+  else if(e.kind==='shot'||e.kind==='eshot'||e.kind==='stuck'){ pushShot(e); return; }
   else if(e.kind==='fairy'){
     var m2=mat();
     m4trs(m2,e.x+e.bx,e.y+e.by,e.z,0,G.t*2,0,0.42,0.42,0.42);
@@ -1159,7 +1269,7 @@ function drawHUD(){
   var sc=mr/(DESKTOP?86:70), ms=DESKTOP?1:0.85;
   for(var e2=0;e2<G.ents.length;e2++){
     var en=G.ents[e2];
-    if(en.kind==='shot'||en.kind==='eshot') continue;
+    if(en.kind==='shot'||en.kind==='eshot'||en.kind==='stuck') continue;
     var ddx=(en.x-p.x)*sc, ddz=(en.z-p.z)*sc;
     if(Math.hypot(ddx,ddz)>mr) continue;
     var rp=rotPt(ddx,ddz,G.cam.yaw);
@@ -1268,7 +1378,7 @@ function drawHUD(){
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
     var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot';
-    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   I stats';
+    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   M sound   ·   I stats';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
       hx.textAlign='center'; hx.font='600 12.5px Georgia,serif';
@@ -1338,6 +1448,7 @@ function titleScreen(){
     '<p class="sub">An open wood. Spiders in the canopy, goblins at the fire, and your kin strung up between the trees.</p>'+
     '<p class="sub">Free them and they fight beside you.</p>'+
     '<button class="btn" id="make">Make your hunter</button>'+
+    '<button class="btn alt" id="snd">'+sndLabel()+'</button>'+
     '<button class="btn alt" id="diag2">Copy diagnostic report</button>'+
     '<a class="btn alt" id="arcade" href="../">&larr; Back to Elk Leaf Arcade</a>'+
     '<textarea id="dgout" style="display:none;width:100%;height:120px;margin-top:8px;font-size:11px;'+
@@ -1345,10 +1456,11 @@ function titleScreen(){
     (G.best?'<p class="hint">Best: level '+G.best+'</p>':'')+
     (DESKTOP
       ? '<p class="hint"><b>Laptop:</b> WASD to move · move the mouse to look · E or left-click strike · F or right-click shoot<br>'+
-        'Space jump · Shift dash · Q potion · Tab skills · scroll to zoom · Esc frees the cursor</p>'
+        'Space jump · Shift dash · Q potion · Tab skills · M sound · scroll to zoom · Esc frees the cursor</p>'
       : '<p class="hint"><b>Phone:</b> drag the left side to move, the right side to look, buttons to fight.<br>'+
         'Your hunter swings on her own when something gets close.</p>'));
   document.getElementById('make').onclick=makeScreen;
+  document.getElementById('snd').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
   document.getElementById('diag2').onclick=copyDiag;
 }
 function makeScreen(){
@@ -1378,7 +1490,7 @@ function makeScreen(){
 function startRun(){
   G.build.skills={}; G.build.points=0;
   recalc();
-  G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.runStart=G.t;
+  G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
   populate();
   G.cam.yaw=0; G.cam.pitch=DESKTOP?0.32:0.30; G.cam.dist=DESKTOP?6.2:7.0;
   G.cam.x=G.player.x; G.cam.y=G.player.y+6; G.cam.z=G.player.z+9;
@@ -1404,10 +1516,12 @@ function skillScreen(){
     '<div class="stat"><span>Prisoners freed / foes slain</span><b>'+G.freed+' / '+G.killed+'</b></div>'+
     '<div class="skills">'+rows+'</div>'+
     '<button class="btn" id="close">Back to the wood</button>'+
+    '<button class="btn alt" id="snd2">'+sndLabel()+'</button>'+
     '<button class="btn alt" id="diag3">Copy diagnostic report</button>'+
     '<textarea id="dgout" style="display:none;width:100%;height:130px;margin-top:8px;font-size:11px;'+
     'background:#0d0a04;color:#cdbb8c;border:1px solid #3b2f16;border-radius:8px;padding:6px"></textarea>');
   document.getElementById('diag3').onclick=copyDiag;
+  document.getElementById('snd2').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
   var els=ui.querySelectorAll('.sk');
   for(var k=0;k<els.length;k++) els[k].onclick=function(){
     var s=tree()[+this.getAttribute('data-i')];
@@ -1466,14 +1580,19 @@ function autoQuality(dt){
   var old=QUAL;
   // last resort on a struggling device: the world stops casting shadows (it is the
   // big cost of the shadow pass); characters keep theirs
-  if(a<32&&QUAL<=0.62&&WORLD&&WORLD.castShadow){ WORLD.castShadow=false; TELE.lowShadows=1; }
+  if(a<32&&QUAL<=0.62&&WORLD&&WORLD.castShadow){ WORLD.castShadow=false; TELE.lowShadows=1;
+    for(var pi=0;pi<PROPS3.length;pi++){ PROPS3[pi].hi.castShadow=false; PROPS3[pi].lo.castShadow=false; } }
   if(a<42&&QUAL>0.62) QUAL=Math.max(0.62,QUAL-0.12);
   else if(a>57&&QUAL<1) QUAL=Math.min(1,QUAL+0.06);
   if(QUAL!==old) setRes();
 }
 var last=0, acc=0, JSMS=0, DRAWMS=0;
 function frame(ts){
-  var dt=Math.min(0.05,(ts-last)/1000||0.016); last=ts; FRAMEDT=G.state==='play'?dt:0;
+  var dt=Math.min(0.05,(ts-last)/1000||0.016); last=ts;
+  var realDt=dt;
+  // hit-stop: for a blink after a blow lands, the world nearly freezes
+  if(G.hitStop>0){ G.hitStop-=dt; dt*=0.06; }
+  FRAMEDT=G.state==='play'?dt:0;
   MPI=0;
   var t0=performance.now();
   if(G.state==='play') update(dt);
@@ -1481,7 +1600,7 @@ function frame(ts){
   draw(); drawHUD();
   var t2=performance.now();
   JSMS=JSMS*0.9+(t1-t0)*0.1; DRAWMS=DRAWMS*0.9+(t2-t1)*0.1;
-  if(G.state==='play'&&dt>0){ TELE.frame(dt*1000); if(TELE.fps.length<900) TELE.fps.push(Math.round(1/dt)); autoQuality(dt); }
+  if(G.state==='play'&&realDt>0){ TELE.frame(realDt*1000); if(TELE.fps.length<900) TELE.fps.push(Math.round(1/realDt)); autoQuality(realDt); }
   requestAnimationFrame(frame);
 }
 function boot(){
@@ -1505,6 +1624,8 @@ function boot(){
 /* events */
 addEventListener('resize',resize);
 addEventListener('orientationchange',function(){setTimeout(resize,150);});
+ui.addEventListener('click',function(e){ sndWake(); if(e.target&&e.target.closest&&e.target.closest('.btn,.pick,.sk')) sfx('click'); });
+addEventListener('pointerdown',function(){ sndWake(); },true);
 cvs.addEventListener('pointerdown',function(e){ e.preventDefault(); try{cvs.setPointerCapture(e.pointerId);}catch(_){ }
   ptrDown(e.pointerId,e.clientX,e.clientY); });
 cvs.addEventListener('pointermove',function(e){ ptrMove(e.pointerId,e.clientX,e.clientY); });
@@ -1515,6 +1636,8 @@ cvs.addEventListener('touchmove',function(e){e.preventDefault();},{passive:false
 addEventListener('keydown',function(e){
   if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0) e.preventDefault();
   KEY[e.key]=true; KEY[e.key.toLowerCase&&e.key.toLowerCase()]=true;
+  sndWake();
+  if((e.key==='m'||e.key==='M')&&!e.repeat){ var lbl=sndCycle(); if(G.state==='play') tip(lbl); }
   if(e.key===' ') IN.jump=true;
   if(e.key==='j'||e.key==='J'){ IN.attack=true; IN.atkBuf=0.45; }
   // keyboard combat beside WASD: E strikes, F shoots (J / K too); hold either to repeat

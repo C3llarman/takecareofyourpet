@@ -4,7 +4,7 @@
 export {
   WebGLRenderer, Scene, PerspectiveCamera, Fog, Color, ColorManagement,
   LinearSRGBColorSpace, NoToneMapping,
-  BufferGeometry, Float32BufferAttribute, InstancedBufferAttribute, DynamicDrawUsage,
+  BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Uint32BufferAttribute, InstancedBufferAttribute, DynamicDrawUsage,
   Mesh, InstancedMesh, MeshLambertMaterial, MeshBasicMaterial, DoubleSide,
   HemisphereLight, DirectionalLight, Vector3, REVISION,
   Group, Box3, AnimationMixer, AnimationClip, LoopOnce, LoopRepeat, NoColorSpace,
@@ -13,3 +13,5 @@ export {
 export { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 export { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 export { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+// models are packed with EXT_meshopt_compression (tools/models.mjs); this unpacks them
+export { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
