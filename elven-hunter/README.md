@@ -43,7 +43,6 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 | Drink a potion | `Q` |
 | Skills | `Tab` |
 | Sound | `M` cycles all on → effects only → off (also a button on the title and skills screens) |
-| Diagnostics overlay | `I` |
 | Zoom | Scroll wheel |
 
 **Phone / tablet** (auto-detected)
@@ -94,6 +93,28 @@ committed, because the site is served as static files with no build step.
 
 To use another three.js class, add its name to `src/three-entry.js`; only listed classes
 are bundled.
+
+### The tavern
+
+The Greenleaf sits on a levelled yard at the end of a worn dirt path from the glade.
+Trees and undergrowth are kept out of the yard, the path and the other landmark grounds.
+The yard has a table and benches, barrels, a hanging sign and a fire pit. It is safe
+ground: no foes spawn within 32 units, those chasing you break off at the yard, and you
+and your company slowly mend there.
+
+**Bram**, the innkeeper, waits by the door: walk up and press `E` / left-click (or tap the
+strike button, which reads **TALK** beside him). He offers:
+
+- **Rest by the fire**: full health for you and your company, free.
+- **Healing potions**: 25 coins each, up to six.
+- **Hire a companion**: three fighters at the bar each visit (ranger, blade, knight,
+  mage, druid or dwarf), 45–70 coins, up to your company size.
+- **Bounties**: slay spiders, slay goblins, free captives or, from level 3, slay a
+  giant spider. Progress shows in the status panel; come back for coins and XP.
+- **Training**: a shortcut to spend skill points.
+
+Menus pause the wood and, on a laptop, free the mouse so you can click; closing one
+captures it again.
 
 ### Characters
 
@@ -189,10 +210,10 @@ are bundled.
 
 ### Diagnostics
 
-Press `I` (or tap the **i** button on a phone) for a live overlay: frame rate, worst
-frame time, taps that landed on a button versus taps that missed (drawn as red dots),
-and what has been damaging you. The title and death screens also have a **Copy
-diagnostic report** button that dumps the same data as JSON.
+Players never see it. Open the game with `?debug` on the address (for example
+`index.html?debug`) and `I` toggles a live overlay: frame rate, worst frame time, taps
+that landed on a button versus taps that missed (drawn as red dots), and what has been
+damaging you. The same numbers stay available to the tests as `TELE.report()`.
 
 This exists because the game is developed without a device in hand. Several real bugs
 were found this way and nowhere else — most memorably, the attack button rendering

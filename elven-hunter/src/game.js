@@ -205,25 +205,36 @@ function populate(){
   for(var i=0;i<16;i++){ var a=r()*6.28,d=4+r()*16; spawnSpider(86+Math.cos(a)*d,-56+Math.sin(a)*d,r()<0.18); }
   for(var i2=0;i2<22;i2++){ var x=(r()*2-1)*WHALF*0.8, z=(r()*2-1)*WHALF*0.8;
     var dd=Math.hypot(x,z);
-    if(dd<34||H(x,z)<WATER+0.5) continue;
+    if(dd<34||H(x,z)<WATER+0.5||nearTavern(x,z,32)) continue;
     spawnSpider(x,z, dd>70&&r()<0.09); }
   // goblins at the camp
   for(var k=0;k<13;k++){ var a2=r()*6.28,d2=3+r()*13;
     spawnGoblin(-72+Math.cos(a2)*d2,48+Math.sin(a2)*d2, r()<0.3?'bow':'spear'); }
   for(var k2=0;k2<8;k2++){ var gx=(r()*2-1)*WHALF*0.7, gz=(r()*2-1)*WHALF*0.7;
-    if(Math.hypot(gx,gz)<40||H(gx,gz)<WATER+0.5) continue; spawnGoblin(gx,gz,r()<0.3?'bow':'spear'); }
+    if(Math.hypot(gx,gz)<40||H(gx,gz)<WATER+0.5||nearTavern(gx,gz,32)) continue; spawnGoblin(gx,gz,r()<0.3?'bow':'spear'); }
   // prisoners
   var spots=[[86,-56],[-72,48],[0,0],[-88,-78]];
   for(var p=0;p<14;p++){
     var sp=spots[(r()*spots.length)|0], a3=r()*6.28, d3=8+r()*22;
     var cx=sp[0]+Math.cos(a3)*d3, cz=sp[1]+Math.sin(a3)*d3;
     cx=Math.max(-WHALF*0.9,Math.min(WHALF*0.9,cx)); cz=Math.max(-WHALF*0.9,Math.min(WHALF*0.9,cz));
-    if(H(cx,cz)<WATER+0.4) continue;
+    if(H(cx,cz)<WATER+0.4||nearTavern(cx,cz,22)||pathDist(cx,cz)<3) continue;
     spawnCocoon(cx,cz);
   }
   for(var f=0;f<10;f++){ var fx=(r()*2-1)*WHALF*0.8, fz=(r()*2-1)*WHALF*0.8;
     if(H(fx,fz)<WATER+0.4) continue; spawnFairy(fx,fz); }
+  spawnKeeper();
 }
+function nearTavern(x,z,r){ return Math.hypot(x-TAVERN.x,z-TAVERN.z)<r; }
+/* Bram keeps the Greenleaf: rest, potions, hired blades and bounties */
+function spawnKeeper(){
+  var k=TAVERN.keeper; if(!k) return;
+  G.ents.push({kind:'npc',name:'Bram',x:k.x,y:H(k.x,k.z),z:k.z,yaw:k.yaw,home:k.yaw,scale:1.05,speed:0,walkPhase:0,onGround:true,
+    hp:1,maxHp:1,cheer:0,greeted:false,
+    look:look('human','warrior',{tunic:[0.55,0.42,0.30],sleeve:[0.55,0.42,0.30],cloak:null,weapon:null,hair:HAIR.brown,beard:1})});
+  if(!G.keeperColl){ collCircle(k.x,k.z,0.5); G.keeperColl=1; }
+}
+function keeper(){ for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind==='npc') return G.ents[i]; return null; }
 
 /* ---------- input ---------- */
 var IN={mx:0,mz:0,look:{x:0,y:0},attack:false,shoot:false,shootHeld:false,jump:false,dash:false,interact:false,atkBuf:0,shotBuf:0,jumpBuf:0};
@@ -245,8 +256,7 @@ function layoutButtons(){
     {id:'shoot', x:right-r*2.2, y:bot+r*0.10, r:r*0.78,label:'SHOOT'},
     {id:'jump',  x:right,       y:bot-r*2.25, r:r*0.78,label:'JUMP'},
     {id:'potion',x:W-r*0.90,    y:SAFET+r*0.60, r:r*0.58,label:''},
-    {id:'skills',x:W-r*0.90,    y:SAFET+r*2.05, r:r*0.58,label:'SKILL'},
-    {id:'dbg',   x:W-r*0.90,    y:SAFET+r*3.40, r:r*0.44,label:'i'}
+    {id:'skills',x:W-r*0.90,    y:SAFET+r*2.05, r:r*0.58,label:'SKILL'}
   ];
   if(G.S&&G.S.dash) btns.push({id:'dash',x:right-r*2.4,y:bot-r*2.0,r:r*0.70,label:'DASH'});
 }
@@ -265,7 +275,6 @@ function press(id){
   else if(id==='dash') IN.dash=true;
   else if(id==='potion') usePotion();
   else if(id==='skills') skillScreen();
-  else if(id==='dbg') SHOWDBG=!SHOWDBG;
   buzz(8);
 }
 function ptrDown(id,x,y){
@@ -302,7 +311,8 @@ function ptrUp(id){
   delete touches[id];
 }
 var STICK={on:0,x:0,y:0};
-var SHOWDBG=false;
+/* the developer overlay (fps, taps, damage) only exists with ?debug in the address */
+var DEBUG=/[?&]debug\b/.test(location.search||''), SHOWDBG=false;
 var MREF=0, MREFset=false;
 var DESKTOP=(function(){ try{
     return !!(window.matchMedia&&window.matchMedia('(pointer:fine)').matches)&&!('ontouchstart' in window);
@@ -427,6 +437,7 @@ function hurtEnemy(e,d,quiet){
   if(!quiet) msg(''+Math.round(d),'#fff1d0',e.x+(Math.random()-0.5)*0.6,e.y+2.0*(e.scale||1),e.z,13);
   if(e.hp<=0){
     G.killed++; gainXp(50,e.x,e.y+2,e.z);
+    bountyTick(e.kind==='spider'?(e.big?['spider','giant']:['spider']):['goblin']);
     sfx(e.kind==='spider'?'spiderdie':'goblindie',e.x,e.z);
     // spiders burst in dark ichor, goblins in a puff of dust and rags
     burst(e.x,e.y+0.7*(e.scale||1),e.z,e.kind==='spider'?18:14,e.kind==='spider'?[0.30,0.42,0.16]:[0.48,0.40,0.28],
@@ -493,7 +504,7 @@ function landShot(e,ground){
 function breakCocoon(c,d){
   c.hp-=d; c.hurtT=0.18;
   if(c.hp<=0){
-    G.freed++; gainXp(100,c.x,c.y+2.4,c.z,'+100 XP — FREED');
+    G.freed++; gainXp(100,c.x,c.y+2.4,c.z,'+100 XP — FREED'); bountyTick(['freed']);
     sfx('freed',c.x,c.z); burst(c.x,c.y+1.4,c.z,22,[0.92,0.94,0.90],{up:3,spread:3.5,size:0.15,life:1.1});
     var i=G.ents.indexOf(c); if(i>=0) G.ents.splice(i,1);
     var deployed=0; for(var k=0;k<G.ents.length;k++) if(G.ents[k].kind==='ally') deployed++;
@@ -601,8 +612,9 @@ function update(dt){
   if(p.y<WATER+0.3){ p.slowT=0.2; }
   // actions — a tap during cooldown is remembered briefly so it never feels dropped
   IN.atkBuf=Math.max(0,IN.atkBuf-dt); IN.shotBuf=Math.max(0,IN.shotBuf-dt); IN.jumpBuf=Math.max(0,IN.jumpBuf-dt);
+  if((IN.attack||IN.atkBuf>0)&&G.talk){ IN.attack=false; IN.atkBuf=0; keeperScreen(); return; }
   if(IN.attack||IN.atkBuf>0){ if(p.cdT<=0){ doAttack(); IN.atkBuf=0; } }
-  else if(!DESKTOP&&p.cdT<=0&&!p.dead){
+  else if(!DESKTOP&&p.cdT<=0&&!p.dead&&!p.atTavern){
     // auto-swing (touch only): if something hostile is already in reach, the hunter
     // defends herself. With a mouse it just yanked your facing around, so it is off.
     for(var ai2=0;ai2<G.ents.length;ai2++){
@@ -625,22 +637,27 @@ function update(dt){
   followCam(dt);
   // landmarks: discovery, and the tavern as a place to rest
   p.atTavern=false;
+  // who you can talk to: Bram, when you are close and nothing hostile is
+  G.talk=null;
+  var kp=keeper();
+  if(kp&&Math.hypot(kp.x-p.x,kp.z-p.z)<3.8){
+    var threat=false;
+    for(var ti=0;ti<G.ents.length;ti++){ var te=G.ents[ti];
+      if((te.kind==='spider'||te.kind==='goblin')&&Math.hypot(te.x-p.x,te.z-p.z)<7){ threat=true; break; } }
+    if(!threat) G.talk=kp;
+  }
   for(var i=0;i<LANDMARKS.length;i++){
     var lm=LANDMARKS[i], ld=Math.hypot(p.x-lm.x,p.z-lm.z);
     if(!G.found[lm.name]&&ld<lm.r+4){
       G.found[lm.name]=1; tip('Discovered: '+lm.name); sfx('discover');
       gainXp(60,p.x,p.y+3,p.z,'+60 XP — discovery');
     }
-    if(lm.kind==='tavern'&&ld<lm.r+3){
+    if(lm.kind==='tavern'&&ld<TAVERN.yard){
+      // the yard is safe ground: you and your company mend here, and foes break off
       p.atTavern=true;
-      if(p.hp<p.maxHp){ p.hp=Math.min(p.maxHp,p.hp+p.maxHp*0.22*dt); }
+      if(p.hp<p.maxHp){ p.hp=Math.min(p.maxHp,p.hp+p.maxHp*0.10*dt); }
       for(var ai=0;ai<G.ents.length;ai++){ var al2=G.ents[ai];
-        if(al2.kind==='ally'&&al2.hp<al2.maxHp) al2.hp=Math.min(al2.maxHp,al2.hp+al2.maxHp*0.25*dt); }
-      G.restT=(G.restT||0)+dt;
-      if(G.restT>2.4){ G.restT=0;
-        if(p.coins>=25&&p.potions<6){ p.coins-=25; p.potions++; msg('bought a potion','#ff9d9d',p.x,p.y+2.6,p.z); }
-      }
-      if(G.tipT<=0) tip('Resting — your company mends here');
+        if(al2.kind==='ally'&&al2.hp<al2.maxHp) al2.hp=Math.min(al2.maxHp,al2.hp+al2.maxHp*0.15*dt); }
     }
   }
   // respawn pressure
@@ -651,7 +668,7 @@ function update(dt){
     if(alive<46){
       var a=Math.random()*6.28, d=46+Math.random()*26;
       var sx=p.x+Math.cos(a)*d, sz=p.z+Math.sin(a)*d, sd2=Math.hypot(sx,sz);
-      if(sd2>34&&sd2<WHALF*0.9&&H(sx,sz)>WATER+0.5){
+      if(sd2>34&&sd2<WHALF*0.9&&H(sx,sz)>WATER+0.5&&!nearTavern(sx,sz,32)){
         if(Math.random()<0.6) spawnSpider(sx,sz,sd2>70&&Math.random()<0.08); else spawnGoblin(sx,sz,Math.random()<0.3?'bow':'spear');
       }
     }
@@ -772,7 +789,7 @@ function updateEnts(dt){
         }
       }
       e.atkCd-=dt;
-      if(tdist<e.aggro&&!p.dead){
+      if(tdist<e.aggro&&!p.dead&&!(tgt===p&&p.atTavern)){
         if(e.kind==='goblin'&&e.gk==='bow'){
           if(tdist>11) moveCreature(e,dt,tgt.x,tgt.z,spd);
           else if(tdist<7) moveCreature(e,dt,e.x-(tgt.x-e.x),e.z-(tgt.z-e.z),spd*0.7);
@@ -824,6 +841,15 @@ function updateEnts(dt){
         if(e.y<gy2-0.05||solidAt(e.x,e.z,e.y-gy2)){ landShot(e,e.y<gy2-0.05); hit=true; break; }
       }
       if(hit||e.life<=0) G.ents.splice(i,1);
+      continue;
+    }
+    if(e.kind==='npc'){
+      // Bram turns to watch you come up the path, and raises a mug when you arrive
+      var want=pd<10?Math.atan2(p.x-e.x,p.z-e.z):e.home;
+      e.yaw+=(((want-e.yaw+Math.PI*3)%(Math.PI*2))-Math.PI)*Math.min(1,dt*4);
+      if(pd<10&&!e.greeted){ e.greeted=true; e.cheer=1.6; msg(G.bounty&&G.bounty.got>=G.bounty.n?'Back already? Come, collect!':'Welcome to the Greenleaf!','#ffe08a',e.x,e.y+2.6,e.z); }
+      if(pd>18) e.greeted=false;
+      if(e.cheer>0) e.cheer-=dt;
       continue;
     }
     if(e.kind==='ally'){
@@ -1126,7 +1152,7 @@ function panelGeom(){
   var ins=10*UI, hpH=16*UI, xpH=8*UI, row=17*UI;
   var hBase=ins+hpH+5*UI+xpH+6*UI+row+ins*0.5;
   return {UI:UI,x:pad,y:pad,ins:ins,bw:bw,w:bw+ins*2,hpH:hpH,xpH:xpH,row:row,
-    hBase:hBase,hMax:hBase+row};
+    hBase:hBase,hMax:hBase+row*2};
 }      // phones: tap the minimap to show the map key
 /* minimap glyphs, one shape per kind so you can tell what is what at a glance */
 function mapIcon(kind,x,y,s,unknown){
@@ -1157,6 +1183,12 @@ function mapIcon(kind,x,y,s,unknown){
       hx.fillStyle='#bff0ff'; hx.beginPath();
       for(var k=0;k<8;k++){ var a=k/8*6.283, rr=(k&1)?1.2:4; hx.lineTo(Math.sin(a)*rr,-Math.cos(a)*rr); }
       hx.closePath(); hx.fill(); break;
+    case 'keeper':                       // Bram: a gold "!" while he has work or a reward for you
+      var ready=!G.bounty||G.bounty.got>=G.bounty.n;
+      hx.fillStyle='#2a1a0a'; hx.beginPath(); hx.arc(0,0,4.2,0,6.3); hx.fill();
+      hx.fillStyle=ready?'#ffd76a':'#c9b27a'; hx.beginPath(); hx.arc(0,0,3.2,0,6.3); hx.fill();
+      if(ready){ hx.fillStyle='#2a1a0a'; hx.fillRect(-0.7,-2.4,1.4,3); hx.fillRect(-0.7,1.2,1.4,1.2); }
+      break;
     case 'tavern':                       // warm house
       hx.fillStyle='#f0b860'; hx.beginPath(); hx.moveTo(-5,0); hx.lineTo(0,-5); hx.lineTo(5,0); hx.lineTo(5,4.5); hx.lineTo(-5,4.5); hx.closePath(); hx.fill();
       hx.strokeStyle='#2a1a0a'; hx.lineWidth=1; hx.stroke(); break;
@@ -1211,8 +1243,8 @@ function drawHUD(){
   }
   // status panel
   var P=panelGeom(), UI=P.UI, pad=P.x, bx=P.x+P.ins, by=P.y+P.ins, bw=P.bw;
-  var hasBuff=(p.buff!==null&&p.buff!==undefined), pts=G.build.points;
-  var ph=(hasBuff||pts>0)?P.hMax:P.hBase;
+  var hasBuff=(p.buff!==null&&p.buff!==undefined), pts=G.build.points, bq=G.bounty;
+  var ph=P.hBase+((hasBuff||pts>0)?P.row:0)+(bq?P.row:0);
   hx.fillStyle='rgba(8,11,8,.62)'; roundRect(P.x,P.y,P.w,ph,10*UI); hx.fill();
   hx.strokeStyle='rgba(232,194,106,.28)'; hx.lineWidth=1; hx.stroke();
   // health, with its numbers inside the bar
@@ -1244,8 +1276,9 @@ function drawHUD(){
   var xpT=p.xp+' / '+need+' xp';
   if(lvW+8*UI+hx.measureText(xpT).width<bw-rightW-wGap) hx.fillText(xpT,bx+lvW+8*UI,ty);
   // status line: unspent skill points, and the fairy blessing with its timer
+  var sy=ty;
   if(hasBuff||pts>0){
-    var sy=ty+P.row; hx.font='700 '+Math.round(11*UI)+'px Georgia,serif';
+    sy=ty+P.row; hx.font='700 '+Math.round(11*UI)+'px Georgia,serif';
     var bfW=0;
     if(hasBuff){
       var bn=FAIRYNAME[p.buff].split(' ')[0], bt2=bn+' '+Math.ceil(p.buffT)+'s';
@@ -1261,6 +1294,15 @@ function drawHUD(){
       hx.fillText(spT,bx,sy);
     }
   }
+  // Bram's bounty, if you took one
+  if(bq){
+    var qy=sy+P.row, done=bq.got>=bq.n;
+    hx.textAlign='left'; hx.font='700 '+Math.round(11*UI)+'px Georgia,serif';
+    hx.fillStyle=done?(Math.sin(G.t*4)>-0.4?'#ffd76a':'#c9a64a'):'#e8d6a8';
+    hx.fillText(done?'⚑ Bounty done — see Bram':'⚑ '+bq.def.short+'  '+bq.got+' / '+bq.n,bx,qy);
+    if(!done){ hx.fillStyle='rgba(255,215,106,.25)'; hx.fillRect(bx,qy+3*UI,bw,2*UI);
+      hx.fillStyle='rgba(255,215,106,.8)'; hx.fillRect(bx,qy+3*UI,bw*bq.got/bq.n,2*UI); }
+  }
   // minimap: every kind of thing has its own shape, landmarks off the edge stay
   // pinned to the rim so you always know which way they lie
   var MG=mapGeom(), mr=MG.r, mx=MG.x, my=MG.y;
@@ -1273,7 +1315,7 @@ function drawHUD(){
     var ddx=(en.x-p.x)*sc, ddz=(en.z-p.z)*sc;
     if(Math.hypot(ddx,ddz)>mr) continue;
     var rp=rotPt(ddx,ddz,G.cam.yaw);
-    mapIcon(en.kind==='goblin'?(en.gk==='bow'?'archer':'goblin'):(en.kind==='spider'&&en.big?'bigspider':en.kind),mx+rp.x,my+rp.y,ms);
+    mapIcon(en.kind==='goblin'?(en.gk==='bow'?'archer':'goblin'):(en.kind==='spider'&&en.big?'bigspider':(en.kind==='npc'?'keeper':en.kind)),mx+rp.x,my+rp.y,ms);
   }
   hx.restore();
   for(var L=0;L<LANDMARKS.length;L++){
@@ -1291,7 +1333,7 @@ function drawHUD(){
   hx.strokeStyle='rgba(232,194,106,.55)'; hx.lineWidth=2; hx.beginPath(); hx.arc(mx,my,mr,0,6.3); hx.stroke();
   if(DESKTOP||SHOWKEY){
     var keyItems=[['spider','Spider'],['goblin','Goblin'],['archer','Goblin archer'],['cocoon','Captive — free them'],
-      ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['camp','Goblin camp'],
+      ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['camp','Goblin camp'],
       ['hollow',"Queen's Hollow"],['stones','Standing stones']];
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
@@ -1350,7 +1392,20 @@ function drawHUD(){
     if(bt.id==='potion'){ hx.fillStyle='#ff9d9d'; hx.fillText('✚'+p.potions,bt.x,bt.y+bt.r*0.16); }
     else if(bt.id==='skills'){ hx.fillStyle=G.build.points>0?'#9ff07a':'#f3e7c9';
       hx.fillText(G.build.points>0?'★'+G.build.points:'SKILL',bt.x,bt.y+bt.r*0.16); }
+    else if(bt.id==='attack'&&G.talk){ hx.fillStyle='#ffd76a'; hx.fillText('TALK',bt.x,bt.y+bt.r*0.14); }
     else hx.fillText(bt.label,bt.x,bt.y+bt.r*0.14);
+  }
+  // talk to Bram
+  if(G.talk){
+    var ks=project(G.talk.x,G.talk.y+2.55,G.talk.z);
+    if(ks){
+      var kt=DESKTOP?'E  ·  talk to Bram':'Tap TALK';
+      hx.font='700 15px Georgia,serif'; hx.textAlign='center';
+      var kw=hx.measureText(kt).width+22;
+      hx.fillStyle='rgba(8,11,8,.72)'; roundRect(ks.x-kw/2,ks.y-19,kw,27,8); hx.fill();
+      hx.strokeStyle='rgba(255,215,106,.8)'; hx.lineWidth=1.5; hx.stroke();
+      hx.fillStyle='#ffd76a'; hx.fillText(kt,ks.x,ks.y);
+    }
   }
   // what a strike would hit
   if(G.lock&&G.ents.indexOf(G.lock)>=0){
@@ -1378,7 +1433,7 @@ function drawHUD(){
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
     var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot';
-    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   M sound   ·   I stats';
+    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   M sound';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
       hx.textAlign='center'; hx.font='600 12.5px Georgia,serif';
@@ -1449,10 +1504,7 @@ function titleScreen(){
     '<p class="sub">Free them and they fight beside you.</p>'+
     '<button class="btn" id="make">Make your hunter</button>'+
     '<button class="btn alt" id="snd">'+sndLabel()+'</button>'+
-    '<button class="btn alt" id="diag2">Copy diagnostic report</button>'+
     '<a class="btn alt" id="arcade" href="../">&larr; Back to Elk Leaf Arcade</a>'+
-    '<textarea id="dgout" style="display:none;width:100%;height:120px;margin-top:8px;font-size:11px;'+
-    'background:#0d0a04;color:#cdbb8c;border:1px solid #3b2f16;border-radius:8px;padding:6px"></textarea>'+
     (G.best?'<p class="hint">Best: level '+G.best+'</p>':'')+
     (DESKTOP
       ? '<p class="hint"><b>Laptop:</b> WASD to move · move the mouse to look · E or left-click strike · F or right-click shoot<br>'+
@@ -1461,7 +1513,6 @@ function titleScreen(){
         'Your hunter swings on her own when something gets close.</p>'));
   document.getElementById('make').onclick=makeScreen;
   document.getElementById('snd').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
-  document.getElementById('diag2').onclick=copyDiag;
 }
 function makeScreen(){
   G.state='make';
@@ -1490,46 +1541,151 @@ function makeScreen(){
 function startRun(){
   G.build.skills={}; G.build.points=0;
   recalc();
-  G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
+  G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
   populate();
   G.cam.yaw=0; G.cam.pitch=DESKTOP?0.32:0.30; G.cam.dist=DESKTOP?6.2:7.0;
   G.cam.x=G.player.x; G.cam.y=G.player.y+6; G.cam.z=G.player.z+9;
   layoutButtons();
   hide(); G.state='play';
   wantLock();                     // the Play click is a user gesture: capture the mouse now
-  tip('Find the tavern light to the north');
+  tip('Follow the path north to the tavern');
 }
-function skillScreen(){
-  if(G.state==='play') G.state='skills'; else return;
+/* menus pause the wood; on a laptop they free the cursor so you can click */
+function menuOpen(state){
+  G.state=state; IN.attack=false; IN.shoot=false; IN.shootHeld=false; IN.atkBuf=0; IN.shotBuf=0;
+  for(var k in KEY) KEY[k]=false;
+  if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
+}
+function menuClose(){ hide(); G.state='play'; wantLock(); }
+function skillScreen(flash){
+  if(G.state==='play'||G.state==='talk') menuOpen('skills');
+  else if(G.state!=='skills') return;          // (it re-draws itself after every point you spend)
   var sp=spentClass(), T=tree(), rows='';
   for(var i=0;i<T.length;i++){
     var s=T[i], have=SK(s.id), locked=(SKILLS[G.build.cls].indexOf(s)>=0&&s.t>sp);
     var can=G.build.points>0&&have<s.r&&!locked;
-    rows+='<div class="sk'+(can?'':' off')+(have?' has':'')+'" data-i="'+i+'">'+
-      '<div class="skh"><b>'+s.n+'</b><span>'+have+'/'+s.r+'</span></div><small>'+s.d+
-      (locked?' — needs '+s.t+' points in your calling':'')+'</small></div>';
+    rows+='<div class="sk'+(can?' can':' off')+(have?' has':'')+(flash===s.id?' flash':'')+'" data-i="'+i+'">'+
+      '<div class="skh"><b>'+s.n+'</b><span>'+(have>=s.r?'MAX':have+'/'+s.r)+'</span></div><small>'+s.d+
+      (locked?' — unlocks after '+s.t+' points in your calling ('+sp+' so far)':'')+'</small>'+
+      (can?'<em>tap to learn</em>':'')+'</div>';
   }
   show('<h1>'+RACES[G.build.race].name+' '+CLASSES[G.build.cls].name+'</h1>'+
-    '<p class="sub">Level '+G.player.level+' · <b>'+G.build.points+'</b> point'+(G.build.points===1?'':'s')+' to spend</p>'+
+    '<p class="sub">Level '+G.player.level+' · <b class="pts">'+G.build.points+'</b> skill point'+(G.build.points===1?'':'s')+' to spend</p>'+
     '<div class="stat"><span>Health</span><b>'+G.S.maxHp+'</b></div>'+
     '<div class="stat"><span>Melee / ranged</span><b>'+Math.round(G.S.melee*100)+'% / '+Math.round(G.S.ranged*100)+'%</b></div>'+
     '<div class="stat"><span>Prisoners freed / foes slain</span><b>'+G.freed+' / '+G.killed+'</b></div>'+
     '<div class="skills">'+rows+'</div>'+
     '<button class="btn" id="close">Back to the wood</button>'+
-    '<button class="btn alt" id="snd2">'+sndLabel()+'</button>'+
-    '<button class="btn alt" id="diag3">Copy diagnostic report</button>'+
-    '<textarea id="dgout" style="display:none;width:100%;height:130px;margin-top:8px;font-size:11px;'+
-    'background:#0d0a04;color:#cdbb8c;border:1px solid #3b2f16;border-radius:8px;padding:6px"></textarea>');
-  document.getElementById('diag3').onclick=copyDiag;
+    '<button class="btn alt" id="snd2">'+sndLabel()+'</button>');
   document.getElementById('snd2').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
   var els=ui.querySelectorAll('.sk');
   for(var k=0;k<els.length;k++) els[k].onclick=function(){
     var s=tree()[+this.getAttribute('data-i')];
     if(G.build.points<=0||SK(s.id)>=s.r) return;
     if(SKILLS[G.build.cls].indexOf(s)>=0&&s.t>spentClass()) return;
-    G.build.skills[s.id]=SK(s.id)+1; G.build.points--; recalc(); layoutButtons(); buzz(15); skillScreen();
+    G.build.skills[s.id]=SK(s.id)+1; G.build.points--; recalc(); layoutButtons(); buzz(15); sfx('pickup');
+    var top=ui.scrollTop; skillScreen(s.id); ui.scrollTop=top;    // keep your place in the list
   };
-  document.getElementById('close').onclick=function(){ hide(); G.state='play'; };
+  document.getElementById('close').onclick=menuClose;
+}
+
+/* ---------- the Greenleaf: Bram's counter ---------- */
+var BOUNTIES=[
+  {id:'spiders', short:'Spiders slain', t:'Slay {n} spiders', n:function(l){ return 6+Math.min(6,l); }, on:['spider'],
+   say:'The spiders creep closer every night. Thin them out — {n} of them — and the drinks are on me.'},
+  {id:'goblins', short:'Goblins slain', t:'Slay {n} goblins', n:function(l){ return 4+Math.min(5,(l/2)|0); }, on:['goblin'],
+   say:'Goblins robbed the supply cart again. Teach {n} of them some manners.'},
+  {id:'freed', short:'Captives freed', t:'Free {n} captives', n:function(){ return 3; }, on:['freed'],
+   say:'Folk have gone missing in the webs. Cut {n} of them down and send them home.'},
+  {id:'giant', short:'Giant spider', t:'Slay a giant spider', n:function(){ return 1; }, on:['giant'],
+   say:'Something huge broods out past the Queen\'s Hollow. Kill it and I\'ll make it worth your while.'}
+];
+var HIRE_PRICE={ranger:45,blade:45,knight:70,mage:60,druid:60,dwarf:70};
+function bountyReward(b){ var l=G.player.level; return {coins:20+b.n*6+l*4, xp:60+b.n*20+l*10}; }
+function bountyTick(tags){
+  var b=G.bounty; if(!b||b.got>=b.n) return;
+  if(tags.indexOf(b.def.on[0])<0) return;
+  b.got++;
+  var p=G.player;
+  if(b.got>=b.n){ tip('Bounty done — Bram has your reward'); sfx('discover'); msg('Bounty done!','#ffd76a',p.x,p.y+2.8,p.z); }
+  else msg(b.def.short+' '+b.got+'/'+b.n,'#ffd76a',p.x,p.y+3.0,p.z,14);
+}
+function deployed(){ var n=0; for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind==='ally') n++; return n; }
+function keeperScreen(say){
+  if(G.state==='play'){ menuOpen('talk'); G.offers=null; sfx('click'); }
+  else if(G.state!=='talk') return;
+  var p=G.player, b=G.bounty, S=G.S, k=keeper();
+  if(!G.offers){                                     // who's drinking at the bar this visit
+    var pool=[0,1,2,3,4,5].sort(function(){ return Math.random()-0.5; }).slice(0,3);
+    var names=NAMES.slice().sort(function(){ return Math.random()-0.5; });
+    G.offers=pool.map(function(i,n){ return {ak:i,name:names[n]}; });
+  }
+  var lines=['Mind the mud. What\'ll it be?','Sit, sit. The stew is mostly safe.','Back in one piece! Good.','The fire\'s warm and the ale is cold.'];
+  var hpFull=p.hp>=p.maxHp-0.5;
+  var opts=[];
+  opts.push({id:'rest',  t:'Rest by the fire', d:hpFull?'You are already rested':'Mend you and your company — free', off:false});
+  opts.push({id:'potion',t:'Buy a healing potion — 25 ◉', d:p.potions>=6?'Your belt is full':(p.coins<25?'Not enough coin':'You carry '+p.potions+' of 6'), off:p.potions>=6||p.coins<25});
+  var full=deployed()>=S.allies;
+  opts.push({id:'hire',  t:'Hire a companion', d:full?'Your company is full ('+deployed()+' of '+S.allies+')':'Blades for coin ('+deployed()+' of '+S.allies+' in your company)', off:full});
+  if(!b) opts.push({id:'work', t:'Ask for work', d:'Bram always has a job going', off:false});
+  else if(b.got>=b.n){ var rw=bountyReward(b); opts.push({id:'claim', t:'Collect your bounty', d:'+'+rw.coins+' ◉ and +'+rw.xp+' XP', off:false, gold:true}); }
+  else opts.push({id:'none', t:'Bounty: '+b.def.t.replace('{n}',b.n), d:'Progress '+b.got+' of '+b.n, off:true});
+  if(G.build.points>0) opts.push({id:'train', t:'Spend your skill point'+(G.build.points>1?'s':'')+' ('+G.build.points+')', d:'Train in the back room', off:false, gold:true});
+  var html='<h1>Bram</h1><p class="sub">Keeper of the Greenleaf Tavern</p>'+
+    '<p class="say">“'+(say||lines[(Math.random()*lines.length)|0])+'”</p>'+
+    '<div class="stat"><span>Your purse</span><b>◉ '+p.coins+' &nbsp; ✚ '+p.potions+'</b></div>'+
+    '<div class="stat"><span>Health</span><b>'+Math.ceil(p.hp)+' / '+p.maxHp+'</b></div>'+
+    '<div class="opts">';
+  for(var i=0;i<opts.length;i++){ var o=opts[i];
+    html+='<button class="opt'+(o.off?' off':'')+(o.gold?' gold':'')+'" data-o="'+o.id+'"'+(o.off?' disabled':'')+'><b>'+o.t+'</b><small>'+o.d+'</small></button>'; }
+  html+='</div><button class="btn" id="leave">Back to the wood</button>';
+  show(html);
+  var els=ui.querySelectorAll('.opt');
+  for(var j=0;j<els.length;j++) els[j].onclick=function(){ keeperDo(this.getAttribute('data-o')); };
+  document.getElementById('leave').onclick=menuClose;
+}
+function keeperDo(id){
+  var p=G.player, k=keeper();
+  if(id==='rest'){
+    p.hp=p.maxHp; for(var i=0;i<G.ents.length;i++){ var a=G.ents[i]; if(a.kind==='ally') a.hp=a.maxHp; }
+    sfx('potion'); keeperScreen('There. Feet up a while — you look better already.');
+  } else if(id==='potion'){
+    if(p.coins<25||p.potions>=6) return;
+    p.coins-=25; p.potions++; sfx('coin'); keeperScreen('Brewed it myself. Mostly herbs.');
+  } else if(id==='hire'){ hireScreen(); }
+  else if(id==='work'){
+    var l=p.level, defs=BOUNTIES.filter(function(d){ return d.id!=='giant'||l>=3; });
+    var d=defs[(Math.random()*defs.length)|0];
+    G.bounty={def:d,n:d.n(l),got:0};
+    sfx('pickup'); keeperScreen(d.say.replace('{n}',G.bounty.n));
+  } else if(id==='claim'){
+    var b=G.bounty, rw=bountyReward(b);
+    p.coins+=rw.coins; G.bounty=null; G.bountiesDone=(G.bountiesDone||0)+1;
+    sfx('coin'); gainXp(rw.xp,k?k.x:p.x,(k?k.y:p.y)+2.6,k?k.z:p.z,'+'+rw.xp+' XP — bounty');
+    keeperScreen('As promised. You\'ve earned every coin.');
+  } else if(id==='train'){ skillScreen(); }
+}
+function hireScreen(){
+  var p=G.player, S=G.S, full=deployed()>=S.allies, html='<h1>Hire a companion</h1>'+
+    '<p class="sub">Your company: '+deployed()+' of '+S.allies+' · ◉ '+p.coins+'</p><div class="opts">';
+  for(var i=0;i<G.offers.length;i++){ var o=G.offers[i], K=ALLYKIND[o.ak], price=HIRE_PRICE[K.k]||50;
+    if(o.hired){ html+='<button class="opt off" disabled><b>'+o.name+' the '+K.n+'</b><small>Already with you</small></button>'; continue; }
+    var off=full||p.coins<price;
+    var role=K.heal?'heals you as you fight':(K.range>6?'fights from range':(K.taunt?'draws foes onto a shield':'fights up close'));
+    html+='<button class="opt'+(off?' off':'')+'" data-h="'+i+'"'+(off?' disabled':'')+'><b>'+o.name+' the '+K.n+' — '+price+' ◉</b><small>'+
+      K.hp+' health, '+role+(full?' · your company is full':(p.coins<price?' · not enough coin':''))+'</small></button>'; }
+  html+='</div><button class="btn alt" id="hback">Back to the counter</button>';
+  show(html);
+  var els=ui.querySelectorAll('.opt[data-h]');
+  for(var j=0;j<els.length;j++) els[j].onclick=function(){
+    var o=G.offers[+this.getAttribute('data-h')], K=ALLYKIND[o.ak], price=HIRE_PRICE[K.k]||50;
+    if(deployed()>=G.S.allies||p.coins<price||o.hired) return;
+    p.coins-=price; o.hired=true;
+    var kp=keeper(), ax=(kp?kp.x:p.x)+1.5, az=(kp?kp.z:p.z)+1.5;
+    spawnAlly(o.ak,ax,az,o.name); sfx('freed',ax,az);
+    hireScreen();
+  };
+  document.getElementById('hback').onclick=function(){ keeperScreen(); };
 }
 function gameOver(){
   if(G.state!=='play') return;
@@ -1543,22 +1699,10 @@ function gameOver(){
     '<div class="stat"><span>Level reached</span><b>'+G.player.level+'</b></div>'+
     '<div class="stat"><span>Prisoners freed</span><b>'+G.freed+'</b></div>'+
     '<div class="stat"><span>Foes slain</span><b>'+G.killed+'</b></div>'+
-    '<button class="btn alt" id="diag">Copy diagnostic report</button>'+
     '<button class="btn" id="again">Walk in again</button>'+
-    '<button class="btn alt" id="menu">Title</button>'+
-    '<textarea id="dgout" style="display:none;width:100%;height:120px;margin-top:8px;font-size:11px;'+
-    'background:#0d0a04;color:#cdbb8c;border:1px solid #3b2f16;border-radius:8px;padding:6px"></textarea>');
-  document.getElementById('diag').onclick=copyDiag;
+    '<button class="btn alt" id="menu">Title</button>');
   document.getElementById('again').onclick=startRun;
   document.getElementById('menu').onclick=titleScreen;
-}
-
-function copyDiag(){
-  var txt=JSON.stringify(TELE.report(),null,1);
-  var ta=document.getElementById('dgout');
-  if(ta){ ta.style.display='block'; ta.value=txt; ta.select(); }
-  try{ if(navigator.clipboard) navigator.clipboard.writeText(txt); }catch(e){}
-  this.textContent='Copied — paste it to Claude';
 }
 
 /* ---------- boot ---------- */
@@ -1644,10 +1788,11 @@ addEventListener('keydown',function(e){
   if(e.key==='k'||e.key==='K'||e.key==='f'||e.key==='F'){ IN.shoot=true; IN.shotBuf=0.45; IN.shootHeld=true; }
   if(e.key==='q'||e.key==='Q') usePotion();
   if(e.key==='c'||e.key==='C'||e.key==='Shift') IN.dash=true;
-  if(e.key==='i'||e.key==='I') SHOWDBG=!SHOWDBG;
+  if(DEBUG&&(e.key==='i'||e.key==='I')) SHOWDBG=!SHOWDBG;
   if(e.key==='e'||e.key==='E'){ IN.attack=true; IN.atkBuf=0.45; }
   setMode(true);
-  if(e.key==='Tab'){ e.preventDefault(); if(G.state==='play') skillScreen(); }
+  if(e.key==='Tab'){ e.preventDefault(); if(G.state==='play') skillScreen(); else if(G.state==='skills') menuClose(); }
+  if(e.key==='Escape'&&(G.state==='skills'||G.state==='talk')) menuClose();
 });
 addEventListener('keyup',function(e){
   KEY[e.key]=false; if(e.key.toLowerCase) KEY[e.key.toLowerCase()]=false;
@@ -1665,8 +1810,11 @@ document.addEventListener('pointerlockchange',function(){
   LOCKED=(document.pointerLockElement===cvs);
   if(!LOCKED){ IN.attack=false; IN.shoot=false; IN.shootHeld=false; }
 });
+var LASTTOUCH=0;
+addEventListener('touchstart',function(){ LASTTOUCH=performance.now(); },{capture:true,passive:true});
 addEventListener('mousemove',function(e){
-  if(e.movementX||e.movementY) setMode(true);
+  // phones send a fake mouse move after a tap; only a real mouse switches to laptop controls
+  if((e.movementX||e.movementY)&&performance.now()-LASTTOUCH>1000) setMode(true);
   if(!LOCKED) return;
   G.cam.yaw-=e.movementX*0.0024;
   G.cam.pitch=clamp(G.cam.pitch+e.movementY*0.0022,-0.30,1.05);

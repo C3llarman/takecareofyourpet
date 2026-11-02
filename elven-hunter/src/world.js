@@ -16,8 +16,32 @@ function fbm(x,z,oct,sc){
   for(var i=0;i<oct;i++){ s+=vnoise(x*fr,z*fr)*amp; norm+=amp; amp*=0.5; fr*=2.07; }
   return s/norm;
 }
+/* the tavern sits on a level yard at the end of a dirt path from the glade */
+var TAVERN={x:0,z:-34,ry:0.5,yard:19,flat:15,h:null};
+/* clearings kept free of trees: landmark grounds and the path to the tavern */
+var CLEAR=[[0,-34,20],[-72,48,15],[86,-56,15],[-88,-78,11]];
+function pathDist(x,z){            // distance to the glade -> tavern-door path
+  var t=clamp01((z-4)/(-29-4)), px=0+1.4*t*t, pz=4+(-29-4)*t;
+  return Math.hypot(x-px,z-pz);
+}
+function clamp01(v){ return v<0?0:(v>1?1:v); }
+function inClearing(x,z,pad){
+  for(var i=0;i<CLEAR.length;i++){ var c=CLEAR[i]; if(Math.hypot(x-c[0],z-c[1])<c[2]+(pad||0)) return true; }
+  return pathDist(x,z)<3.2+(pad||0);
+}
 /* world height */
 function H(x,z){
+  var h=Hraw(x,z);
+  // level the tavern yard
+  var dt=Math.hypot(x-TAVERN.x,z-TAVERN.z);
+  if(dt<TAVERN.flat*2.2){
+    if(TAVERN.h===null) TAVERN.h=Hraw(TAVERN.x,TAVERN.z);
+    var w=Math.exp(-Math.pow(dt/TAVERN.flat,4));
+    h=h*(1-w)+TAVERN.h*w;
+  }
+  return h;
+}
+function Hraw(x,z){
   var d=Math.hypot(x,z)/WHALF;
   var base=fbm(x,z,4,0.012)*2-1;
   var hills=fbm(x+120,z-80,3,0.03)*2-1;
@@ -37,13 +61,17 @@ function Hn(x,z){ // normal-ish slope 0..1
   return Math.min(1,Math.hypot(hr-hl,hu-hd)/(2*e)*0.9);
 }
 var C_GRASS=[0.30,0.47,0.22], C_GRASS2=[0.22,0.37,0.18], C_DIRT=[0.36,0.27,0.17],
-    C_ROCK=[0.38,0.38,0.40], C_SAND=[0.56,0.50,0.33], C_WATER=[0.16,0.33,0.42];
+    C_ROCK=[0.38,0.38,0.40], C_SAND=[0.56,0.50,0.33], C_WATER=[0.16,0.33,0.42],
+    C_PATH=[0.45,0.36,0.24];
 
 /* ground colour at a point: drifts smoothly (no checkerboard) and blends
    grass -> dirt -> rock with slope, sand near the water */
 function groundCol(x,z,y){
   var sl=Hn(x,z), g=fbm(x+311,z-97,2,0.045);
   var col=mix3(C_GRASS2,C_GRASS,g);
+  // a worn dirt path to the tavern door, and a trodden yard in front of it
+  var pd=pathDist(x,z), yd=Math.hypot(x-TAVERN.x-2.2,z-TAVERN.z-6.5);
+  col=mix3(col,C_PATH,Math.max(1-smooth01((pd-1.0)/1.4),(1-smooth01((yd-5.5)/3.5))*0.8)*(0.85+g*0.3));
   col=mix3(col,C_DIRT,smooth01((sl-0.26)/0.16));
   col=mix3(col,C_ROCK,smooth01((sl-0.48)/0.14));
   return mix3(col,C_SAND,smooth01((WATER+0.9-y)/0.6));
@@ -272,6 +300,7 @@ function scatterWorld(m){
     if(sl>0.7) { if(r()<0.86) continue; }
     if(d<7 && r()<0.8) continue;            // keep a small clearing at the spawn
     var k=r();
+    if(inClearing(x,z,k<0.62?1.5:0)) continue;     // landmark grounds and the tavern path stay open
     if(k<0.42){ // pine
       var hh=3.6+r()*4.2, rr=0.9+r()*0.5, ry=r()*6.28;
       collCircle(x,z,0.30*rr);
@@ -308,6 +337,7 @@ function scatterWorld(m){
       var n=2+((r()*3)|0);
       for(var q=0;q<n;q++){
         var ax=x+(r()-0.5)*2.4, az=z+(r()-0.5)*2.4, ay=H(ax,az)-0.05;
+        if(inClearing(ax,az)) continue;
         if(Q){ var u=r(), un=u<0.45?pick(r,['fern1','fern2']):(u<0.8?pick(r,['bush1','bush2']):(u<0.9?'berry':'flower'));
           addProp(un,ax,ay,az,r()*6.28,un==='flower'?0.5+r()*0.3:(un.indexOf('bush')===0||un==='berry'?0.9+r()*0.6:0.8+r()*0.5),1,null); continue; }
         addMeshCh(FERN,ax,ay,az,r()*6.28,1.5+r()*0.8,1.1+r()*0.7,1.5+r()*0.8);
@@ -349,25 +379,74 @@ function chunkMeshes(mat){
 /* ---------- landmarks ---------- */
 var LANDMARKS=[];
 function buildTavern(m,x,z){
-  var y=H(x,z);
-  var wall=[0.44,0.33,0.22], roof=[0.33,0.17,0.14], warm=[0.95,0.72,0.35];
-  addMesh(m,boxMesh(wall),x,y-0.2,z,0.5,9,4.2,7);
-  collBox(x,z,4.5,3.5,0.5);
-  addMesh(m,coneMesh(roof,4),x,y+3.9,z,0.5+Math.PI/4,9.6,3.2,8.0);
-  addMesh(m,boxMesh([0.30,0.22,0.15]),x+3.2,y+2.6,z-2.2,0.5,1.0,2.4,1.0); // chimney
-  // glowing windows
+  var y=H(x,z), R=TAVERN.ry, c=Math.cos(R), sn=Math.sin(R);
+  // tavern-local (lx across the front, lz out of the door) -> world
+  function T(lx,lz){ return {x:x+lx*c+lz*sn, z:z-lx*sn+lz*c}; }
+  var wall=[0.44,0.33,0.22], roof=[0.33,0.17,0.14], warm=[0.95,0.72,0.35], wood=[0.36,0.25,0.15], dark=[0.24,0.17,0.11];
+  addMesh(m,boxMesh(wall),x,y-0.2,z,R,9,4.2,7);
+  collBox(x,z,4.5,3.5,R);
+  addMesh(m,coneMesh(roof,4),x,y+3.9,z,R+Math.PI/4,9.6,3.2,8.0);
+  var ch=T(3.2,-2.2); addMesh(m,boxMesh([0.30,0.22,0.15]),ch.x,y+2.6,ch.z,R,1.0,2.4,1.0); // chimney
+  // glowing windows on the front and the side
   for(var i=-1;i<=1;i+=2){
-    addMesh(m,boxMesh(warm),x+i*2.2,y+1.3,z+3.1,0.5,1.2,1.3,0.3);
-    addMesh(m,boxMesh(warm),x+3.3,y+1.3,z+i*2.0,0.5,0.3,1.3,1.2);
+    var wf=T(i*2.4,3.52); addMesh(m,boxMesh(warm),wf.x,y+1.3,wf.z,R,1.2,1.3,0.12);
+    var ws=T(4.52,i*1.6); addMesh(m,boxMesh(warm),ws.x,y+1.3,ws.z,R,0.12,1.3,1.2);
   }
-  addMesh(m,boxMesh([0.24,0.17,0.11]),x-0.2,y-0.1,z+3.3,0.5,1.6,2.4,0.4); // door
-  // lantern posts
+  var dr=T(-0.2,3.52); addMesh(m,boxMesh(dark),dr.x,y-0.1,dr.z,R,1.6,2.4,0.14);       // door
+  // a porch step and a hanging sign by the door
+  var st=T(-0.2,4.1); addMesh(m,boxMesh(wood),st.x,y-0.25,st.z,R,2.4,0.4,1.0);
+  var sp=T(-2.2,4.4); addMesh(m,boxMesh(wood),sp.x,y,sp.z,R,0.18,3.0,0.18);
+  var sg=T(-2.2,4.4); addMesh(m,boxMesh([0.62,0.48,0.26]),sg.x,y+2.0,sg.z,R,1.3,0.75,0.12);
+  var sl=T(-2.2,4.38); addMesh(m,blobMesh([0.95,0.80,0.40],0,1),sl.x,y+2.37,sl.z,R,0.22,0.22,0.06);   // a gold leaf
+  collCircle(sp.x,sp.z,0.2);
+  // lantern posts at the yard's mouth
   for(var k=-1;k<=1;k+=2){
-    addMesh(m,boxMesh([0.25,0.18,0.12]),x+k*5.2,y,z+5.0,0,0.25,2.6,0.25);
-    collCircle(x+k*5.2,z+5.0,0.25);
-    addMesh(m,boxMesh(warm),x+k*5.2,y+2.6,z+5.0,0,0.5,0.6,0.5);
+    var lp=T(k*5.6,8.5);
+    addMesh(m,boxMesh(wood),lp.x,H(lp.x,lp.z),lp.z,R,0.25,2.6,0.25);
+    collCircle(lp.x,lp.z,0.25);
+    addMesh(m,boxMesh(warm),lp.x,H(lp.x,lp.z)+2.6,lp.z,R,0.5,0.6,0.5);
   }
+  // barrels stacked against the wall
+  var bar=[[5.3,1.6],[5.4,0.4],[5.2,-0.8],[5.35,1.0,1]];
+  for(var b2=0;b2<bar.length;b2++){ var bp=T(bar[b2][0],bar[b2][1]), up=bar[b2][2]?1.05:0;
+    addMesh(m,coneMesh([0.42,0.30,0.18],10,0.5,0.46),bp.x,y+up,bp.z,0,0.95,1.05,0.95);
+    addMesh(m,coneMesh([0.30,0.30,0.32],10,0.5,0.5,true),bp.x,y+up+0.18,bp.z,0,0.99,0.08,0.99);
+    addMesh(m,coneMesh([0.30,0.30,0.32],10,0.5,0.5,true),bp.x,y+up+0.80,bp.z,0,0.97,0.08,0.97);
+    if(!up) collCircle(bp.x,bp.z,0.5);
+  }
+  // a table with benches in the yard
+  var tb=T(-4.2,7.0);
+  addMesh(m,boxMesh(wood),tb.x,y+0.78,tb.z,R,2.6,0.14,1.2);
+  for(var lg=-1;lg<=1;lg+=2){ var lgp=T(-4.2+lg*1.05,7.0); addMesh(m,boxMesh(dark),lgp.x,y,lgp.z,R,0.16,0.8,1.0); }
+  for(var bn=-1;bn<=1;bn+=2){ var bnp=T(-4.2,7.0+bn*1.15); addMesh(m,boxMesh(wood),bnp.x,y+0.42,bnp.z,R,2.4,0.1,0.42);
+    addMesh(m,boxMesh(dark),bnp.x,y,bnp.z,R,2.1,0.42,0.12); }
+  collBox(tb.x,tb.z,1.3,1.5,R);
+  var mug=T(-4.6,6.8); addMesh(m,coneMesh([0.80,0.62,0.30],8,0.5,0.5),mug.x,y+0.85,mug.z,0,0.18,0.24,0.18);
+  // a fire pit to gather at
+  var fp=T(1.5,12.0), fy=H(fp.x,fp.z);
+  for(var q=0;q<8;q++){ var qa=q/8*6.283, qx=fp.x+Math.cos(qa)*1.25, qz=fp.z+Math.sin(qa)*1.25;
+    addMesh(m,ROCK,qx,fy-0.05,qz,qa,0.55,0.4,0.55); }
+  addMesh(m,coneMesh([0.98,0.62,0.22],7),fp.x,fy+0.05,fp.z,0,1.1,1.25,1.1);
+  addMesh(m,coneMesh([1.0,0.86,0.40],6),fp.x,fy+0.05,fp.z,0.6,0.6,0.85,0.6);
+  collCircle(fp.x,fp.z,1.3);
+  for(var lgs=0;lgs<2;lgs++){ var la=lgs*2.2+0.6, lx=fp.x+Math.cos(la)*3.0, lz=fp.z+Math.sin(la)*3.0;
+    addMesh(m,tubeLog(),lx,H(lx,lz)+0.28,lz,la+Math.PI/2,0.55,2.4,0.55); }
   LANDMARKS.push({x:x,z:z,r:11,name:'The Greenleaf Tavern',kind:'tavern'});
+  var door=T(-0.2,3.52), keep=T(1.6,5.4);
+  TAVERN.door=door; TAVERN.keeper={x:keep.x,z:keep.z,yaw:R}; TAVERN.fire=fp;
+}
+/* a log to sit on: a cylinder lying along x */
+var LOGMESH=null;
+function tubeLog(){
+  if(LOGMESH) return LOGMESH;
+  var src=coneMesh([0.38,0.27,0.17],8,0.5,0.5), m=new MB();
+  // turn the upright cylinder on its side, centred
+  for(var i=0;i<src.p.length;i+=3){
+    m.p.push(src.p[i+1]-0.5, -src.p[i], src.p[i+2]);      // a quarter turn about z
+    m.n.push(src.n[i+1], -src.n[i], src.n[i+2]);
+    m.c.push(src.c[i],src.c[i+1],src.c[i+2]); m.f.push(src.f[i/3]||0);
+  }
+  return (LOGMESH=m);
 }
 function buildCamp(m,x,z){
   var y=H(x,z);

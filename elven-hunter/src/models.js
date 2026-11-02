@@ -111,6 +111,8 @@ function actorSpec(e){
     var mw=cls==='rogue'?['Knife','Knife_Offhand']:null;
     return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null};
   }
+  if(e.kind==='npc')                  // the innkeeper: a barbarian with a mug, in warm tones
+    return {model:'barbarian', weapons:['Mug'], beard:true, tint:[1.0,0.88,0.74], key:'keeper'};
   if(e.kind==='spider'||(e.kind==='corpse'&&e.of==='spider'))
     return {model:'spider', weapons:[], tint:e.look&&e.look.body, key:e.big?'bigspider':'spider'};
   if(e.kind==='goblin'||(e.kind==='corpse'&&e.of==='goblin'))
@@ -294,7 +296,7 @@ function animateActor(a,e,dt){
 /* Hand out actors to the nearest humanoids; everyone else falls back to the
    instanced primitive rig. Returns the set of entities that got one. */
 var ACTOR_OF=new Map(), HUMANS=[];
-function isHumanoid(e){ return e.kind==='player'||e.kind==='ally'||e.kind==='goblin'||(e.kind==='corpse'&&e.of==='goblin'); }
+function isHumanoid(e){ return e.kind==='player'||e.kind==='ally'||e.kind==='goblin'||e.kind==='npc'||(e.kind==='corpse'&&e.of==='goblin'); }
 function hasModel(e){ return isHumanoid(e)||(MODELS.spider&&(e.kind==='spider'||(e.kind==='corpse'&&e.of==='spider'))); }
 function assignActors(dt){
   ACTOR_OF.clear();

@@ -423,6 +423,58 @@ section('Characters');
   await page.close();
 }
 
+/* ---------------- the tavern ---------------- */
+section('Tavern');
+{
+  const page = await open(browser, PHONE);
+  ok('no diagnostic report on the title screen', await page.evaluate(() => !document.getElementById('diag2') && !/diagnostic/i.test(ui.textContent)));
+  await page.evaluate(() => startRun());
+  await page.waitForTimeout(300);
+  const yard = await page.evaluate(() => {
+    // nothing planted in the yard or on the path; the ground is level around the door
+    const n = (r) => { let c = 0; for (let a = 0; a < 6.28; a += 0.2) for (let d = 1; d < r; d += 1) {
+      const x = TAVERN.x + Math.cos(a) * d, z = TAVERN.z + Math.sin(a) * d; if (solidAt(x, z, 1.0)) c++; } return c; };
+    const hs = []; for (let a = 0; a < 6.28; a += 0.5) hs.push(H(TAVERN.x + Math.cos(a) * 9, TAVERN.z + Math.sin(a) * 9));
+    return { keeper: !!keeper(), noButtons: !btns.some((b) => b.id === 'dbg'),
+      flat: Math.max(...hs) - Math.min(...hs), pathClear: [0, 0.2, 0.4, 0.6, 0.8, 0.95].every((t) => !solidAt(1.4 * t * t, 4 - 33 * t, 1.0)) };
+  });
+  ok('the innkeeper stands at the tavern', yard.keeper);
+  ok('the tavern yard is level', yard.flat < 0.6, `${yard.flat.toFixed(2)} units of rise across the yard`);
+  ok('the path to the tavern is clear', yard.pathClear);
+  ok('no diagnostics button in the game', yard.noButtons);
+
+  const talk = await page.evaluate(() => new Promise((res) => {
+    const k = keeper(), p = G.player; G.ents = G.ents.filter((e) => e.kind !== 'spider' && e.kind !== 'goblin');
+    p.x = k.x + Math.sin(k.yaw) * 2.2; p.z = k.z + Math.cos(k.yaw) * 2.2; p.y = H(p.x, p.z); p.coins = 200;
+    const t0 = G.t; const tick = () => { if (G.t - t0 > 0.3) res({ talk: !!G.talk }); else requestAnimationFrame(tick); }; tick();
+  }));
+  ok('walking up to Bram offers a talk', talk.talk);
+  const atk = await page.evaluate(() => { const b = btns.find((b) => b.id === 'attack'); return [b.x, b.y]; });
+  await page.touchscreen.tap(atk[0], atk[1]);
+  await page.waitForTimeout(300);
+  ok('the strike button talks to Bram', (await page.evaluate(() => G.state)) === 'talk');
+  await page.click('.opt[data-o="work"]');
+  await page.click('.opt[data-o="potion"]');
+  const shop = await page.evaluate(() => ({ bounty: !!G.bounty, coins: G.player.coins, potions: G.player.potions }));
+  ok('Bram hands out a bounty and sells potions', shop.bounty && shop.coins === 175 && shop.potions === 3);
+  await page.click('.opt[data-o="hire"]');
+  await page.click('.opt[data-h]');
+  ok('you can hire a companion', (await page.evaluate(() => G.ents.filter((e) => e.kind === 'ally').length)) === 1);
+  const tick = await page.evaluate(() => { const b = G.bounty; const before = b.got; bountyTick(b.def.on); return b.got - before; });
+  ok('bounty progress counts', tick === 1);
+
+  await page.click('#hback');
+  await page.evaluate(() => { G.build.points = 2; keeperScreen(); });
+  await page.click('.opt[data-o="train"]');
+  await page.click('.sk.can');
+  const sk = await page.evaluate(() => ({ pts: G.build.points, shown: document.querySelector('.pts').textContent, state: G.state }));
+  ok('spending a skill point takes, and the page updates', sk.pts === 1 && sk.shown === '1' && sk.state === 'skills', `${sk.shown} left`);
+  await page.click('#close');
+  ok('closing the menu returns to the wood', (await page.evaluate(() => G.state)) === 'play');
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
+  await page.close();
+}
+
 /* ---------------- feel: sound, strafing, impact ---------------- */
 section('Feel');
 {
