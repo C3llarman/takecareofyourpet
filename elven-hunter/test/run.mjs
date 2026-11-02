@@ -609,7 +609,7 @@ section('Forest');
       nearHi: near.length > 0 && near.every((c) => c.hi.visible && !c.lo.visible),
       farLo: far.length > 0 && far.every((c) => c.lo.visible && !c.hi.visible) };
   });
-  ok('the wood is planted with the nature pack', f.kinds >= 15 && f.props > 2000, `${f.props} props of ${f.kinds} kinds in ${f.chunks} chunks`);
+  ok('the wood is planted with the nature pack', f.kinds >= 15 && f.props > 1500, `${f.props} props of ${f.kinds} kinds in ${f.chunks} chunks`);
   ok('near chunks draw full detail, far ones the stand-ins', f.nearHi && f.farLo);
   const size = (await import('node:fs')).statSync(PAGE.replace('file://', '')).size / 1024 / 1024;
   ok('the whole game stays small', size < 3.2, `${size.toFixed(2)} MB with models, forest and music`);

@@ -4887,6 +4887,8 @@ function scatterWorld(m){
     if(d<7 && r()<0.8) continue;            // keep a small clearing at the spawn
     var k=r();
     if(inClearing(x,z,k<0.62?1.5:0)) continue;     // landmark grounds and the tavern path stay open
+    // trees: thinned out overall, and none in the open meadows that wander through the wood
+    if(k<0.62&&(r()<0.22||fbm(x+517,z-233,2,0.018)>0.62)) continue;
     if(k<0.42){ // pine
       var hh=3.6+r()*4.2, rr=0.9+r()*0.5, ry=r()*6.28;
       collCircle(x,z,0.30*rr);

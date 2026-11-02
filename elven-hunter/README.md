@@ -13,7 +13,8 @@ music and the game into a single ~3.0 MB file. Open it from a USB stick on a pla
 plays.
 
 The wood is 300 × 300 units of procedurally generated hills, a winding river and about
-2,700 oaks, birches, pines, bushes, ferns, mossy rocks, stumps and logs, with five
+1,900 oaks, birches, pines, bushes, ferns, mossy rocks, stumps and logs (about 700 of
+them trees, with open meadows wandering between the stands), with five
 landmarks to find. Spiders hunt the undergrowth, snakes lie in the grass, wasps swarm
 their hive, and your kin hang in cocoons waiting to be cut down. Free them and they follow
 you and fight. Bram keeps the tavern, and from level 15 an abandoned cottage can be
