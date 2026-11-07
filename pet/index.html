@@ -239,37 +239,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--ink); outli
 .hearts-row i.on { background: #ff5c8a; }
 .inv { display: flex; flex-wrap: wrap; gap: 6px; }
 .inv span { background: var(--track); border-radius: 99px; padding: 3px 10px; font-weight: 900; font-size: 13px; font-variant-numeric: tabular-nums; }
-.beta-tab {
-  position: fixed; right: env(safe-area-inset-right, 0px); top: 50%; transform: translateY(-50%);
-  writing-mode: vertical-rl; border: 0; cursor: pointer; background: var(--ink); color: var(--sun);
-  font-weight: 900; font-size: 12px; letter-spacing: .14em; padding: 14px 7px; border-radius: 12px 0 0 12px;
-  box-shadow: 0 3px 0 var(--shadow);
-}
-.beta-panel {
-  position: fixed; right: env(safe-area-inset-right, 0px); top: 50%; transform: translateY(-50%);
-  width: min(290px, calc(100% - 32px)); max-height: 78vh; overflow-y: auto;
-  background: var(--panel); border-radius: 18px 0 0 18px; padding: 14px; display: grid; gap: 10px;
-  box-shadow: 0 6px 0 var(--shadow), 0 18px 40px rgba(43, 37, 64, .2); border-left: 5px solid var(--ink);
-}
-.beta-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-.beta-head b { font-weight: 900; font-size: 16px; }
-.beta-head small { display: block; font-weight: 800; font-size: 12px; color: var(--muted); }
-.beta-tag { background: var(--ink); color: var(--sun); font-size: 10px; font-weight: 900; letter-spacing: .1em; border-radius: 6px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
-.beta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.beta-grid button, .beta-row button { border: 0; cursor: pointer; border-radius: 10px; padding: 8px 6px; font-weight: 900; font-size: 12px; background: var(--track); line-height: 1.2; }
-.beta-grid button:active, .beta-row button:active { transform: translateY(1px); }
-.beta-row { display: flex; gap: 6px; align-items: center; }
-.beta-row select, .beta-row input { min-width: 0; flex: 1 1 auto; border: 2px solid var(--track); border-radius: 10px; padding: 6px; font-weight: 800; font-size: 13px; background: #fff; }
-.beta-row input { flex: 0 0 56px; }
 .guide-step { font-size: 17px !important; color: var(--ink) !important; font-weight: 800 !important; background: #fff8e1; border-radius: 16px; padding: 14px 16px; }
 .guide-count { font-weight: 900; font-size: 12px; color: var(--muted); letter-spacing: .06em; }
-.beta-lock { display: grid; gap: 8px; }
-.beta-lock p { margin: 0; font-weight: 800; font-size: 13px; color: var(--muted); }
-.beta-lock .beta-row input { flex: 1 1 0; width: 0; min-width: 0; font-size: 20px; letter-spacing: .3em; text-align: center; padding: 6px; }
-.beta-lock .beta-row button { flex: 0 0 auto; padding: 10px 12px; }
-.beta-panel > * { min-width: 0; }
-.beta-lock .err { color: var(--hp-low); min-height: 1.2em; }
-.beta-tools { display: grid; gap: 10px; }
 .shop-msg { margin: 0; font-weight: 800; font-size: 14px; color: var(--hp-low); min-height: 1.2em; }
 
 .dpad {
@@ -375,7 +346,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--ink); outli
   .dpad { grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(3, 40px); }
   .toast, .hint { top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); max-width: calc(100% - 300px); font-size: 13px; }
   .banner { top: calc(env(safe-area-inset-top, 0px) + 90px); }
-  .beta-tab { top: 34%; }
   .sheet, .shop-card { max-height: calc(100vh - 16px); overflow-y: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -517,51 +487,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--ink); outli
 </div>
 <div class="fade" id="fade" hidden></div>
 
-<button class="beta-tab" id="betaTab" type="button" aria-expanded="false">BETA TOOLS</button>
-<div class="beta-panel" id="betaPanel" hidden>
-  <div class="beta-head">
-    <div><b>Beta tools<span class="beta-tag">BETA</span></b><small>Skip the grinding to try every part of the game.</small></div>
-    <button class="close" id="betaClose" type="button" aria-label="Close beta tools">×</button>
-  </div>
-  <div class="beta-lock" id="betaLock">
-    <p>Enter the passcode to use beta tools.</p>
-    <div class="beta-row">
-      <input id="betaCode" type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="Beta passcode">
-      <button type="button" id="betaUnlock">Unlock</button>
-    </div>
-    <p class="err" id="betaErr"></p>
-  </div>
-  <div class="beta-tools" id="betaTools" hidden>
-  <div class="beta-grid">
-    <button type="button" id="betaDog">Add dog Lv 10<br><small>Wolf Trail</small></button>
-    <button type="button" id="betaCat">Add cat Lv 6<br><small>Bandit Trail</small></button>
-    <button type="button" id="betaBird">Add bird Lv 6<br><small>Lake Trail</small></button>
-    <button type="button" id="betaYou">My level → 5<br><small>Ridge Trail</small></button>
-    <button type="button" id="betaCoins">+100 coins</button>
-    <button type="button" id="betaLevels">All pets Lv 10</button>
-    <button type="button" id="betaRanger">Become a Ranger</button>
-    <button type="button" id="betaItems">+10 forest items</button>
-    <button type="button" id="betaWolf">Make Mama Wolf a friend</button>
-    <button type="button" id="betaGuide">How to play</button>
-  </div>
-  <div class="beta-row">
-    <select id="betaSp" aria-label="Pet type"></select>
-    <input id="betaLv" type="number" min="1" max="20" value="5" aria-label="Pet level">
-    <button type="button" id="betaAdd">Add pet</button>
-  </div>
-  <div class="beta-row">
-    <select id="betaHol" aria-label="Holiday decorations">
-      <option value="0">Holiday: use today's date</option>
-      <option value="1">January · New Year</option><option value="2">February · Valentine's Day</option><option value="3">March · St. Patrick's Day</option>
-      <option value="4">April · Easter</option><option value="5">May · no decorations</option><option value="6">June · no decorations</option>
-      <option value="7">July · Fourth of July</option><option value="8">August · no decorations</option><option value="9">September · no decorations</option>
-      <option value="10">October · Halloween</option><option value="11">November · Thanksgiving</option><option value="12">December · Christmas</option>
-    </select>
-    <button type="button" id="betaHolGo">Show</button>
-  </div>
-  <div class="beta-row"><button type="button" id="betaRelock">Lock beta tools</button></div>
-  </div>
-</div>
 
 <div class="count" id="count" hidden><b id="countNum">5</b><span id="countText">Cover your eyes! Your pets are hiding.</span></div>
 <div class="toast" id="toast" hidden></div>
@@ -4336,70 +4261,10 @@ function renderGate(body) {
   if (blocked2) { const e = document.createElement('p'); e.textContent = 'Finish what you and your pets are doing first.'; body.appendChild(e); }
   const a = document.createElement('div'); a.className = 'tp-actions';
   if (st.ok) a.appendChild(tpButton('Head down the trail', 'green', () => { closeTP(); enterZone(def.id, st.guide); }, blocked2, 'gateGo'));
-  else if (betaUnlocked) a.appendChild(tpButton('Beta: get a guide and go', '', () => { if (betaMeetReq(def)) { const s2 = gateStatus(def); if (s2.ok) { closeTP(); enterZone(def.id, s2.guide); } } }, blocked2, 'gateBeta'));
   a.appendChild(tpButton('Not now', 'blue', () => closeTP(), false, 'gateNo'));
   body.appendChild(a);
 }
 
-/* --- beta tools --- */
-function betaAddPet(species, level, quiet) {
-  if (pets.length >= MAX_PETS) { toast(`Your house is full (${MAX_PETS} pets). Give a pet a new home at the Pet Shop first.`); return null; }
-  const pal = SPECIES[species].colors[0];
-  const p = createPet({ species, color: pal.id, name: randomName(species), level, xp: 0, hp: MAX_HP }, freeSpot(player.pos.x + rand(-1.5, 1.5), player.pos.z + 1.6));
-  rebuildRings(); persist();
-  hearts(p.pos, 4, 1.2); sfx.sparkle();
-  if (!quiet) toast(`Beta: added ${p.name}, a level ${level} ${SPECIES[species].label.toLowerCase()}.`);
-  return p;
-}
-function betaMeetReq(def) {
-  const r = def.req;
-  if (r.you) { if (you.level < r.you) { you.level = r.you; you.xp = 0; updateRings(); persist(); } return true; }
-  const st = gateStatus(def);
-  if (st.ok) return true;
-  const mine = pets.filter((x) => x.species === r.species);
-  const atRes = mine.find((x) => x.atResort);
-  if (atRes) { checkOut(atRes); if (atRes.level < r.level) atRes.level = r.level; updateCosmetics(atRes); updateRings(); persist(); return true; }
-  if (mine.length) { const best = mine.sort((a, b) => b.level - a.level)[0]; best.level = Math.max(best.level, r.level); best.xp = 0; updateCosmetics(best); updateRings(); persist(); return true; }
-  return !!betaAddPet(r.species, r.level, true);
-}
-function betaRanger() {
-  RANGER.forEach((c) => { rangerState[c.id].p = c.goal; rangerState[c.id].claimed = true; });
-  if (!rangerHat) { rangerHat = true; putOnRangerHat(); }
-  $('woodBtn').hidden = false; FRIENDS.forEach(updateFriendEnv);
-  persist(); toast('Beta: you are now a Forest Ranger. The woodland friends need you!');
-}
-let betaUnlocked = false;
-try { betaUnlocked = localStorage.getItem('tcyp-beta-unlocked') === '1'; } catch (e) {}
-(function setupBeta() {
-  const tab = $('betaTab'), panel = $('betaPanel');
-  const showTools = () => { $('betaLock').hidden = betaUnlocked; $('betaTools').hidden = !betaUnlocked; };
-  const open = (v) => { panel.hidden = !v; tab.hidden = v; tab.setAttribute('aria-expanded', String(v)); if (v) { showTools(); $('betaErr').textContent = ''; $('betaCode').value = ''; if (!betaUnlocked) setTimeout(() => $('betaCode').focus(), 0); } };
-  const tryCode = () => {
-    if ($('betaCode').value.trim() === '2522') {
-      betaUnlocked = true; try { localStorage.setItem('tcyp-beta-unlocked', '1'); } catch (e) {}
-      showTools(); toast('Beta tools unlocked.');
-    } else { $('betaErr').textContent = 'That passcode is not right. Try again.'; $('betaCode').value = ''; $('betaCode').focus(); }
-  };
-  $('betaUnlock').addEventListener('click', tryCode);
-  $('betaCode').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') tryCode(); });
-  $('betaHolGo').addEventListener('click', () => { holidayOverride = Number($('betaHol').value) || 0; buildHoliday(); if (HOL) { spawnHolidayCollect(); toast(`Beta: decorated for ${HOL.H.name}.`); } else toast('Beta: no decorations this month.'); });
-  $('betaRelock').addEventListener('click', () => { betaUnlocked = false; try { localStorage.removeItem('tcyp-beta-unlocked'); } catch (e) {} open(false); toast('Beta tools locked.'); });
-  tab.addEventListener('click', () => { startAudio(); open(true); });
-  $('betaClose').addEventListener('click', () => open(false));
-  const sel = $('betaSp');
-  Object.entries(SPECIES).forEach(([k, sp]) => { const o = document.createElement('option'); o.value = k; o.textContent = sp.label; sel.appendChild(o); });
-  $('betaDog').addEventListener('click', () => betaAddPet('dog', 10));
-  $('betaCat').addEventListener('click', () => betaAddPet('cat', 6));
-  $('betaBird').addEventListener('click', () => betaAddPet('bird', 6));
-  $('betaYou').addEventListener('click', () => { if (you.level < 5) { you.level = 5; you.xp = 0; } updateRings(); persist(); toast(`Beta: you are level ${you.level}.`); });
-  $('betaCoins').addEventListener('click', () => { addCoins(100); persist(); });
-  $('betaLevels').addEventListener('click', () => { pets.forEach((x) => { if (x.level < 10) { x.level = 10; x.xp = 0; } updateCosmetics(x); }); updateRings(); updateSheet(); persist(); toast('Beta: every pet is level 10 or higher.'); });
-  $('betaRanger').addEventListener('click', betaRanger);
-  $('betaItems').addEventListener('click', () => { Object.keys(inv).forEach((k) => { inv[k] += 10; }); persist(); toast('Beta: +10 of every forest item.'); });
-  $('betaWolf').addEventListener('click', () => { den.trust = 3; wolfFriend = true; persist(); toast('Beta: Mama Wolf trusts you. No more wolf raids, and pups are ready to adopt at the Wolf Den.'); });
-  $('betaGuide').addEventListener('click', () => { open(false); openGuide(); });
-  $('betaAdd').addEventListener('click', () => { const lv = clamp(Math.round(Number($('betaLv').value) || 1), 1, 20); betaAddPet(sel.value, lv); });
-})();
 
 function closeTP() {
   if (tpKind === 'guide' && guideTopic === 'start') markTutorial();
