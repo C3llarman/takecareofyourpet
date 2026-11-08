@@ -19,6 +19,16 @@ var LORE=[
   {id:'marigold',sec:'The wood',t:"Marigold's Garden",h:"Find all seven gnomes.",
    x:"All seven home. Bram set them back along the garden path and sat with them a long while. “She'd have laughed,” he said. “She always said they had opinions.”"},
 
+  {id:'wren',sec:'Folk of the wood',t:"Wren",h:"Someone camps by the fairy ring, west of the glade.",
+   x:"Wren was Hesper's apprentice for six summers and still talks to her pots the way Hesper did. She camps by the fairy ring because, she says, it is the only place in the wood that hums in the right key. She is probably right."},
+  {id:'tobin',sec:'Folk of the wood',t:"Tobin Cogsworth",h:"A broken cart on the east road.",
+   x:"A dwarf tinker who has walked every road in three kingdoms and broken a wheel on most of them. He can mend anything except, apparently, his own cart. He keeps a list of everyone who owes him money. Bram is on it."},
+  {id:'aertheldor',sec:'Folk of the wood',t:"Ærtheldor",h:"Far in the south, past the river, a pillar of rock.",
+   x:"The Great Eagle of the South is older than the tavern, older than the Burning, perhaps older than the stones. The Sylvani called the eagles the wood's eyes; Ærtheldor is the last who remembers being asked to look. He speaks rarely, and only to people who look up."},
+  {id:'aelfrend',sec:'Folk of the wood',t:"Aelfrend",h:"Help Ærtheldor, all the way.",
+   x:"Hatched in a nest you mended, warmed by a scale you stole from a dragon. Aelfrend is loud, curious and certain that you are his. He will dive on anything that threatens you — and when you call, he carries you home."},
+  {id:'hesper',sec:'Folk of the wood',t:"Hesper's Last Note",h:"Hesper's satchel lies somewhere in the dark.",
+   x:"“The singing stone is real. It is deeper than the mine, under the Matron's den, and it hums the waking-song — the one that cuts silk without a blade. I need more light, and more time, and somebody to tell Bram I was right. If you find this, tell Wren she was the best of my jars.”"},
   {id:'tavern',sec:'Places',t:"The Greenleaf Tavern",h:"Follow the path north from the glade.",
    x:"Bram built the Greenleaf on the ruins of a Sylvani waystation — the hearthstone is elf-cut, and on cold nights it still hums. He says he came for the dragon's gold, forty years ago, and stayed for the stew. He does not say what happened on the crag."},
   {id:'hive',sec:'Places',t:"The Wasp Hive",h:"Somewhere south-west, something buzzes.",
@@ -88,7 +98,7 @@ function journalScreen(back){
   G.loreNew=0;
   var secs=[], by={};
   LORE.forEach(function(l){ if(!by[l.sec]){ by[l.sec]=[]; secs.push(l.sec); } by[l.sec].push(l); });
-  var html='<h1>Journal</h1><p class="sub">'+loreCount()+' of '+LORE.length+' pages written</p>';
+  var html='<h1>Journal</h1><p class="sub">'+loreCount()+' of '+LORE.length+' pages written</p>'+(typeof questLogHtml==='function'?questLogHtml():'');
   secs.forEach(function(sname){
     html+='<h3>'+sname+'</h3><div class="lore">';
     by[sname].forEach(function(l){
@@ -116,7 +126,7 @@ function waystoneScreen(w){
     (fresh?'<p class="sub">✎ Written in your journal.</p>':'')+'<button class="btn" id="leave">Walk on</button>');
   document.getElementById('leave').onclick=menuClose;
 }
-var LANDLORE={tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
+var LANDLORE={eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
 
 /* ---------- mini-bosses ----------
    Named monsters with a home they guard and a trick of their own. Beaten, they

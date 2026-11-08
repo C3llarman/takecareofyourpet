@@ -114,7 +114,7 @@ function recalc(){
   S.extra=SK('twin')+SK('fork'); S.pierce=SK('pierce');
   S.burst=SK('burst')?3.0+1.4*SK('burst'):0; S.frost=SK('frost');
   S.allies=2+SK('comp'); S.xp=r.xp*(1+0.25*SK('ley'));
-  S.proj=c.proj; G.S=S;
+  S.proj=c.proj; if(typeof charmStats==='function'&&WILD) charmStats(S); G.S=S;
   if(G.player){var d=S.maxHp-G.player.maxHp; G.player.maxHp=S.maxHp; if(d>0)G.player.hp=Math.min(S.maxHp,G.player.hp+d);}
 }
 function look(race,cls,extra){
@@ -199,6 +199,7 @@ function buildWorld(){
   buildCrag(m);
   buildBounce(m);
   buildWaystones(m);
+  buildFolkSites(m);
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
   WORLD.castShadow=true; WORLD.receiveShadow=true;
   SCENE.add(WORLD);
@@ -251,6 +252,7 @@ function populate(){
   spawnCritters(); spawnGnomes(); populateCave();
   if(WILD.dragon.t<=0) spawnDragon();
   spawnMinis(); seedChampions();
+  spawnFolk(); spawnNodes(); spawnQuestItems();
 }
 function nearTavern(x,z,r){ return Math.hypot(x-TAVERN.x,z-TAVERN.z)<r||homeSafe(x,z,r*0.8); }
 /* Bram keeps the Greenleaf: rest, potions, hired blades and bounties */
@@ -261,7 +263,7 @@ function spawnKeeper(){
     look:look('human','warrior',{tunic:[0.55,0.42,0.30],sleeve:[0.55,0.42,0.30],cloak:null,weapon:null,hair:HAIR.brown,beard:1})});
   if(!G.keeperColl){ collCircle(k.x,k.z,0.5); G.keeperColl=1; }
 }
-function keeper(){ for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind==='npc') return G.ents[i]; return null; }
+function keeper(){ for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind==='npc'&&!G.ents[i].npcId) return G.ents[i]; return null; }
 
 /* ---------- input ---------- */
 var IN={mx:0,mz:0,look:{x:0,y:0},attack:false,shoot:false,shootHeld:false,jump:false,dash:false,interact:false,atkBuf:0,shotBuf:0,jumpBuf:0};
@@ -286,6 +288,7 @@ function layoutButtons(){
     {id:'skills',x:W-r*0.90,    y:SAFET+r*2.05, r:r*0.58,label:'SKILL'}
   ];
   if(G.S&&G.S.dash) btns.push({id:'dash',x:right-r*2.4,y:bot-r*2.0,r:r*0.70,label:'DASH'});
+  if(typeof WILD!=='undefined'&&WILD&&WILD.eagle) btns.push({id:'fly',x:W-r*0.90,y:SAFET+r*3.5,r:r*0.58,label:'FLY'});
 }
 function hitBtn(x,y){
   var best=null,bd=1e9;
@@ -302,6 +305,7 @@ function press(id){
   else if(id==='dash') IN.dash=true;
   else if(id==='potion') usePotion();
   else if(id==='skills') skillScreen();
+  else if(id==='fly') flyScreen();
   buzz(8);
 }
 function ptrDown(id,x,y){
@@ -476,6 +480,7 @@ function hurtEnemy(e,d,quiet){
     stonesKill();
     if(e.boss) bossDown(e);
     if(e.mini) miniDown(e);
+    monsterDrop(e);
     if(e.elite) championDown(e);
     sfx(e.kind+'die',e.x,e.z);
     // monsters burst in a puff of ichor and dust, no blood
@@ -608,6 +613,7 @@ function update(dt){
   if(ga>=4&&!p.dead&&Math.random()<dt*(ga>=5?9:3)){ var ma=Math.random()*6.28;
     burst(p.x+Math.cos(ma)*0.45,p.y+0.4+Math.random()*1.2,p.z+Math.sin(ma)*0.45,1,ga>=5?[1.0,0.84,0.38]:[0.70,1.0,0.80],{up:0.9,spread:0.15,size:0.06,life:1.1,grav:-0.6}); }
   if(p.dead){ p.deadT+=dt; p.speed=0; followCam(dt); return; }
+  if(G.flight){ flightUpdate(dt); updateEnts(dt); followCam(dt); return; }   // in Aelfrend's talons
 
   // movement frame: latched when you start pushing, so the auto-camera can't
   // rotate your heading out from under you (that is what made you walk in circles)
@@ -860,6 +866,9 @@ function updateEnts(dt){
       continue;
     }
     if(e.kind==='critter'){ updateCritter(e,dt,pd); continue; }
+    if(e.kind==='node'){ updateNode(e,dt,pd); continue; }
+    if(e.kind==='qitem'){ updateQItem(e,dt,pd); continue; }
+    if(e.kind==='eagle'){ updateEagle(e,dt); continue; }
     if(e.kind==='gnome'){ e.yaw+=wrapA(Math.atan2(p.x-e.x,p.z-e.z)-e.yaw)*Math.min(1,dt*(pd<8?3:0));
       if(pd<2.2&&!p.dead) findGnome(e); continue; }
     if(e.boss){ if(pd<130) updateBoss(e,dt); continue; }
@@ -943,7 +952,7 @@ function updateEnts(dt){
       // Bram turns to watch you come up the path, and raises a mug when you arrive
       var want=pd<10?Math.atan2(p.x-e.x,p.z-e.z):e.home;
       e.yaw+=(wrapA(want-e.yaw))*Math.min(1,dt*4);
-      if(pd<10&&!e.greeted){ e.greeted=true; e.cheer=1.6; msg(G.bounty&&G.bounty.got>=G.bounty.n?'Back already? Come, collect!':'Welcome to the Greenleaf!','#ffe08a',e.x,e.y+2.6,e.z); }
+      if(pd<10&&!e.greeted){ e.greeted=true; e.cheer=1.6; msg(e.npcId?FOLK[e.npcId].greet:(G.bounty&&G.bounty.got>=G.bounty.n?'Back already? Come, collect!':'Welcome to the Greenleaf!'),'#ffe08a',e.x,e.y+2.6,e.z); }
       if(pd>18) e.greeted=false;
       if(e.cheer>0) e.cheer-=dt;
       continue;
@@ -1029,7 +1038,8 @@ function addShadow(e){
   var sc=(e.kind==='spider')?3.0*(e.scale||1):1.5*(e.scale||1);
   if(e.kind==='cocoon') sc=1.6;
   if(e.boss||(e.kind==='corpse'&&e.boss)) sc=(e.rad||3)*2.4;
-  if(e.kind==='critter'||e.kind==='gnome') sc=0.6;
+  if(e.kind==='critter'||e.kind==='gnome'||e.kind==='node'||e.kind==='qitem') sc=0.6;
+  if(e.kind==='eagle') sc=(e.scale||1)*1.8;
   var air=Math.max(0,e.y-H(e.x,e.z));
   var f=Math.max(0.35,1-air*0.22);
   var m=mat(); m4trs(m,e.x,H(e.x,e.z)+0.06,e.z,0,e.yaw||0,0,sc*f,1,sc*f);
@@ -1138,7 +1148,7 @@ function draw(){
     var e=G.ents[i];
     if(actors.has(e)) continue;
     var ed=Math.hypot(e.x-c.x,e.z-c.z);
-    if(ed>(e.boss?130:(e.kind==='critter'?45:62))) continue;
+    if(ed>(e.boss||e.kind==='eagle'?130:(e.kind==='critter'||e.kind==='node'?45:62))) continue;
     VIS.push([ed,e]);
   }
   VIS.sort(function(a,b){return a[0]-b[0];});
@@ -1232,6 +1242,9 @@ function pushEnt(e){
   else if(rk==='golem') golemRig(RIG,e,G.t);
   else if(rk==='dragon') dragonRig(RIG,e,G.t);
   else if(e.kind==='gnome') gnomeRig(RIG,e,G.t);
+  else if(e.kind==='eagle') eagleRig(RIG,e,G.t);
+  else if(e.kind==='node') nodeRig(RIG,e,G.t);
+  else if(e.kind==='qitem') qitemRig(RIG,e,G.t);
   else if(e.kind==='critter'){ if(e.sub==='fly') flyRig(RIG,e,G.t); else bunnyRig(RIG,e,G.t); }
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
   else if(e.kind==='shot'||e.kind==='eshot'||e.kind==='stuck'){ pushShot(e); return; }
@@ -1313,6 +1326,12 @@ function mapIcon(kind,x,y,s,unknown){
       hx.fillStyle='#bff0ff'; hx.beginPath();
       for(var k=0;k<8;k++){ var a=k/8*6.283, rr=(k&1)?1.2:4; hx.lineTo(Math.sin(a)*rr,-Math.cos(a)*rr); }
       hx.closePath(); hx.fill(); break;
+    case 'folk':                         // Wren and Tobin
+      hx.fillStyle='#2a1a0a'; hx.beginPath(); hx.arc(0,0,4,0,6.3); hx.fill();
+      hx.fillStyle='#9fdc8a'; hx.beginPath(); hx.arc(0,0,3,0,6.3); hx.fill(); break;
+    case 'eagle': case 'eyrie':          // a bird in flight
+      hx.fillStyle='#e8c88a'; hx.beginPath(); hx.moveTo(0,-1); hx.lineTo(5.5,-3.5); hx.lineTo(2.5,0.5); hx.lineTo(0,3.5); hx.lineTo(-2.5,0.5); hx.lineTo(-5.5,-3.5); hx.closePath(); hx.fill();
+      hx.strokeStyle='#2a1a0a'; hx.lineWidth=0.8; hx.stroke(); break;
     case 'keeper':                       // Bram: a gold "!" while he has work or a reward for you
       var ready=!G.bounty||G.bounty.got>=G.bounty.n;
       hx.fillStyle='#2a1a0a'; hx.beginPath(); hx.arc(0,0,4.2,0,6.3); hx.fill();
@@ -1461,11 +1480,11 @@ function drawHUD(){
   var sc=mr/(DESKTOP?86:70), ms=DESKTOP?1:0.85;
   for(var e2=0;e2<G.ents.length;e2++){
     var en=G.ents[e2];
-    if(en.kind==='shot'||en.kind==='eshot'||en.kind==='stuck'||en.kind==='critter'||en.kind==='gnome'||en.kind==='corpse') continue;
+    if(en.kind==='shot'||en.kind==='eshot'||en.kind==='stuck'||en.kind==='critter'||en.kind==='gnome'||en.kind==='corpse'||en.kind==='node'||en.kind==='qitem'||(en.kind==='eagle'&&en.sub==='pet')) continue;
     var ddx=(en.x-p.x)*sc, ddz=(en.z-p.z)*sc;
     if(Math.hypot(ddx,ddz)>mr) continue;
     var rp=rotPt(ddx,ddz,G.cam.yaw);
-    mapIcon(en.kind==='spider'&&en.big?'bigspider':(en.kind==='npc'?'keeper':en.kind),mx+rp.x,my+rp.y,ms);
+    mapIcon(en.kind==='spider'&&en.big?'bigspider':(en.kind==='npc'?(en.npcId?'folk':'keeper'):en.kind),mx+rp.x,my+rp.y,ms);
   }
   if(WILD.inCave){                        // below ground the map shows the chambers instead
     hx.fillStyle='rgba(120,200,220,.16)';
@@ -1481,6 +1500,12 @@ function drawHUD(){
     if(edge){ rot.x*=(mr-7)/rl; rot.y*=(mr-7)/rl; }
     mapIcon(lm.kind,mx+rot.x,my+rot.y,ms*(edge?0.85:1.1),!G.found[lm.name]);
   }
+  // quest objectives: gold diamonds, pinned to the rim when they lie beyond it
+  var QT=questTargets();
+  for(var qi=0;qi<QT.length;qi++){ var qt=QT[qi], qr=rotPt((qt.x-p.x)*sc,(qt.z-p.z)*sc,G.cam.yaw), ql=Math.hypot(qr.x,qr.y);
+    if(ql>mr-6){ qr.x*=(mr-6)/ql; qr.y*=(mr-6)/ql; }
+    hx.save(); hx.translate(mx+qr.x,my+qr.y); hx.rotate(0.785); hx.fillStyle='#ffd76a'; hx.strokeStyle='#2a1a0a'; hx.lineWidth=1;
+    hx.fillRect(-3,-3,6,6); hx.strokeRect(-3,-3,6,6); hx.restore(); }
   // north marker rides the rim (the map turns with the camera)
   var nr=rotPt(0,-mr,G.cam.yaw);
   hx.font='700 '+Math.round(11*ms)+'px Georgia,serif'; hx.textAlign='center';
@@ -1491,7 +1516,7 @@ function drawHUD(){
   if(DESKTOP||SHOWKEY){
     var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['shroom','Mushroom grump'],['cocoon','Captive — free them'],
       ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
-      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['crag',"Dragon's Crag"],['cave','Glimmer Cave — bring a torch']];
+      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['cave','Glimmer Cave — bring a torch']];
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
     hx.textAlign='left'; hx.font='600 '+(DESKTOP?11.5:10.5)+'px Georgia,serif';
@@ -1525,6 +1550,7 @@ function drawHUD(){
     }
   }
   drawBossBar();
+  drawCompass(); drawFolkMarks();
   // tip
   if(G.tipT>0){
     hx.textAlign='center'; hx.globalAlpha=Math.min(1,G.tipT);
@@ -1591,7 +1617,7 @@ function drawHUD(){
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
     var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot';
-    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   L journal   ·   M sound';
+    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   M sound';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
       hx.textAlign='center'; hx.font='600 12.5px Georgia,serif';
@@ -1761,7 +1787,7 @@ function skillScreen(flash){
     '<div class="stat"><span>Health</span><b>'+G.S.maxHp+'</b></div>'+
     '<div class="stat"><span>Melee / ranged</span><b>'+Math.round(G.S.melee*100)+'% / '+Math.round(G.S.ranged*100)+'%</b></div>'+
     '<div class="stat"><span>Prisoners freed / foes slain</span><b>'+G.freed+' / '+G.killed+'</b></div>'+
-    '<div class="stat"><span>Lost gnomes found</span><b>'+gnomeCount()+' / '+GNOMES.length+'</b></div>'+
+    '<div class="stat"><span>Lost gnomes found</span><b>'+gnomeCount()+' / '+GNOMES.length+'</b></div>'+satchelHtml()+
     '<div class="skills">'+rows+'</div>'+
     '<button class="btn" id="close">Back to the wood</button>'+
     '<button class="btn alt" id="jrnl">Journal — '+loreCount()+' of '+LORE.length+' pages'+(G.loreNew?' (new!)':'')+'</button>'+
@@ -1834,6 +1860,7 @@ function keeperScreen(say){
   var full=deployed()>=S.allies;
   opts.push({id:'hire',  t:'Hire a companion', d:full?'Your company is full ('+deployed()+' of '+S.allies+')':'Blades for coin ('+deployed()+' of '+S.allies+' in your company)', off:full});
   if(!WILD.torch) opts.push({id:'torch', t:'Buy a torch — '+TORCH_PRICE+' ◉', d:p.coins<TORCH_PRICE?'Not enough coin':'For the Glimmer Cave under the Dragon\'s Crag', off:p.coins<TORCH_PRICE});
+  bramParcel(opts);
   opts.push({id:'story', t:'Ask for a story', d:'Bram knows the wood\'s old tales — and a few of his own', off:false});
   if(!b) opts.push({id:'work', t:'Ask for work', d:'Bram always has a job going', off:false});
   else if(b.got>=b.n){ var rw=bountyReward(b); opts.push({id:'claim', t:'Collect your bounty', d:'+'+rw.coins+' ◉ and +'+rw.xp+' XP', off:false, gold:true}); }
@@ -1864,6 +1891,7 @@ function keeperDo(id){
     if(WILD.torch||p.coins<TORCH_PRICE) return;
     p.coins-=TORCH_PRICE; WILD.torch=true; sfx('pickup'); saveGame();
     keeperScreen('There. Pitch-soaked, burns for days. The cave\'s in the west face of the crag — and whatever glitters in there, I want to hear about it.');
+  } else if(id==='parcel'){ keeperScreen(bramParcelDo());
   } else if(id==='story'){ var st=bramStory(); sfx('pickup'); keeperScreen(st);
   } else if(id==='hire'){ hireScreen(); }
   else if(id==='gear'){ gearScreen(); }
@@ -2045,6 +2073,7 @@ addEventListener('keydown',function(e){
   if(e.key==='q'||e.key==='Q') usePotion();
   if(e.key==='c'||e.key==='C'||e.key==='Shift') IN.dash=true;
   if(DEBUG&&(e.key==='i'||e.key==='I')) SHOWDBG=!SHOWDBG;
+  if((e.key==='g'||e.key==='G')&&!e.repeat&&G.state==='play'&&WILD.eagle&&!G.flight) flyScreen();
   if((e.key==='l'||e.key==='L')&&!e.repeat){ if(G.state==='play') journalScreen(); else if(G.state==='skills') menuClose(); }
   if(e.key==='e'||e.key==='E'){ IN.attack=true; IN.atkBuf=0.45; }
   setMode(true);

@@ -185,6 +185,7 @@ function cottageScreen(say){
     var built=0; HOME_UP.forEach(function(u){ if(HOME.up[u.id]) built++; });
     html='<h1>Your Cottage</h1><p class="sub">'+(built===HOME_UP.length?'Every job done. It\'s home.':built+' of '+HOME_UP.length+' jobs done')+' · ◉ '+p.coins+'</p>'+
       (say?'<p class="say">'+say+'</p>':'');
+    if(Object.keys(WILD.recipes||{}).length) opts.push({id:'craft',t:'Your workbench',d:'Brew and make from what you\'ve gathered',off:false});
     if(HOME.up.hearth) opts.push({id:'rest',t:'Rest by the hearth',d:p.hp>=p.maxHp-0.5?'You are already rested':'Mend you and your company',off:false});
     if(plotsOpen()){
       var rc=readyCrops(), empty=0, growing=[];
@@ -234,6 +235,7 @@ function cottageDo(id){
     for(var k=0;k<plotsOpen();k++){ var q=HOME.plots[k]; if(cropReady(q)){ q.c=null; q.t=0; } }
     if(rc.n){ p.coins+=rc.v; sfx('coin'); var hp=HT(8,0); burst(hp.x,H(hp.x,hp.z)+1,hp.z,20,[1.0,0.85,0.4],{up:3,spread:3,size:0.12,life:1}); saveGame(); }
     cottageScreen(rc.n?'A good harvest: +'+rc.v+' coins.':'');
+  } else if(id==='craft'){ craftScreen(function(){ cottageScreen(); });
   } else if(id==='rest'){
     p.hp=p.maxHp; for(var a=0;a<G.ents.length;a++) if(G.ents[a].kind==='ally') G.ents[a].hp=G.ents[a].maxHp;
     sfx('potion'); cottageScreen('You doze by the fire. Much better.');

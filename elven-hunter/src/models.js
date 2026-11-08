@@ -123,6 +123,8 @@ function actorSpec(e){
     var gr=G.build.gear||{w:0,a:0};
     return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null, armor:gr.a, wtier:gr.w};
   }
+  if(e.kind==='npc'&&e.npcId)        // the other folk: Wren the hedge-witch, Tobin the tinker
+    return {model:e.model, weapons:e.npcId==='tobin'?['1H_Axe_Offhand']:[], beard:!!e.beard, tint:e.tint, key:e.npcId};
   if(e.kind==='npc')                  // the innkeeper: a barbarian with a mug, in warm tones
     return {model:'barbarian', weapons:['Mug'], beard:true, tint:[1.0,0.88,0.74], key:'keeper'};
   var ck=e.kind==='corpse'?e.of:e.kind;

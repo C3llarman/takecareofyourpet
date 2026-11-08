@@ -1,6 +1,6 @@
 {
   "name": "elven-hunter-3d",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "An open-world, third-person low-poly forest game that runs in a single self-contained HTML file. Rendered with three.js, bundled inline; no network at runtime.",
   "type": "module",
   "scripts": {

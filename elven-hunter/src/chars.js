@@ -15,6 +15,8 @@ function initParts(){
   reg('disc',discMesh(14));
   reg('wingIn',wingMesh(0));
   reg('wingOut',wingMesh(1));
+  reg('featherIn',featherMesh(0));
+  reg('featherOut',featherMesh(1));
   reg('sky',skyMesh([0.62,0.70,0.68],[0.30,0.45,0.52],[0.20,0.25,0.22],20));
 }
 
@@ -385,6 +387,57 @@ function dragonRig(out,e,t){
     if(!LOW){ var tip=trsv(0,-sd4*sweep2,-sd4*al2,sd4*3.5*W,0,0.35*W);
       P('cone',sh[0]+el[0]+tip[0],sh[1]+el[1]+tip[1],sh[2]+el[2]+tip[2],-1.2,0,0,0.16*s,0.5*s,0.16*s,L.horn);
       P('blob',sh[0]+el[0],sh[1]+el[1]-0.15*s,sh[2]+el[2],0,0,0,0.35*s,0.3*s,0.35*s,L.dark); }
+  }
+}
+/* a bird's wing panel, flat in y=0, running out along +x: part 0 the broad inner
+   wing with its coverts, part 1 the hand, ending in five long "finger" primaries */
+function featherMesh(part){
+  var m=new MB(), BASE=[1,1,1], LITE=[1.25,1.2,1.1], TIP=[0.55,0.52,0.50];
+  function tri(a,b,c,col,y){ var A=[a[0],y,a[1]],B=[b[0],y,b[1]],C=[c[0],y,c[1]], up=[0,1,0], dn=[0,-1,0];
+    m.triV(A,C,B,up,up,up,col,col,col); m.triV(A,B,C,dn,dn,dn,col,col,col); }
+  function quad(a,b,c,d,col,y){ tri(a,b,c,col,y); tri(a,c,d,col,y); }
+  if(part===0){
+    quad([0,0.35],[1.5,0.42],[1.5,-0.75],[0,-0.95],BASE,0);
+    quad([0,0.35],[1.5,0.42],[1.5,0.0],[0,-0.1],LITE,0.015);              // a pale band of coverts along the leading edge
+    for(var i=0;i<5;i++){ var x=i*0.3; tri([x,-0.75-0.04*i],[x+0.3,-0.75-0.04*i],[x+0.15,-1.2],TIP,0); }   // ragged secondaries
+  } else {
+    quad([0,0.42],[0.9,0.38],[0.9,-0.6],[0,-0.75],BASE,0);
+    var fan=[[2.15,0.38],[2.25,0.05],[2.15,-0.30],[1.95,-0.62],[1.65,-0.90]];
+    for(var k=0;k<5;k++){ var bz=0.30-k*0.22, tip=fan[k], w=0.11;
+      quad([0.85,bz+w],[tip[0],tip[1]+w*0.6],[tip[0],tip[1]-w*0.6],[0.85,bz-w],BASE,0);
+      tri([tip[0]-0.35,tip[1]+w*0.6],[tip[0]+0.12,tip[1]],[tip[0]-0.35,tip[1]-w*0.6],TIP,0.01); }
+  }
+  return m;
+}
+/* the eagles: Ærtheldor (big, gold-brown, white-headed) and the young Aelfrend */
+function eagleRig(out,e,t){
+  var s=e.scale||1, L=eagleLook(e), LOW=(typeof LOD!=='undefined'&&LOD);
+  var perched=e.sub==='great'&&!(e.flapT>0), fly=!perched;
+  var spread=e.sub==='great'?(e.flapT>0?1:0):1;
+  function P(k,x,y,z,rx,ry,rz,sx,sy,sz,c){ out.push([k,x*s,y*s,z*s,rx,ry,rz,sx*s,sy*s,sz*s,c]); }
+  var pitch=e.dive?0.6:(fly?0.1:-0.35);
+  P('blobR',0,0.0,0, pitch,0,0, 0.85,0.8,1.5,L.body);
+  P('blob',0,0.05,0.35, pitch,0,0, 0.7,0.6,0.9,L.dark);
+  var hz=fly?0.85:0.55, hy=fly?0.42:0.85;
+  P('blob',0,hy-0.3,hz, 0,0,0, 0.62,0.62,0.7,L.head);
+  P('cone',0,hy-0.08,hz+0.3, -1.2,0,0, 0.22,0.45,0.18,L.beak);
+  if(!LOW){ P('box',-0.2,hy+0.05,hz+0.18,0,0,0,0.08,0.06,0.08,[0.12,0.08,0.04]); P('box',0.2,hy+0.05,hz+0.18,0,0,0,0.08,0.06,0.08,[0.12,0.08,0.04]);
+    P('box',-0.2,hy+0.12,hz+0.14,0.2,0,0.2,0.16,0.04,0.12,L.dark); P('box',0.2,hy+0.12,hz+0.14,0.2,0,-0.2,0.16,0.04,0.12,L.dark); }
+  // tail fan
+  P('cone',0,0.1,-0.95, fly?1.45:1.2,0,0, 0.75,0.9,0.08,L.tail);
+  // legs and talons, gripping the rock or tucked
+  if(!fly&&!LOW) for(var sd=-1;sd<=1;sd+=2){ P('limbT',sd*0.22,-0.25,0.1,0,0,0,0.16,0.5,0.16,L.beak);
+    for(var c=-1;c<=1;c++) P('cone',sd*0.22+c*0.08,-0.72,0.25,-1.4,0,0,0.06,0.2,0.06,[0.15,0.12,0.10]); }
+  // wings: folded along the flanks on the perch, spread and beating in the air
+  var fl=Math.sin(t*(e.dive?3:(e.sub==='great'?6:4.2))), W=1.0;
+  for(var sd2=-1;sd2<=1;sd2+=2){
+    var al, sw, al2, sw2;
+    if(spread){ al=e.dive?-0.25:0.05+fl*0.6; sw=e.dive?0.9:0.08; al2=al+(e.dive?-0.2:fl*0.3); sw2=sw+(e.dive?0.5:0.05); }
+    else { al=-0.35; sw=1.35; al2=-0.5; sw2=1.75; }
+    var sh=[sd2*0.45,0.25,0.35];
+    P('featherIn',sh[0],sh[1],sh[2],0,-sd2*sw,-sd2*al,sd2*W,W,W,L.body);
+    var el=trsv(0,-sd2*sw,-sd2*al,sd2*1.5*W,0,0);
+    P('featherOut',sh[0]+el[0],sh[1]+el[1],sh[2]+el[2],0,-sd2*sw2,-sd2*al2,sd2*W,W,W,L.body);
   }
 }
 /* ambient life: butterflies, rabbits and the gnomes hiding about the wood */

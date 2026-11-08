@@ -21,7 +21,11 @@ from level 10 an abandoned cottage can be bought, fixed up and farmed. The stand
 wake while you hunt and can call up a boss; a dragon sleeps on the Dragon's Crag; and the
 Glimmer Cave under it opens to anyone with a torch. Five named mini-bosses guard their
 homes, golden champions roam on Normal and Hard, and a journal fills with the wood's story
-as you explore. Pick Easy, Normal or Hard. Progress is saved in the browser.
+as you explore. Wren the hedge-witch and Tobin the tinker have quests that aren't about
+killing: gathering, finding lost things, a delivery, a repair; what you gather crafts into
+potions, tonics and lasting charms. Far in the south, Ærtheldor the Great Eagle has a quest
+chain of his own, and at its end an eaglet, Aelfrend, follows you and flies you back to
+the quest givers. Pick Easy, Normal or Hard. Progress is saved in the browser.
 
 ---
 
@@ -47,7 +51,8 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 | Dash | `Shift` *(unlocked by a skill; rolls the way you are pushing)* |
 | Drink a potion | `Q` |
 | Skills | `Tab` |
-| Journal | `L` (or the button on the skills screen) |
+| Journal and quests | `L` (or the button on the skills screen) |
+| Fly with Aelfrend | `G` (phone: the **FLY** button), once he has hatched |
 | Sound | `M` cycles all on → effects only → off (also a button on the title and skills screens) |
 | Zoom | Scroll wheel |
 
@@ -80,8 +85,10 @@ src/
   home.js     the cottage, its farm, and saving / continuing
   wild.js     difficulty, mushroom grumps, the Stone Warden, the dragon, the Glimmer
               Cave and its torch, butterflies, rabbits, toadstools and gnomes
-  legends.js  the journal (31 pages of lore), waystones, Bram's tales, the five
+  legends.js  the journal (36 pages of lore), waystones, Bram's tales, the five
               mini-bosses and the golden champions
+  folk.js     Wren, Tobin and Ærtheldor and their ten quests, gathering, the
+              workbench and its recipes, Tobin's compass, Aelfrend and flying
   audio.js    synthesised sound effects and the music loop (Web Audio)
   game.js     state, input, camera, combat, AI, allies, skills, HUD, particles, telemetry
 assets/       compressed models (*.glb), the forest (nature.json), music.mp3 — all CC0,
@@ -234,6 +241,42 @@ live at the top of `src/home.js`.
   circlet; and at **Legendary**, gold plate with spikes, a jewelled crown and a glowing chest
   gem, with gold motes drifting off you. Weapons glow at the top two tiers.
 
+### Folk, quests and crafting (`src/folk.js`)
+
+Walk up to a quest giver and `E` / **TALK**. A gold **!** floats over someone with work for
+you, a green **?** over someone waiting for what you've found. Open quests are gold
+diamonds on the minimap (pinned to its rim when far), and are listed at the top of the
+journal.
+
+| Giver | Where | Quests |
+|---|---|---|
+| **Wren**, hedge-witch | by the fairy ring west of the glade | gather 5 silverleaf (learn to craft) · bring 3 glowcaps · find Hesper's satchel in the Glimmer Cave |
+| **Tobin Cogsworth**, tinker | his broken cart on the east road | find his cog, spring, bell and lens (they're at the Hollow, the river, the hive and the dragon's lair) · deliver a parcel to Bram · bring wood and ore for a new wheel |
+| **Ærtheldor**, the Great Eagle | the Eyrie, far south, across the map from the dragon | find six golden feathers · bring back his stolen egg from the Hollow · steal a shed scale from beside the sleeping dragon (he may wake) · bring wood, silk and ore to mend the nest |
+
+Rewards include coin, XP, recipes, a whetstone (+5% damage), **Tobin's compass** (an arrow at
+the top of the screen pointing at your nearest objective) and, at the end of Ærtheldor's
+chain, **Aelfrend**: a young eagle who circles over you, dives on anything that comes
+near, and on `G` / **FLY** carries you to the Eyrie, the tavern, Wren, Tobin, your
+cottage or the standing stones.
+
+**Gathering.** Silverleaf grows in the open, fallen wood lies everywhere, iron ore sits in
+the high ground and round the crag, honeycomb by the hive, silk at the Hollow and
+glowcaps in the cave. Walk over a patch to gather it; it grows back in a couple of minutes.
+Spiders also drop silk, wasps honeycomb and grumps the odd glowcap.
+
+**Crafting**, at Wren's bench or your own cottage once you own it:
+
+| Recipe | Takes | Makes |
+|---|---|---|
+| Healing potion | 2 silverleaf, 1 honeycomb | a potion |
+| Honey cake | 2 honeycomb | you mend for 40 s |
+| Torch | 2 wood, 1 silk | the cave torch, if you don't have one |
+| Wardleaf tonic | 2 silverleaf, 1 glowcap | half damage for 45 s |
+| Glimmer charm | 3 ore, 2 glowcaps | +8% damage, for good |
+| Silkweave mantle | 6 silk, 2 silverleaf | +25 health, for good |
+| Featherlight boots | 4 wood, 2 honeycomb, 2 silk | +8% speed, for good |
+
 ### Characters
 
 - **Models.** Rogue → hooded rogue with crossbow (draws a knife to strike), Warrior →
@@ -349,7 +392,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-137 assertions run the actual game in headless Chromium with software WebGL and check
+155 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames

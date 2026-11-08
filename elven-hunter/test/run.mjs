@@ -61,7 +61,7 @@ section('World');
     })(),
   }));
   ok('world mesh builds', w.tris > 50000, `${w.tris} triangles in one draw call`);
-  ok('seven landmarks placed', w.landmarks.length === 7, w.landmarks.join(', '));
+  ok('eight landmarks placed', w.landmarks.length === 8, w.landmarks.join(', '));
   ok('spawn is above water', w.spawnAboveWater);
   ok('terrain normals face up', w.upward === 1, `${Math.round(w.upward * 100)}% of sampled faces`);
   await page.close();
@@ -792,7 +792,7 @@ section('Lore, mini-bosses, champions and armour');
   ok('waystones can be read into the journal', lore.tap === 'READ' && lore.read);
   ok('Bram tells his stories', lore.tale, `${lore.pages} pages written`);
   await page.evaluate(() => { G.state = 'play'; journalScreen(); });
-  const jp = await page.evaluate(() => ({ written: document.querySelectorAll('.lp:not(.off)').length, empty: document.querySelectorAll('.lp.off').length, total: LORE.length }));
+  const jp = await page.evaluate(() => ({ written: document.querySelectorAll('.lp:not(.off):not(.qp)').length, empty: document.querySelectorAll('.lp.off:not(.qp)').length, total: LORE.length }));
   ok('the journal shows written pages and hints for the rest', jp.written === lore.pages && jp.empty === jp.total - lore.pages, `${jp.written} written, ${jp.empty} to find`);
   await page.evaluate(() => menuClose());
 
@@ -822,6 +822,90 @@ section('Lore, mini-bosses, champions and armour');
   await page.click('#cont'); await page.waitForTimeout(300);
   const kept = await page.evaluate(() => ({ pages: loreCount(), queenDown: WILD.minis.queen > 0 && !G.ents.some((e) => e.mini === 'queen') }));
   ok('journal and fallen mini-bosses are saved', kept.pages >= before && kept.queenDown, JSON.stringify(kept));
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
+  await page.close();
+}
+
+/* ---------------- folk: quest givers, gathering, crafting, the eagles ---------------- */
+section('Folk, quests, gathering, crafting and the eagles');
+{
+  const page = await open(browser, PHONE);
+  await page.evaluate(() => { startRun(); G.ents = G.ents.filter((e) => !FOE[e.kind] || e.boss); G.player.inv = 1e9; });
+  await page.waitForTimeout(300);
+  const folk = await page.evaluate(() => ({ npcs: G.ents.filter((e) => e.npcId).map((e) => e.npcId), eagle: G.ents.some((e) => e.kind === 'eagle' && e.sub === 'great'),
+    nodes: G.ents.filter((e) => e.kind === 'node').length, quests: QUESTS.length,
+    eyrieFar: Math.hypot(FOLKSITE.eyrie.x - CRAG.x, FOLKSITE.eyrie.z - CRAG.z) }));
+  ok('Wren and Tobin keep camp, and Ærtheldor nests in the south', folk.npcs.includes('wren') && folk.npcs.includes('tobin') && folk.eagle, folk.npcs.join(', '));
+  ok('the eyrie is across the map from the dragon', folk.eyrieFar > 200, `${Math.round(folk.eyrieFar)} units apart`);
+  ok('there are things to gather', folk.nodes > 80, `${folk.nodes} patches of silverleaf, wood, ore, silk, honeycomb and glowcaps`);
+
+  // walk up to Wren: talk, take her quest, gather, hand in, learn to craft
+  const wren = await page.evaluate(() => new Promise((res) => {
+    const w = folkEnt('wren'), p = G.player; p.x = w.x + 2; p.z = w.z + 1; p.y = H(p.x, p.z);
+    const t0 = G.t; const tick = () => { if (G.t - t0 < 0.3) { requestAnimationFrame(tick); return; } res(G.talk && G.talk.tap); }; tick();
+  }));
+  ok('walking up to Wren offers a talk', wren === 'TALK');
+  const atk = await page.evaluate(() => { const b = btns.find((b) => b.id === 'attack'); return [b.x, b.y]; });
+  await page.touchscreen.tap(atk[0], atk[1]); await page.waitForTimeout(300);
+  await page.click('.opt[data-o="accept"]');
+  const gather = await page.evaluate(() => new Promise((res) => {
+    menuClose(); const p = G.player, before = inv('herb');
+    const nodes = G.ents.filter((e) => e.kind === 'node' && e.res === 'herb').slice(0, 4);
+    let i = 0; const step = () => { if (i >= nodes.length) { res({ got: inv('herb') - before, regrow: nodes[0].t > 0 }); return; }
+      const n = nodes[i++]; p.x = n.x; p.z = n.z; p.y = H(p.x, p.z); const t0 = G.t; const w = () => { if (G.t - t0 < 0.15) requestAnimationFrame(w); else step(); }; w(); };
+    step();
+  }));
+  ok('walking over silverleaf gathers it, and it grows back', gather.got >= 3 && gather.regrow, `+${gather.got} silverleaf`);
+  const handIn = await page.evaluate(() => { WILD.inv.herb = Math.max(5, inv('herb')); G.state = 'play'; folkScreen('wren');
+    document.querySelector('.opt[data-o="turn"]').click(); return { done: qDone('w_leaf'), potion: !!WILD.recipes.potion, craft: !!document.querySelector('.opt[data-o="craft"]') }; });
+  ok('handing in teaches you recipes and opens the workbench', handIn.done && handIn.potion && handIn.craft);
+  await page.click('.opt[data-o="craft"]');
+  const craft = await page.evaluate(() => { WILD.inv.herb = 2; WILD.inv.honey = 1; const p0 = G.player.potions; craftScreen();
+    document.querySelector('.opt[data-r="potion"]').click(); return { potions: G.player.potions - p0, herb: inv('herb'), honey: inv('honey') }; });
+  ok('crafting turns silverleaf and honeycomb into a potion', craft.potions === 1 && craft.herb === 0 && craft.honey === 0);
+  const charm = await page.evaluate(() => { WILD.recipes.mantle = 1; WILD.inv.silk = 6; WILD.inv.herb = 2; const h0 = G.S.maxHp; craftScreen();
+    document.querySelector('.opt[data-r="mantle"]').click(); const again = !!document.querySelector('.opt[data-r="mantle"]:not([disabled])'); menuClose();
+    return { hp: G.S.maxHp - h0, again }; });
+  ok('a crafted charm is a lasting upgrade, made once', charm.hp === 25 && !charm.again, `+${charm.hp} health`);
+
+  // Tobin: lost parts lie in the world while his quest is open; the compass points at them
+  const parts = await page.evaluate(() => { G.state = 'play'; acceptQuest(QUEST_BY.t_parts); const items = G.ents.filter((e) => e.kind === 'qitem' && e.qid === 't_parts');
+    const marks = questTargets().length; items.forEach((it) => { G.player.x = it.x; G.player.z = it.z; updateQItem(it, 0.016, 0); });
+    const ready = qReady(QUEST_BY.t_parts); finishQuest(QUEST_BY.t_parts); return { items: items.length, marks, ready, compass: WILD.compass, left: G.ents.filter((e) => e.qid === 't_parts').length }; });
+  ok('Tobin\'s lost parts can be found and returned', parts.items === 4 && parts.ready && parts.left === 0, `${parts.items} parts`);
+  ok('open quests are marked on the map, and the compass is your reward', parts.marks >= 4 && parts.compass === 1);
+  const parcel = await page.evaluate(() => { acceptQuest(QUEST_BY.t_parcel); G.state = 'play'; keeperScreen(); const offered = !!document.querySelector('.opt[data-o="parcel"]');
+    keeperDo('parcel'); menuClose(); return { offered, ready: qReady(QUEST_BY.t_parcel) }; });
+  ok('a delivery: Tobin\'s parcel for Bram', parcel.offered && parcel.ready);
+
+  // Ærtheldor's chain ends with Aelfrend
+  await page.evaluate(() => setMode(false));            // page.click() moved a mouse, which switched to laptop controls
+  const eagle = await page.evaluate(() => { const order = ['e_feathers', 'e_egg', 'e_scale', 'e_nest']; const seen = [];
+    order.forEach((id) => { const q = QUEST_BY[id]; seen.push(giverQuest('eagle') === q); acceptQuest(q);
+      if (q.goal.type === 'find') G.ents.filter((e) => e.kind === 'qitem' && e.qid === id).forEach((it) => { const d = findKind('dragon'); if (d) d.state = 'sleep'; updateQItem(it, 0.016, 0); });
+      if (q.goal.type === 'bring') for (const k in q.goal.cost) WILD.inv[k] = (WILD.inv[k] || 0) + q.goal.cost[k];
+      finishQuest(q); });
+    return { inOrder: seen.every(Boolean), pet: !!findPet(), btn: btns.some((b) => b.id === 'fly') }; });
+  ok('Ærtheldor\'s quests come one after another', eagle.inOrder);
+  ok('and end with Aelfrend, who follows you', eagle.pet && eagle.btn, 'and a FLY button');
+  const dive = await page.evaluate(() => new Promise((res) => { const p = G.player; p.x = 0; p.z = 10; p.y = H(0, 10); spawnSpider(p.x + 6, p.z, false);
+    const sp = G.ents[G.ents.length - 1], h0 = sp.hp, t0 = G.t; const pet = findPet(); pet.cd = 0;
+    const tick = () => { if (G.t - t0 < 4 && sp.hp === h0) { requestAnimationFrame(tick); return; } res({ hurt: h0 - sp.hp }); }; tick(); }));
+  ok('Aelfrend dives on your foes', dive.hurt > 0, `${Math.round(dive.hurt)} damage`);
+  const fly = await page.evaluate(() => { const b = btns.find((x) => x.id === 'fly'); return [b.x, b.y]; });
+  await page.touchscreen.tap(fly[0], fly[1]); await page.waitForTimeout(300);
+  ok('the FLY button asks where to', await page.evaluate(() => document.querySelectorAll('.opt[data-d]').length >= 4));
+  await page.click('.opt[data-d="eyrie"]');
+  await page.waitForFunction(() => G.flight && G.player.y > H(G.player.x, G.player.z) + 8, null, { timeout: 20000 });
+  await page.waitForFunction(() => !G.flight, null, { timeout: 30000 });
+  const landed = await page.evaluate(() => Math.hypot(G.player.x - FOLKSITE.eyrie.x, G.player.z - FOLKSITE.eyrie.z));
+  ok('Aelfrend flies you back to the eyrie', landed < 14, `landed ${landed.toFixed(1)} from Ærtheldor`);
+
+  const before = await page.evaluate(() => { saveGame(); return { q: Object.keys(WILD.q).length, inv: JSON.stringify(WILD.inv), eagle: WILD.eagle }; });
+  await page.reload(); await page.waitForFunction('window.__ready===true', { timeout: 60000 });
+  await page.click('#cont'); await page.waitForTimeout(300);
+  const kept = await page.evaluate(() => ({ q: Object.keys(WILD.q).length, inv: JSON.stringify(WILD.inv), eagle: WILD.eagle, pet: !!findPet(), mantle: !!WILD.charms.mantle }));
+  ok('quests, satchel, charms and Aelfrend are saved', kept.q === before.q && kept.inv === before.inv && kept.eagle && kept.pet && kept.mantle);
   ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
   await page.close();
 }

@@ -4630,6 +4630,10 @@ var WAYSTONES=[{id:'way1',x:10,z:-12},{id:'way2',x:-2,z:-58},{id:'way3',x:52,z:-
 var CLEAR=[[0,-34,20],[-72,48,15],[86,-56,15],[-88,-78,11],[35,-60,20],[-18,19,8]];
 BOUNCE.forEach(function(b){ CLEAR.push([b.x,b.z,2.6]); });
 WAYSTONES.forEach(function(w){ CLEAR.push([w.x,w.z,3]); });
+/* where the folk live: Wren's camp by the fairy ring, Tobin's cart on the east road,
+   and Ærtheldor's eyrie far in the south, across the map from the dragon (see folk.js) */
+var FOLKSITE={wren:{x:-30,z:12},tobin:{x:43,z:-28},eyrie:{x:14,z:112,top:0}};
+CLEAR.push([FOLKSITE.wren.x,FOLKSITE.wren.z,8],[FOLKSITE.tobin.x,FOLKSITE.tobin.z,7],[FOLKSITE.eyrie.x,FOLKSITE.eyrie.z,12]);
 function pathDist(x,z){            // distance to the nearest path: glade -> tavern door, tavern -> cottage
   var t=clamp01((z-4)/(-29-4)), px=0+1.4*t*t, pz=4+(-29-4)*t;
   return Math.min(Math.hypot(x-px,z-pz), segDist(x,z,7,-29,30.5,-54.5));
@@ -5264,6 +5268,44 @@ function buildWaystones(m){
     w.y=y;
   }
 }
+function buildFolkSites(m){
+  var wood=[0.40,0.28,0.16], dark=[0.26,0.18,0.11], canvas=[0.62,0.70,0.50];
+  // Wren: a patched tent, a cauldron on the boil, a bench of jars, a rack of drying herbs
+  var W=FOLKSITE.wren, wy=H(W.x,W.z);
+  addMesh(m,coneMesh(canvas,6),W.x-2.5,wy-0.1,W.z-2.2,0.4,3.6,3.0,3.6); collCircle(W.x-2.5,W.z-2.2,1.7);
+  addMesh(m,coneMesh([0.20,0.20,0.22],10,0.5,0.42),W.x+2.0,wy,W.z+0.5,0,1.2,0.8,1.2); collCircle(W.x+2.0,W.z+0.5,0.6);
+  addMesh(m,blobMesh([0.45,0.80,0.45],0,1),W.x+2.0,wy+0.7,W.z+0.5,0,0.95,0.2,0.95);
+  for(var f=0;f<5;f++){ var fa=f/5*6.283; addMesh(m,ROCK,W.x+2+Math.cos(fa)*0.85,wy-0.1,W.z+0.5+Math.sin(fa)*0.85,fa,0.35,0.25,0.35); }
+  addMesh(m,boxMesh(wood),W.x-1.2,wy+0.75,W.z+1.8,0.2,2.2,0.12,0.9); collBox(W.x-1.2,W.z+1.8,1.1,0.45,0.2);
+  for(var lg=-1;lg<=1;lg+=2) addMesh(m,boxMesh(dark),W.x-1.2+lg*0.9,wy,W.z+1.8+lg*0.18,0.2,0.12,0.75,0.75);
+  var jars=[[0.6,0.85,0.95],[0.95,0.6,0.6],[0.7,0.95,0.6],[0.95,0.85,0.5]];
+  for(var j=0;j<4;j++) addMesh(m,coneMesh(jars[j],8,0.5,0.4),W.x-1.9+j*0.45,wy+0.87,W.z+1.65+j*0.05,0,0.25,0.35,0.25);
+  for(var r=-1;r<=1;r+=2) addMesh(m,boxMesh(dark),W.x+r*1.1,wy,W.z-4.6,0,0.12,1.9,0.12);
+  addMesh(m,boxMesh(wood),W.x,wy+1.8,W.z-4.6,0,2.4,0.08,0.08);
+  for(var h=0;h<5;h++) addMesh(m,coneMesh([0.45,0.62,0.40],5),W.x-0.9+h*0.45,wy+1.15,W.z-4.6,3.14,0.22,0.65,0.22);
+  // Tobin: a cart with a wheel off, crates, an anvil
+  var T=FOLKSITE.tobin, ty=H(T.x,T.z), R=0.7;
+  addMesh(m,boxMesh(wood),T.x,ty+0.7,T.z,R,3.4,0.6,1.8); collBox(T.x,T.z,1.8,1.0,R);
+  addMesh(m,boxMesh(dark),T.x,ty+1.3,T.z,R,3.4,0.5,0.12);
+  var cR=Math.cos(R), sR=Math.sin(R);
+  function TP(lx,lz){ return {x:T.x+lx*cR+lz*sR,z:T.z-lx*sR+lz*cR}; }
+  [[-1.2,1.0],[1.2,1.0],[-1.2,-1.0]].forEach(function(w){ var q=TP(w[0],w[1]);
+    addMesh(m,coneMesh(dark,12,0.5,0.5),q.x,ty+0.05,q.z,R,1.1,0.18,1.1); });                     // wheels, flat on their axles (near enough)
+  var lw=TP(2.6,-1.8); addMesh(m,coneMesh(dark,12,0.5,0.5),lw.x,ty-0.05,lw.z,0,1.3,0.12,1.3);   // the one that came off
+  var cr=TP(-2.6,1.6); addMesh(m,boxMesh([0.52,0.40,0.24]),cr.x,ty,cr.z,R,0.9,0.9,0.9); collCircle(cr.x,cr.z,0.6);
+  var cr2=TP(-2.4,2.6); addMesh(m,boxMesh([0.48,0.36,0.22]),cr2.x,ty,cr2.z,R+0.3,0.7,0.7,0.7);
+  var an=TP(0.5,2.6); addMesh(m,boxMesh([0.30,0.30,0.32]),an.x,ty,an.z,R,0.5,0.6,0.5); addMesh(m,boxMesh([0.36,0.36,0.40]),an.x,ty+0.6,an.z,R,0.9,0.25,0.45); collCircle(an.x,an.z,0.45);
+  // the eyrie: a pillar of stacked rock with a nest of whole branches on top
+  var E=FOLKSITE.eyrie, ey=H(E.x,E.z), stack=[[2.8,2.2],[2.4,2.0],[2.0,1.9],[1.75,1.7]], hy=ey-0.4;
+  for(var k=0;k<stack.length;k++){ addMesh(m,ROCK,E.x+(k%2)*0.3,hy,E.z-(k%2)*0.2,k*1.3,stack[k][0]*1.3,stack[k][1]*1.25,stack[k][0]*1.3); hy+=stack[k][1]*1.25*0.82; }
+  collCircle(E.x,E.z,2.4);
+  E.top=hy+0.35;
+  for(var n=0;n<12;n++){ var na=n/12*6.283; addMesh(m,tubeLog(),E.x+Math.cos(na)*1.45,E.top-0.1,E.z+Math.sin(na)*1.45,na+1.7,0.35,1.4,0.35); }
+  addMesh(m,coneMesh([0.42,0.32,0.20],10,0.5,0.5),E.x,E.top-0.25,E.z,0,2.6,0.25,2.6);
+  for(var b=0;b<5;b++){ var ba=b*1.25+0.4, bx=E.x+Math.cos(ba)*5.5, bz=E.z+Math.sin(ba)*5.5;     // old bones and feathers at its foot
+    addMesh(m,coneMesh([0.95,0.85,0.55],5),bx,H(bx,bz)+0.05,bz,ba,0.25,1.0,0.06); }
+  LANDMARKS.push({x:E.x,z:E.z,r:9,name:'The Eyrie',kind:'eyrie'});
+}
 /* toadstools big enough to bounce on */
 function buildBounce(m){
   for(var i=BOUNCE.length-1;i>=0;i--){ var b=BOUNCE[i], y=H(b.x,b.z);
@@ -5354,6 +5396,8 @@ function initParts(){
   reg('disc',discMesh(14));
   reg('wingIn',wingMesh(0));
   reg('wingOut',wingMesh(1));
+  reg('featherIn',featherMesh(0));
+  reg('featherOut',featherMesh(1));
   reg('sky',skyMesh([0.62,0.70,0.68],[0.30,0.45,0.52],[0.20,0.25,0.22],20));
 }
 
@@ -5726,6 +5770,57 @@ function dragonRig(out,e,t){
       P('blob',sh[0]+el[0],sh[1]+el[1]-0.15*s,sh[2]+el[2],0,0,0,0.35*s,0.3*s,0.35*s,L.dark); }
   }
 }
+/* a bird's wing panel, flat in y=0, running out along +x: part 0 the broad inner
+   wing with its coverts, part 1 the hand, ending in five long "finger" primaries */
+function featherMesh(part){
+  var m=new MB(), BASE=[1,1,1], LITE=[1.25,1.2,1.1], TIP=[0.55,0.52,0.50];
+  function tri(a,b,c,col,y){ var A=[a[0],y,a[1]],B=[b[0],y,b[1]],C=[c[0],y,c[1]], up=[0,1,0], dn=[0,-1,0];
+    m.triV(A,C,B,up,up,up,col,col,col); m.triV(A,B,C,dn,dn,dn,col,col,col); }
+  function quad(a,b,c,d,col,y){ tri(a,b,c,col,y); tri(a,c,d,col,y); }
+  if(part===0){
+    quad([0,0.35],[1.5,0.42],[1.5,-0.75],[0,-0.95],BASE,0);
+    quad([0,0.35],[1.5,0.42],[1.5,0.0],[0,-0.1],LITE,0.015);              // a pale band of coverts along the leading edge
+    for(var i=0;i<5;i++){ var x=i*0.3; tri([x,-0.75-0.04*i],[x+0.3,-0.75-0.04*i],[x+0.15,-1.2],TIP,0); }   // ragged secondaries
+  } else {
+    quad([0,0.42],[0.9,0.38],[0.9,-0.6],[0,-0.75],BASE,0);
+    var fan=[[2.15,0.38],[2.25,0.05],[2.15,-0.30],[1.95,-0.62],[1.65,-0.90]];
+    for(var k=0;k<5;k++){ var bz=0.30-k*0.22, tip=fan[k], w=0.11;
+      quad([0.85,bz+w],[tip[0],tip[1]+w*0.6],[tip[0],tip[1]-w*0.6],[0.85,bz-w],BASE,0);
+      tri([tip[0]-0.35,tip[1]+w*0.6],[tip[0]+0.12,tip[1]],[tip[0]-0.35,tip[1]-w*0.6],TIP,0.01); }
+  }
+  return m;
+}
+/* the eagles: Ærtheldor (big, gold-brown, white-headed) and the young Aelfrend */
+function eagleRig(out,e,t){
+  var s=e.scale||1, L=eagleLook(e), LOW=(typeof LOD!=='undefined'&&LOD);
+  var perched=e.sub==='great'&&!(e.flapT>0), fly=!perched;
+  var spread=e.sub==='great'?(e.flapT>0?1:0):1;
+  function P(k,x,y,z,rx,ry,rz,sx,sy,sz,c){ out.push([k,x*s,y*s,z*s,rx,ry,rz,sx*s,sy*s,sz*s,c]); }
+  var pitch=e.dive?0.6:(fly?0.1:-0.35);
+  P('blobR',0,0.0,0, pitch,0,0, 0.85,0.8,1.5,L.body);
+  P('blob',0,0.05,0.35, pitch,0,0, 0.7,0.6,0.9,L.dark);
+  var hz=fly?0.85:0.55, hy=fly?0.42:0.85;
+  P('blob',0,hy-0.3,hz, 0,0,0, 0.62,0.62,0.7,L.head);
+  P('cone',0,hy-0.08,hz+0.3, -1.2,0,0, 0.22,0.45,0.18,L.beak);
+  if(!LOW){ P('box',-0.2,hy+0.05,hz+0.18,0,0,0,0.08,0.06,0.08,[0.12,0.08,0.04]); P('box',0.2,hy+0.05,hz+0.18,0,0,0,0.08,0.06,0.08,[0.12,0.08,0.04]);
+    P('box',-0.2,hy+0.12,hz+0.14,0.2,0,0.2,0.16,0.04,0.12,L.dark); P('box',0.2,hy+0.12,hz+0.14,0.2,0,-0.2,0.16,0.04,0.12,L.dark); }
+  // tail fan
+  P('cone',0,0.1,-0.95, fly?1.45:1.2,0,0, 0.75,0.9,0.08,L.tail);
+  // legs and talons, gripping the rock or tucked
+  if(!fly&&!LOW) for(var sd=-1;sd<=1;sd+=2){ P('limbT',sd*0.22,-0.25,0.1,0,0,0,0.16,0.5,0.16,L.beak);
+    for(var c=-1;c<=1;c++) P('cone',sd*0.22+c*0.08,-0.72,0.25,-1.4,0,0,0.06,0.2,0.06,[0.15,0.12,0.10]); }
+  // wings: folded along the flanks on the perch, spread and beating in the air
+  var fl=Math.sin(t*(e.dive?3:(e.sub==='great'?6:4.2))), W=1.0;
+  for(var sd2=-1;sd2<=1;sd2+=2){
+    var al, sw, al2, sw2;
+    if(spread){ al=e.dive?-0.25:0.05+fl*0.6; sw=e.dive?0.9:0.08; al2=al+(e.dive?-0.2:fl*0.3); sw2=sw+(e.dive?0.5:0.05); }
+    else { al=-0.35; sw=1.35; al2=-0.5; sw2=1.75; }
+    var sh=[sd2*0.45,0.25,0.35];
+    P('featherIn',sh[0],sh[1],sh[2],0,-sd2*sw,-sd2*al,sd2*W,W,W,L.body);
+    var el=trsv(0,-sd2*sw,-sd2*al,sd2*1.5*W,0,0);
+    P('featherOut',sh[0]+el[0],sh[1]+el[1],sh[2]+el[2],0,-sd2*sw2,-sd2*al2,sd2*W,W,W,L.body);
+  }
+}
 /* ambient life: butterflies, rabbits and the gnomes hiding about the wood */
 function flyRig(out,e,t){
   var f=Math.sin(t*16+e.seed*5)*1.0, c=e.col, s=0.35;
@@ -5898,6 +5993,8 @@ function actorSpec(e){
     var gr=G.build.gear||{w:0,a:0};
     return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null, armor:gr.a, wtier:gr.w};
   }
+  if(e.kind==='npc'&&e.npcId)        // the other folk: Wren the hedge-witch, Tobin the tinker
+    return {model:e.model, weapons:e.npcId==='tobin'?['1H_Axe_Offhand']:[], beard:!!e.beard, tint:e.tint, key:e.npcId};
   if(e.kind==='npc')                  // the innkeeper: a barbarian with a mug, in warm tones
     return {model:'barbarian', weapons:['Mug'], beard:true, tint:[1.0,0.88,0.74], key:'keeper'};
   var ck=e.kind==='corpse'?e.of:e.kind;
@@ -6598,6 +6695,7 @@ function cottageScreen(say){
     var built=0; HOME_UP.forEach(function(u){ if(HOME.up[u.id]) built++; });
     html='<h1>Your Cottage</h1><p class="sub">'+(built===HOME_UP.length?'Every job done. It\'s home.':built+' of '+HOME_UP.length+' jobs done')+' · ◉ '+p.coins+'</p>'+
       (say?'<p class="say">'+say+'</p>':'');
+    if(Object.keys(WILD.recipes||{}).length) opts.push({id:'craft',t:'Your workbench',d:'Brew and make from what you\'ve gathered',off:false});
     if(HOME.up.hearth) opts.push({id:'rest',t:'Rest by the hearth',d:p.hp>=p.maxHp-0.5?'You are already rested':'Mend you and your company',off:false});
     if(plotsOpen()){
       var rc=readyCrops(), empty=0, growing=[];
@@ -6647,6 +6745,7 @@ function cottageDo(id){
     for(var k=0;k<plotsOpen();k++){ var q=HOME.plots[k]; if(cropReady(q)){ q.c=null; q.t=0; } }
     if(rc.n){ p.coins+=rc.v; sfx('coin'); var hp=HT(8,0); burst(hp.x,H(hp.x,hp.z)+1,hp.z,20,[1.0,0.85,0.4],{up:3,spread:3,size:0.12,life:1}); saveGame(); }
     cottageScreen(rc.n?'A good harvest: +'+rc.v+' coins.':'');
+  } else if(id==='craft'){ craftScreen(function(){ cottageScreen(); });
   } else if(id==='rest'){
     p.hp=p.maxHp; for(var a=0;a<G.ents.length;a++) if(G.ents[a].kind==='ally') G.ents[a].hp=G.ents[a].maxHp;
     sfx('potion'); cottageScreen('You doze by the fire. Much better.');
@@ -6721,15 +6820,18 @@ function DF(){ return DIFFS[G.build.diff]||DIFFS.normal; }
 /* ---------- the wild state, saved with your hunter ---------- */
 var WILD=null;
 function wildReset(){
-  WILD={torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0};
+  WILD={torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0,
+    q:{}, inv:{}, recipes:{}, charms:{}, compass:0, eagle:0};
 }
 wildReset();
 function wildSave(){ return {torch:WILD.torch,gnomes:WILD.gnomes,stone:{c:WILD.stone.c,tier:WILD.stone.tier},
-  dragon:WILD.dragon,chestT:Math.round(WILD.chestT),wardens:WILD.wardens,lore:WILD.lore,minis:WILD.minis,trophies:WILD.trophies}; }
+  dragon:WILD.dragon,chestT:Math.round(WILD.chestT),wardens:WILD.wardens,lore:WILD.lore,minis:WILD.minis,trophies:WILD.trophies,
+  q:WILD.q,inv:WILD.inv,recipes:WILD.recipes,charms:WILD.charms,compass:WILD.compass,eagle:WILD.eagle}; }
 function wildLoad(w){
   wildReset(); if(!w) return;
   WILD.torch=!!w.torch; WILD.gnomes=w.gnomes||{}; WILD.chestT=w.chestT||0; WILD.wardens=w.wardens||0;
   WILD.lore=w.lore||{}; WILD.minis=w.minis||{}; WILD.trophies=w.trophies||0;
+  WILD.q=w.q||{}; WILD.inv=w.inv||{}; WILD.recipes=w.recipes||{}; WILD.charms=w.charms||{}; WILD.compass=w.compass||0; WILD.eagle=w.eagle||0;
   if(w.stone){ WILD.stone.c=w.stone.c||0; WILD.stone.tier=w.stone.tier||0; WILD.stone.full=WILD.stone.c>=1; }
   if(w.dragon){ WILD.dragon.t=w.dragon.t||0; WILD.dragon.kills=w.dragon.kills||0; }
 }
@@ -7193,7 +7295,7 @@ function bounceCheck(p){
 
 /* ---------- what you can walk up to and use ---------- */
 function wildTalk(p,list){
-  legendTalk(p,list);
+  legendTalk(p,list); folkTalk(p,list);
   var g=findKind('golem');
   if(!WILD.inCave){
     if(!g&&Math.hypot(STONES.x-p.x,STONES.z-p.z)<3.6)
@@ -7267,6 +7369,16 @@ var LORE=[
   {id:'marigold',sec:'The wood',t:"Marigold's Garden",h:"Find all seven gnomes.",
    x:"All seven home. Bram set them back along the garden path and sat with them a long while. “She'd have laughed,” he said. “She always said they had opinions.”"},
 
+  {id:'wren',sec:'Folk of the wood',t:"Wren",h:"Someone camps by the fairy ring, west of the glade.",
+   x:"Wren was Hesper's apprentice for six summers and still talks to her pots the way Hesper did. She camps by the fairy ring because, she says, it is the only place in the wood that hums in the right key. She is probably right."},
+  {id:'tobin',sec:'Folk of the wood',t:"Tobin Cogsworth",h:"A broken cart on the east road.",
+   x:"A dwarf tinker who has walked every road in three kingdoms and broken a wheel on most of them. He can mend anything except, apparently, his own cart. He keeps a list of everyone who owes him money. Bram is on it."},
+  {id:'aertheldor',sec:'Folk of the wood',t:"Ærtheldor",h:"Far in the south, past the river, a pillar of rock.",
+   x:"The Great Eagle of the South is older than the tavern, older than the Burning, perhaps older than the stones. The Sylvani called the eagles the wood's eyes; Ærtheldor is the last who remembers being asked to look. He speaks rarely, and only to people who look up."},
+  {id:'aelfrend',sec:'Folk of the wood',t:"Aelfrend",h:"Help Ærtheldor, all the way.",
+   x:"Hatched in a nest you mended, warmed by a scale you stole from a dragon. Aelfrend is loud, curious and certain that you are his. He will dive on anything that threatens you — and when you call, he carries you home."},
+  {id:'hesper',sec:'Folk of the wood',t:"Hesper's Last Note",h:"Hesper's satchel lies somewhere in the dark.",
+   x:"“The singing stone is real. It is deeper than the mine, under the Matron's den, and it hums the waking-song — the one that cuts silk without a blade. I need more light, and more time, and somebody to tell Bram I was right. If you find this, tell Wren she was the best of my jars.”"},
   {id:'tavern',sec:'Places',t:"The Greenleaf Tavern",h:"Follow the path north from the glade.",
    x:"Bram built the Greenleaf on the ruins of a Sylvani waystation — the hearthstone is elf-cut, and on cold nights it still hums. He says he came for the dragon's gold, forty years ago, and stayed for the stew. He does not say what happened on the crag."},
   {id:'hive',sec:'Places',t:"The Wasp Hive",h:"Somewhere south-west, something buzzes.",
@@ -7336,7 +7448,7 @@ function journalScreen(back){
   G.loreNew=0;
   var secs=[], by={};
   LORE.forEach(function(l){ if(!by[l.sec]){ by[l.sec]=[]; secs.push(l.sec); } by[l.sec].push(l); });
-  var html='<h1>Journal</h1><p class="sub">'+loreCount()+' of '+LORE.length+' pages written</p>';
+  var html='<h1>Journal</h1><p class="sub">'+loreCount()+' of '+LORE.length+' pages written</p>'+(typeof questLogHtml==='function'?questLogHtml():'');
   secs.forEach(function(sname){
     html+='<h3>'+sname+'</h3><div class="lore">';
     by[sname].forEach(function(l){
@@ -7364,7 +7476,7 @@ function waystoneScreen(w){
     (fresh?'<p class="sub">✎ Written in your journal.</p>':'')+'<button class="btn" id="leave">Walk on</button>');
   document.getElementById('leave').onclick=menuClose;
 }
-var LANDLORE={tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
+var LANDLORE={eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
 
 /* ---------- mini-bosses ----------
    Named monsters with a home they guard and a trick of their own. Beaten, they
@@ -7507,6 +7619,502 @@ function legendTalk(p,list){
 
 </script>
 <script>
+/* ================= folk: quest givers, gathering, crafting and the eagles =================
+   Wren the hedge-witch (gathering and her mentor's lost satchel), Tobin the tinker
+   (lost parts, a delivery, a repair), and Ærtheldor the Great Eagle in his eyrie in
+   the far south, whose quests end with an eaglet, Aelfrend, who follows you, dives at
+   your foes and flies you back to the quest givers.
+   Things to gather lie about the wood (and drop from monsters); Wren's bench (and
+   your cottage, once you own it) turns them into potions, tonics and charms.
+   Loaded before game.js; nothing here runs until the game calls it. */
+
+/* ---------- resources ---------- */
+var RES={
+  herb:   {n:'Silverleaf',  col:[0.70,0.88,0.72]},
+  wood:   {n:'Wood',        col:[0.55,0.38,0.22]},
+  ore:    {n:'Iron ore',    col:[0.62,0.40,0.30]},
+  silk:   {n:'Spider silk', col:[0.92,0.92,0.95]},
+  honey:  {n:'Honeycomb',   col:[0.96,0.74,0.22]},
+  glowcap:{n:'Glowcap',     col:[0.40,0.90,1.0]}
+};
+var RES_ORDER=['herb','wood','ore','silk','honey','glowcap'];
+var NODE_REGROW=150;
+function inv(k){ return (WILD.inv&&WILD.inv[k])||0; }
+function addRes(k,n,x,y,z){
+  WILD.inv[k]=inv(k)+n;
+  if(x!==undefined) msg('+'+n+' '+RES[k].n.toLowerCase()+' ('+inv(k)+')','#cfe8c0',x,y,z,13);
+}
+/* a dry spot near (x,z), out of the water and out of anything solid */
+function dryNear(x,z,minH){
+  for(var r=0;r<14;r+=1.5) for(var a=0;a<6.28;a+=0.7){ var px=x+Math.cos(a)*r, pz=z+Math.sin(a)*r;
+    if(H(px,pz)>(minH===undefined?WATER+0.6:minH)&&!solidAt(px,pz,0.5)) return {x:px,z:pz}; }
+  return {x:x,z:z};
+}
+function spawnNodes(){
+  var r=mulberry(5150);
+  function put(res,x,z){ G.ents.push({kind:'node',res:res,x:x,y:H(x,z),z:z,t:0,yaw:r()*6.28,seed:r()*9,scale:1}); }
+  function scatter(res,n,test){ for(var i=0,k=0;i<n&&k<n*30;k++){ var x=(r()*2-1)*WHALF*0.86, z=(r()*2-1)*WHALF*0.86;
+    if(H(x,z)<WATER+0.6||solidAt(x,z,0.5)||nearTavern(x,z,12)||cragZone(x,z)<1||(test&&!test(x,z))) continue; put(res,x,z); i++; } }
+  scatter('herb',26,function(x,z){ return fbm(x+500,z-300,2,0.022)>0.42; });     // silverleaf likes the open
+  scatter('wood',24);
+  scatter('ore',16,function(x,z){ return H(x,z)>4.5; });                        // ore in the high ground
+  for(var h=0;h<5;h++){ var a=h/5*6.28+0.3, q=dryNear(-72+Math.cos(a)*6,48+Math.sin(a)*6); put('honey',q.x,q.z); }
+  for(var s=0;s<6;s++){ var b=s/6*6.28, q2=dryNear(86+Math.cos(b)*9,-56+Math.sin(b)*9); put('silk',q2.x,q2.z); }
+  for(var o=0;o<5;o++){ var c=o/5*6.28, q3=dryNear(CRAG.x+Math.cos(c)*20,CRAG.z+Math.sin(c)*20); put('ore',q3.x,q3.z); }
+  for(var g=0;g<10;g++){ var sp=caveSpawnSpot(0); if(sp) put('glowcap',sp.x,sp.z); }
+}
+function updateNode(e,dt,pd){
+  if(e.t>0){ e.t-=dt; return; }
+  if(pd<1.7&&!G.player.dead){
+    var n=e.res==='wood'||e.res==='herb'?1+((Math.random()*1.6)|0):1;
+    addRes(e.res,n,e.x,e.y+1.6,e.z); e.t=NODE_REGROW; sfx('pickup',e.x,e.z);
+    burst(e.x,e.y+0.5,e.z,10,RES[e.res].col,{up:2.5,spread:1.5,size:0.09,life:0.7,grav:2});
+  }
+}
+/* what monsters leave behind besides coin */
+var DROPS={spider:['silk',0.35],wasp:['honey',0.32],shroom:['glowcap',0.2]};
+function monsterDrop(e){
+  var d=DROPS[e.kind]; if(!d||Math.random()>d[1]*(e.elite?2.5:1)) return;
+  addRes(d[0],e.elite?2:1,e.x,e.y+2.2,e.z);
+}
+
+/* ---------- crafting ---------- */
+var RECIPES=[
+  {id:'potion', n:'Healing potion',     cost:{herb:2,honey:1}, d:'Heals 45%. Bram sells these for 15.'},
+  {id:'cake',   n:'Honey cake',         cost:{honey:2},        d:'You mend while it lasts (40 s).'},
+  {id:'torch',  n:'Torch',              cost:{wood:2,silk:1},  d:'For the Glimmer Cave.', ok:function(){ return !WILD.torch; }},
+  {id:'tonic',  n:'Wardleaf tonic',     cost:{herb:2,glowcap:1}, d:'Halves the harm you take (45 s).'},
+  {id:'glimmer',n:'Glimmer charm',      cost:{ore:3,glowcap:2}, d:'+8% damage, for good.', once:1},
+  {id:'mantle', n:'Silkweave mantle',   cost:{silk:6,herb:2},   d:'+25 health, for good.', once:1},
+  {id:'boots',  n:'Featherlight boots', cost:{wood:4,honey:2,silk:2}, d:'+8% speed, for good.', once:1}
+];
+var RECIPE_BY={}; RECIPES.forEach(function(r){ RECIPE_BY[r.id]=r; });
+function canPay(cost){ for(var k in cost) if(inv(k)<cost[k]) return false; return true; }
+function pay(cost){ for(var k in cost) WILD.inv[k]-=cost[k]; }
+function costText(cost){ return Object.keys(cost).map(function(k){ var c=inv(k)>=cost[k]?'#bfe8a0':'#e8a090';
+  return '<span style="color:'+c+'">'+cost[k]+' '+RES[k].n.toLowerCase()+' ('+inv(k)+')</span>'; }).join(', '); }
+function satchelHtml(){
+  return '<div class="stat"><span>Your satchel</span><b>'+RES_ORDER.map(function(k){ return RES[k].n+' '+inv(k); }).join(' · ')+'</b></div>';
+}
+function craftScreen(back,say){
+  var known=RECIPES.filter(function(r){ return WILD.recipes[r.id]; }), p=G.player;
+  var html='<h1>The workbench</h1><p class="sub">Mortar, pestle, a pot on the boil, and a great many jars</p>'+(say?'<p class="say">'+say+'</p>':'')+satchelHtml()+'<div class="opts">';
+  if(!known.length) html+='<button class="opt off" disabled><b>You don\'t know any recipes yet</b><small>Wren will teach you.</small></button>';
+  known.forEach(function(r){
+    var made=r.once&&WILD.charms[r.id], ok=!made&&canPay(r.cost)&&(!r.ok||r.ok());
+    html+='<button class="opt'+(ok?'':' off')+'" data-r="'+r.id+'"'+(ok?'':' disabled')+'><b>'+r.n+(made?' — made':'')+'</b><small>'+r.d+(made?'':' · '+costText(r.cost))+'</small></button>';
+  });
+  html+='</div><button class="btn alt" id="cback">'+(back?'Back':'Back to the wood')+'</button>';
+  show(html);
+  var els=ui.querySelectorAll('.opt[data-r]');
+  for(var i=0;i<els.length;i++) els[i].onclick=function(){ var r=RECIPE_BY[this.getAttribute('data-r')];
+    if(!canPay(r.cost)||(r.once&&WILD.charms[r.id])||(r.ok&&!r.ok())) return;
+    pay(r.cost); var line=craftDo(r); sfx('freed'); setTimeout(saveGame,30); craftScreen(back,line); };
+  document.getElementById('cback').onclick=function(){ if(back) back(); else menuClose(); };
+}
+function craftDo(r){
+  var p=G.player;
+  switch(r.id){
+    case 'potion': p.potions++; return 'A potion, green and faintly fizzing.';
+    case 'cake': p.buff=3; p.buffT=40; return 'Sticky, sweet, and you feel your bruises fading already.';
+    case 'torch': WILD.torch=true; return 'Pitch-soaked silk on a stout stick. It\'ll burn for days.';
+    case 'tonic': p.buff=2; p.buffT=45; return 'It tastes of mint and cold iron. You feel sturdier.';
+    default: WILD.charms[r.id]=1; recalc(); return r.n+' — yours for good.';
+  }
+}
+/* permanent charms, folded into the hunter's stats by recalc */
+function charmStats(S){
+  var c=WILD.charms||{};
+  if(c.glimmer){ S.melee*=1.08; S.ranged*=1.08; }
+  if(c.whet){ S.melee*=1.05; S.ranged*=1.05; }
+  if(c.mantle) S.maxHp+=25;
+  if(c.boots) S.move*=1.08;
+}
+
+/* ---------- the folk ---------- */
+var FOLK={
+  wren: {name:'Wren',role:'hedge-witch, once Hesper\'s apprentice',x:FOLKSITE.wren.x+1.5,z:FOLKSITE.wren.z+2.5,
+         greet:'Mind the toadstools!',icon:'wren'},
+  tobin:{name:'Tobin Cogsworth',role:'travelling tinker',x:FOLKSITE.tobin.x-2.2,z:FOLKSITE.tobin.z+2.0,greet:'Careful — that root bites!',icon:'tobin'},
+  eagle:{name:'Ærtheldor',role:'the Great Eagle of the South',x:FOLKSITE.eyrie.x,z:FOLKSITE.eyrie.z,icon:'eagle'}
+};
+function spawnFolk(){
+  [['wren','rogue',[0.80,1.0,0.78],1.0,false],['tobin','barbarian',[0.92,0.86,1.0],0.86,true]].forEach(function(d){
+    var F=FOLK[d[0]], y=H(F.x,F.z);
+    G.ents.push({kind:'npc',npcId:d[0],name:F.name,x:F.x,y:y,z:F.z,yaw:0,home:Math.atan2(FOLKSITE[d[0]].x-F.x,FOLKSITE[d[0]].z-F.z)+Math.PI,
+      scale:d[3],speed:0,walkPhase:0,onGround:true,hp:1,maxHp:1,cheer:0,greeted:false,model:d[1],tint:d[2],beard:d[4],
+      look:look('human','rogue',{tunic:d[2],sleeve:d[2],cloak:null,weapon:null,hair:HAIR.brown,beard:d[4]?1:0})});
+    if(!G['coll_'+d[0]]){ collCircle(F.x,F.z,0.5); G['coll_'+d[0]]=1; }
+  });
+  var E=FOLK.eagle;
+  G.ents.push({kind:'eagle',sub:'great',name:'Ærtheldor',x:E.x,y:FOLKSITE.eyrie.top,z:E.z+0.6,yaw:Math.PI*0.9,scale:2.6,t:0,perch:1,flapT:0});
+  if(WILD.eagle) spawnPet();
+}
+function folkEnt(id){ for(var i=0;i<G.ents.length;i++) if(G.ents[i].npcId===id) return G.ents[i]; return null; }
+
+/* ---------- quests ---------- */
+var QUESTS=[
+  {id:'w_leaf',giver:'wren',t:'Silverleaf for the Pot',short:'Silverleaf',goal:{type:'gather',item:'herb',n:5},
+   say:'You\'re the one cutting folk out of cocoons? Then you\'ll be needing potions, and I\'ll be needing silverleaf. It grows low and pale in the open grass. Five sprigs, and I\'ll show you how to brew your own.',
+   done:'Lovely. The bench is yours whenever you like. Two leaves and a bit of honeycomb makes a potion — Bram charges you fifteen coins for the same thing, the old robber.',
+   reward:{coins:40,xp:80,recipes:['potion','cake','torch']}},
+  {id:'w_glow',giver:'wren',need:'w_leaf',t:'Glowcaps from the Dark',short:'Glowcaps',goal:{type:'gather',item:'glowcap',n:3},
+   say:'Hesper swore by glowcaps. They grow down in the Glimmer Cave, and the grumps sometimes carry one. Bring me three and I\'ll teach you her tonic.',
+   done:'Ooh, still warm. Hesper wasn\'t mad, you know. Whatever Bram says.',
+   reward:{coins:70,xp:140,recipes:['tonic','glimmer']}},
+  {id:'w_satchel',giver:'wren',need:'w_glow',t:'Hesper\'s Satchel',short:'Hesper\'s satchel',goal:{type:'find',items:[
+     {id:'satchel',n:'Hesper\'s satchel',shape:'satchel',at:function(){ return {x:CAVE.x+14,z:CAVE.z+12}; }}]},
+   say:'Hesper went into that cave and never came out. If her satchel is still down there, I want it back. Her notes. Her… everything.',
+   done:'…She got so close. Thank you. Truly. Take her mantle pattern — she\'d want it worn by someone who goes places.',
+   reward:{coins:120,xp:220,recipes:['mantle'],lore:'hesper'}},
+  {id:'t_parts',giver:'tobin',t:'Bits and Bobs',short:'Tobin\'s parts',goal:{type:'find',items:[
+     {id:'cog',n:'a brass cog',shape:'cog',at:function(){ return dryNear(83,-50); }},
+     {id:'spring',n:'a coiled spring',shape:'spring',at:function(){ return dryNear(34,63); }},
+     {id:'bell',n:'a brass bell',shape:'bell',at:function(){ return dryNear(-66,42); }},
+     {id:'lens',n:'Tobin\'s good lens',shape:'lens',at:function(){ return {x:CRAG.lair.x+3.5,z:CRAG.lair.z+4.5}; }}]},
+   say:'My cart hit a root, the root won, and my best bits went flying — and then things carried them off. A cog, a spring, a brass bell and my good lens. Find \'em and I\'ll make it worth your while.',
+   done:'My lens! Not a scratch. Here — I had a spare compass needle and nothing to point it at. Now it points at whatever you\'re after.',
+   reward:{coins:90,xp:180,compass:1}},
+  {id:'t_parcel',giver:'tobin',need:'t_parts',t:'A Parcel for Bram',short:'Parcel for Bram',goal:{type:'deliver',to:'bram'},
+   say:'Bram ordered a new tap for his barrel a year ago. Take it up to the Greenleaf, would you? And don\'t let him tell you it\'s late. It is late. But don\'t let him tell you.',
+   done:'He paid? He actually paid? Take this whetstone — it\'s the good one. Your blade will thank you.',
+   reward:{coins:40,xp:80,charm:'whet'}},
+  {id:'t_wheel',giver:'tobin',need:'t_parcel',t:'Wood for the Wheel',short:'Cart repairs',goal:{type:'bring',cost:{wood:8,ore:4}},
+   say:'Last job, then I\'m off down the road. A new wheel wants eight good lengths of wood and four lumps of iron ore for the rim.',
+   done:'She rolls! And while I waited I worked out a lighter boot sole. The plans are yours.',
+   reward:{coins:150,xp:240,recipes:['boots']}},
+  {id:'e_feathers',giver:'eagle',t:'Feathers on the Wind',short:'Golden feathers',goal:{type:'find',items:[
+     {id:'f1',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-60,-60); }},
+     {id:'f2',n:'a golden feather',shape:'feather',at:function(){ return dryNear(62,12); }},
+     {id:'f3',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-104,40); }},
+     {id:'f4',n:'a golden feather',shape:'feather',at:function(){ return dryNear(100,30); }},
+     {id:'f5',n:'a golden feather',shape:'feather',at:function(){ return dryNear(28,-82); }},
+     {id:'f6',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-40,100); }}]},
+   say:'Small hunter. The storm took my feathers and scattered them across the wood: gold, and still warm from the sky. Bring me six, and we will speak further.',
+   done:'Good. You look up when others look down. That is rare.',
+   reward:{coins:60,xp:180}},
+  {id:'e_egg',giver:'eagle',need:'e_feathers',t:'The Stolen Egg',short:'The eagle\'s egg',goal:{type:'find',items:[
+     {id:'egg',n:'Ærtheldor\'s egg',shape:'egg',at:function(){ return dryNear(88,-58); }}]},
+   say:'My last egg was taken. The spinners of the Hollow carried it off in their silk. Bring it home to me.',
+   done:'It is cold, but it lives. It needs a warmth that is not mine — and a nest that is whole.',
+   reward:{coins:100,xp:240}},
+  {id:'e_scale',giver:'eagle',need:'e_egg',t:'Fire for the Egg',short:'A dragon\'s scale',goal:{type:'find',items:[
+     {id:'scale',n:'a shed dragon scale',shape:'scale',sneak:1,at:function(){ return {x:CRAG.lair.x-2.5,z:CRAG.lair.z+4.5}; }}]},
+   say:'The egg needs fire that does not die. Cinderwing sheds his scales as he sleeps, and they stay warm for a hundred years. Take one. Do not wake him.',
+   done:'You walked past the dragon\'s teeth for a stranger\'s child. I will remember it.',
+   reward:{coins:120,xp:280}},
+  {id:'e_nest',giver:'eagle',need:'e_scale',t:'Mend the Eyrie',short:'Mend the nest',goal:{type:'bring',cost:{wood:6,silk:4,ore:2}},
+   say:'The storm broke my nest. Bring wood to rebuild it, silk to bind it and iron to anchor it to the rock, and the egg will have a home.',
+   done:'Listen… It cracks. Small hunter, meet Aelfrend. He has chosen you. He will fly with you — and when you call him, he will carry you home to me, or wherever your work lies.',
+   reward:{coins:150,xp:320,eagle:1}}
+];
+var QUEST_BY={}; QUESTS.forEach(function(q){ QUEST_BY[q.id]=q; });
+function qState(id){ return WILD.q[id]; }
+function qActive(id){ var s=WILD.q[id]; return s&&s.s==='on'; }
+function qDone(id){ var s=WILD.q[id]; return s&&s.s==='done'; }
+function qProgress(q){
+  var g=q.goal, s=WILD.q[q.id]||{};
+  if(g.type==='gather') return {have:Math.min(inv(g.item),g.n),need:g.n};
+  if(g.type==='find') return {have:(s.got||[]).length,need:g.items.length};
+  if(g.type==='deliver') return {have:(s.got||[]).length,need:1};
+  var have=0,need=0; for(var k in g.cost){ need+=g.cost[k]; have+=Math.min(inv(k),g.cost[k]); } return {have:have,need:need};
+}
+function qReady(q){ var pr=qProgress(q); return qActive(q.id)&&pr.have>=pr.need; }
+function qProgressText(q){
+  var g=q.goal, pr=qProgress(q);
+  if(g.type==='gather') return RES[g.item].n+' '+pr.have+' / '+pr.need;
+  if(g.type==='find') return pr.have+' of '+pr.need+' found';
+  if(g.type==='deliver') return pr.have?'Delivered — go back to '+FOLK[q.giver].name:'Take it to Bram at the Greenleaf';
+  return costText(g.cost);
+}
+/* the quest a giver has for you now: the first not done, if its prerequisite is */
+function giverQuest(gid){
+  for(var i=0;i<QUESTS.length;i++){ var q=QUESTS[i]; if(q.giver!==gid||qDone(q.id)) continue;
+    if(q.need&&!qDone(q.need)) return null; return q; }
+  return null;
+}
+function acceptQuest(q){
+  WILD.q[q.id]={s:'on',got:[]}; sfx('pickup'); spawnQuestItems();
+  tip('New quest: '+q.t); setTimeout(saveGame,30);
+}
+function finishQuest(q){
+  var g=q.goal, R=q.reward, p=G.player, F=FOLK[q.giver];
+  if(g.type==='gather') WILD.inv[g.item]-=g.n;
+  if(g.type==='bring') pay(g.cost);
+  WILD.q[q.id].s='done';
+  var c=Math.round((R.coins||0)*DF().pay); p.coins+=c;
+  if(R.xp) gainXp(R.xp,p.x,p.y+2.8,p.z,'+'+R.xp+' XP — '+q.t);
+  (R.recipes||[]).forEach(function(r){ WILD.recipes[r]=1; });
+  if(R.charm){ WILD.charms[R.charm]=1; recalc(); }
+  if(R.compass) WILD.compass=1;
+  if(R.lore) loreGet(R.lore,true);
+  if(R.eagle){ WILD.eagle=1; spawnPet(); loreGet('aelfrend',true); layoutButtons(); }
+  msg('+'+c+' ◉','#ffe08a',p.x,p.y+2.4,p.z,16); sfx('levelup');
+  for(var i=G.ents.length-1;i>=0;i--) if(G.ents[i].kind==='qitem'&&G.ents[i].qid===q.id) G.ents.splice(i,1);
+  setTimeout(saveGame,60);
+}
+/* quest items lie in the world while their quest is open */
+function spawnQuestItems(){
+  QUESTS.forEach(function(q){
+    if(!qActive(q.id)||q.goal.type!=='find') return;
+    var got=WILD.q[q.id].got||[];
+    q.goal.items.forEach(function(it){
+      if(got.indexOf(it.id)>=0) return;
+      for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind==='qitem'&&G.ents[i].iid===it.id) return;
+      var at=it.at(); G.ents.push({kind:'qitem',qid:q.id,iid:it.id,n:it.n,shape:it.shape,sneak:it.sneak,x:at.x,y:H(at.x,at.z),z:at.z,yaw:Math.random()*6.28,t:Math.random()*5,scale:1});
+    });
+  });
+}
+function updateQItem(e,dt,pd){
+  e.t+=dt;
+  if(pd<1.8&&!G.player.dead){
+    var s=WILD.q[e.qid]; if(!s) return;
+    s.got=s.got||[]; s.got.push(e.iid);
+    var q=QUEST_BY[e.qid], pr=qProgress(q);
+    msg('Found '+e.n+(pr.need>1?' ('+pr.have+'/'+pr.need+')':''),'#ffe6a0',e.x,e.y+1.8,e.z,15); sfx('discover');
+    burst(e.x,e.y+0.8,e.z,22,[1.0,0.86,0.45],{up:3,spread:2,size:0.1,life:1,grav:-1});
+    if(pr.have>=pr.need) tip(q.t+': done — go back to '+FOLK[q.giver].name);
+    if(e.iid==='satchel') loreGet('hesper');
+    if(e.sneak){ var d=findKind('dragon');
+      if(d&&d.state==='sleep'&&Math.random()<0.45){ d.state='wake'; d.stT=0; sfx('roar',d.x,d.z); shake(0.7); tip('Cinderwing stirs! Run!'); loreGet('cinderwing'); }
+      else if(d&&d.state==='sleep') msg('…he snorts in his sleep…','#d9d2ff',d.x,d.y+4,d.z,15); }
+    var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
+    setTimeout(saveGame,30);
+  }
+}
+
+/* ---------- talking to the folk ---------- */
+function folkScreen(gid,say){
+  if(G.state==='play'){ menuOpen('talk'); sfx('click'); }
+  var F=FOLK[gid], q=giverQuest(gid), p=G.player, opts=[];
+  loreGet(gid==='eagle'?'aertheldor':gid,true);
+  var line=say;
+  if(!line){
+    if(q&&qReady(q)) line='Well? Have you got it?';
+    else if(q&&qActive(q.id)) line=gid==='eagle'?'The wind tells me you are not finished.':'Any luck?';
+    else if(q) line=q.say;
+    else line=gid==='eagle'?(WILD.eagle?'Aelfrend grows strong. Fly well, small hunter.':'The sky is quiet today.'):(gid==='wren'?'The ring\'s been humming all morning. Can you hear it?':'Nothing that needs mending. For once.');
+  }
+  if(q){
+    if(qReady(q)) opts.push({id:'turn',t:'Hand over: '+q.t,d:'Done — '+qProgressText(q),gold:true});
+    else if(qActive(q.id)) opts.push({id:'none',t:q.t,d:qProgressText(q),off:true});
+    else opts.push({id:'accept',t:'Accept: '+q.t,d:q.short,gold:true});
+  }
+  if(gid==='wren'&&qDone('w_leaf')) opts.push({id:'craft',t:'Use the workbench',d:'Brew potions and tonics, make charms'});
+  if(gid==='eagle'&&WILD.eagle) opts.push({id:'fly',t:'Fly with Aelfrend',d:'Anywhere your work lies'});
+  var html='<h1>'+F.name+'</h1><p class="sub">'+F.role+'</p><p class="say">“'+line+'”</p>';
+  if(gid!=='eagle') html+=satchelHtml();
+  html+='<div class="opts">';
+  opts.forEach(function(o){ html+='<button class="opt'+(o.off?' off':'')+(o.gold?' gold':'')+'" data-o="'+o.id+'"'+(o.off?' disabled':'')+'><b>'+o.t+'</b><small>'+o.d+'</small></button>'; });
+  html+='</div><button class="btn" id="leave">Back to the wood</button>';
+  show(html);
+  var els=ui.querySelectorAll('.opt[data-o]');
+  for(var i=0;i<els.length;i++) els[i].onclick=function(){ var id=this.getAttribute('data-o');
+    if(id==='accept'){ acceptQuest(q); folkScreen(gid,q.say); }
+    else if(id==='turn'){ finishQuest(q); folkScreen(gid,q.done); }
+    else if(id==='craft') craftScreen(function(){ folkScreen(gid); });
+    else if(id==='fly') flyScreen(); };
+  document.getElementById('leave').onclick=menuClose;
+}
+function folkTalk(p,list){
+  if(WILD.inCave) return;
+  ['wren','tobin'].forEach(function(id){ var e=folkEnt(id);
+    if(e&&Math.hypot(e.x-p.x,e.z-p.z)<3.6) list.push({x:e.x,y:e.y,z:e.z,lift:2.5,label:'talk to '+FOLK[id].name.split(' ')[0],tap:'TALK',open:function(){ folkScreen(id); }}); });
+  var E=FOLKSITE.eyrie;
+  if(Math.hypot(E.x-p.x,E.z-p.z)<6.5) list.push({x:E.x,y:E.top-3,z:E.z,lift:4,label:'speak with Ærtheldor',tap:'SPEAK',open:function(){ folkScreen('eagle'); }});
+}
+/* Bram's side of Tobin's delivery */
+function bramParcel(opts){ if(qActive('t_parcel')&&!(WILD.q.t_parcel.got||[]).length) opts.push({id:'parcel',t:'Hand over Tobin\'s parcel',d:'A new tap for the ale barrel. A year late.',gold:true}); }
+function bramParcelDo(){
+  WILD.q.t_parcel.got=['parcel']; sfx('coin'); setTimeout(saveGame,30);
+  return 'A year! A whole year I\'ve been drinking from a barrel with a cork in it. …Tell him thank you. Don\'t tell him I said so.';
+}
+
+/* ---------- where the quests point: minimap marks, and Tobin's compass ---------- */
+function questTargets(){
+  var out=[], p=G.player, inCv=WILD.inCave;
+  function add(x,z,label){ if(inCave(x,z)===inCv||!inCv) out.push({x:x,z:z,l:label}); }
+  QUESTS.forEach(function(q){
+    if(!qActive(q.id)) return;
+    var F=FOLK[q.giver];
+    if(qReady(q)){ add(F.x,F.z,'Back to '+F.name); return; }
+    var g=q.goal;
+    if(g.type==='find') for(var i=0;i<G.ents.length;i++){ var e=G.ents[i]; if(e.kind==='qitem'&&e.qid===q.id) add(e.x,e.z,q.short); }
+    if(g.type==='deliver'){ var k=keeper(); if(k) add(k.x,k.z,'Bram'); }
+    var want=g.type==='gather'?[g.item]:(g.type==='bring'?Object.keys(g.cost).filter(function(r){ return inv(r)<g.cost[r]; }):[]);
+    if(want.length){ var best=null,bd=1e9;
+      for(var j=0;j<G.ents.length;j++){ var n=G.ents[j]; if(n.kind!=='node'||n.t>0||want.indexOf(n.res)<0) continue;
+        var d=Math.hypot(n.x-p.x,n.z-p.z); if(d<bd&&inCave(n.x,n.z)===inCv){ bd=d; best=n; } }
+      if(best) add(best.x,best.z,RES[best.res].n); }
+  });
+  return out;
+}
+function giverMark(gid){ var q=giverQuest(gid); if(!q) return null; if(qReady(q)) return '?'; if(!qActive(q.id)) return '!'; return null; }
+function drawCompass(){
+  if(!WILD.compass||G.state!=='play') return;
+  var p=G.player, T=questTargets(); if(!T.length) return;
+  var best=null,bd=1e9; T.forEach(function(t){ var d=Math.hypot(t.x-p.x,t.z-p.z); if(d<bd){ bd=d; best=t; } });
+  if(bd<3) return;
+  var dx=best.x-p.x, dz=best.z-p.z, r=rotPt(dx,dz,G.cam.yaw), a=Math.atan2(r.x,-r.y);
+  var cx=W/2, cy=DESKTOP?72:Math.max(SAFET+70,82);
+  hx.save(); hx.translate(cx,cy); hx.rotate(a);
+  hx.fillStyle='rgba(8,11,8,.6)'; hx.beginPath(); hx.arc(0,0,15,0,6.3); hx.fill();
+  hx.fillStyle='#ffd76a'; hx.beginPath(); hx.moveTo(0,-12); hx.lineTo(7,6); hx.lineTo(0,2); hx.lineTo(-7,6); hx.closePath(); hx.fill();
+  hx.restore();
+  hx.textAlign='center'; hx.font='600 12px Georgia,serif';
+  var lbl=best.l+' · '+Math.round(bd)+'m';
+  hx.fillStyle='rgba(0,0,0,.6)'; hx.fillText(lbl,cx+1,cy+30); hx.fillStyle='#ffe6a0'; hx.fillText(lbl,cx,cy+29);
+}
+
+/* ---------- the eagles ---------- */
+function spawnPet(){
+  if(findPet()) return;
+  var p=G.player, E=FOLKSITE.eyrie;
+  G.ents.push({kind:'eagle',sub:'pet',name:'Aelfrend',x:p?p.x:E.x,y:(p?p.y:H(E.x,E.z))+6,z:p?p.z:E.z,yaw:0,scale:0.9,t:0,orb:0,state:'follow',cd:3,vx:0,vz:0});
+}
+function findPet(){ for(var i=0;i<G.ents.length;i++){ var e=G.ents[i]; if(e.kind==='eagle'&&e.sub==='pet') return e; } return null; }
+function updateEagle(e,dt){
+  e.t+=dt;
+  if(e.sub==='great'){                              // Ærtheldor on his eyrie: preens, watches, now and then spreads his wings
+    var p0=G.player, pd=Math.hypot(p0.x-e.x,p0.z-e.z);
+    e.yaw+=wrapA((pd<40?Math.atan2(p0.x-e.x,p0.z-e.z):Math.PI*0.9)-e.yaw)*Math.min(1,dt*1.5);
+    e.flapT-=dt; if(e.flapT<-6-Math.random()*6){ e.flapT=1.6; if(pd<50) sfx('wings',e.x,e.z); }
+    return;
+  }
+  var p=G.player;
+  if(G.flight){ e.state='carry'; e.x=p.x; e.z=p.z; e.y=p.y+2.6; e.yaw=p.yaw; return; }
+  if(e.state==='carry') e.state='follow';
+  var tx,ty,tz,spd;
+  if(e.state==='dive'&&e.tgt&&G.ents.indexOf(e.tgt)>=0&&e.tgt.hp>0){
+    var T=e.tgt; tx=T.x; tz=T.z; ty=T.y+aimH(T); spd=24;
+    if(Math.hypot(tx-e.x,tz-e.z)<1.6&&Math.abs(ty-e.y)<2){
+      var dmg=(14+p.level*2.6)*(1+0.15*((G.build.gear||{}).w||0));
+      impact(T,Math.sin(e.yaw),Math.cos(e.yaw)); hurtEnemy(T,dmg); sfx('hit',e.x,e.z);
+      msg('Aelfrend!','#ffe6a0',e.x,e.y+1,e.z,13);
+      e.state='rise'; e.riseT=0.9; e.cd=4.5; e.tgt=null;
+    }
+  } else {
+    if(e.state==='dive') e.state='follow';
+    if(e.state==='rise'){ e.riseT-=dt; if(e.riseT<=0) e.state='follow'; }
+    e.orb+=dt*0.9; tx=p.x+Math.cos(e.orb)*5; tz=p.z+Math.sin(e.orb)*5; ty=p.y+(WILD.inCave?4:7)+Math.sin(e.t*1.3)*0.6; spd=e.state==='rise'?14:12;
+    e.cd-=dt;
+    if(e.cd<=0&&!p.dead&&!p.safe){ var best=null,bd=17;
+      for(var i=0;i<G.ents.length;i++){ var f=G.ents[i]; if(!FOE[f.kind]||f.boss&&f.state==='sleep'||f.riseT>0) continue;
+        var d=Math.hypot(f.x-p.x,f.z-p.z); if(d<bd){ bd=d; best=f; } }
+      if(best){ e.state='dive'; e.tgt=best; sfx('wings',e.x,e.z); } else e.cd=1; }
+  }
+  var dx=tx-e.x, dy=ty-e.y, dz=tz-e.z, L=Math.hypot(dx,dy,dz);
+  if(L>40){ e.x=tx; e.y=ty; e.z=tz; }               // catch up after a teleport
+  else if(L>0.01){ var m=Math.min(spd,L*3)*dt; e.x+=dx/L*m; e.y+=dy/L*m; e.z+=dz/L*m;
+    e.yaw+=wrapA(Math.atan2(dx,dz)-e.yaw)*Math.min(1,dt*5); }
+  e.dive=e.state==='dive'?1:0;
+}
+/* where Aelfrend can carry you */
+function flyDests(){
+  var d=[{id:'eyrie',n:'Ærtheldor\'s Eyrie',x:FOLKSITE.eyrie.x-7,z:FOLKSITE.eyrie.z-6},
+    {id:'tavern',n:'The Greenleaf Tavern',x:TAVERN.door.x+Math.sin(TAVERN.ry)*5,z:TAVERN.door.z+Math.cos(TAVERN.ry)*5},
+    {id:'wren',n:'Wren\'s camp',x:FOLK.wren.x+2.5,z:FOLK.wren.z+2},
+    {id:'tobin',n:'Tobin\'s cart',x:FOLK.tobin.x-2,z:FOLK.tobin.z+3}];
+  if(HOME.owned){ var h=HT(0,5.5); d.push({id:'home',n:'Your cottage',x:h.x,z:h.z}); }
+  if(G.found['The Standing Stones']) d.push({id:'stones',n:'The Standing Stones',x:STONES.x+6,z:STONES.z+6});
+  return d;
+}
+function flyScreen(){
+  if(!WILD.eagle) return;
+  if(G.state==='play') menuOpen('talk');
+  var html='<h1>Fly with Aelfrend</h1>';
+  if(WILD.inCave){ html+='<p class="say">Aelfrend looks at the rock above you, then at you, and does not say anything. Get outside first.</p><button class="btn" id="leave">All right</button>';
+    show(html); document.getElementById('leave').onclick=menuClose; return; }
+  html+='<p class="sub">He shrieks, and the wind comes up under his wings. Where to?</p><div class="opts">';
+  var p=G.player;
+  flyDests().forEach(function(d){ html+='<button class="opt" data-d="'+d.id+'"><b>'+d.n+'</b><small>'+Math.round(Math.hypot(d.x-p.x,d.z-p.z))+'m away</small></button>'; });
+  html+='</div><button class="btn alt" id="leave">Stay on the ground</button>';
+  show(html);
+  var els=ui.querySelectorAll('.opt[data-d]');
+  for(var i=0;i<els.length;i++) els[i].onclick=function(){ var id=this.getAttribute('data-d'), D=null;
+    flyDests().forEach(function(d){ if(d.id===id) D=d; }); menuClose(); startFlight(D); };
+  document.getElementById('leave').onclick=menuClose;
+}
+function startFlight(D){
+  var p=G.player; if(!D) return;
+  var dist=Math.hypot(D.x-p.x,D.z-p.z);
+  G.flight={sx:p.x,sz:p.z,sy:p.y,tx:D.x,tz:D.z,t:0,dur:clamp(dist/38,2.6,6),name:D.n};
+  sfx('wings',p.x,p.z); tip('Aelfrend carries you to '+D.n);
+}
+function flightUpdate(dt){
+  var F=G.flight, p=G.player;
+  F.t+=dt/F.dur; var k=Math.min(1,F.t), e=k*k*(3-2*k);
+  var x=F.sx+(F.tx-F.sx)*e, z=F.sz+(F.tz-F.sz)*e, base=F.sy+(H(F.tx,F.tz)-F.sy)*e;
+  var y=Math.max(base+Math.sin(k*Math.PI)*32, H(x,z)+1.5);
+  p.yaw=Math.atan2(F.tx-F.sx,F.tz-F.sz); p.x=x; p.z=z; p.y=y; p.vy=0; p.onGround=false; p.speed=0; p.inv=Math.max(p.inv,0.5);
+  if(Math.random()<dt*10) burst(p.x,p.y+2.5,p.z,1,[1,1,1],{up:-1,spread:0.8,size:0.12,life:0.6,grav:0});
+  if(k>=1){
+    G.flight=null; p.y=H(x,z); p.onGround=true; MREFset=false;
+    var n=0; for(var i=0;i<G.ents.length;i++){ var a=G.ents[i]; if(a.kind!=='ally') continue;
+      a.x=x+Math.cos(n*2.1)*2.4; a.z=z+Math.sin(n*2.1)*2.4; a.y=H(a.x,a.z); collide(a,0.42); n++; }
+    tip('Aelfrend sets you down at '+F.name); sfx('land',0,0,1); setTimeout(saveGame,30);
+  }
+}
+
+/* ---------- drawing the things of this file ---------- */
+function eagleLook(e){
+  return e.sub==='great'?{body:[0.40,0.27,0.13],dark:[0.26,0.17,0.09],head:[0.96,0.95,0.90],beak:[0.98,0.78,0.22],eye:[0.95,0.70,0.15],tail:[0.92,0.90,0.84]}
+    :{body:[0.55,0.40,0.22],dark:[0.36,0.25,0.13],head:[0.85,0.80,0.66],beak:[0.92,0.72,0.25],eye:[0.95,0.70,0.15],tail:[0.55,0.40,0.22]};
+}
+function nodeRig(out,e,t){
+  if(e.t>0) return;
+  var c=RES[e.res].col, gl=0.85+0.15*Math.sin(t*3+e.seed);
+  switch(e.res){
+    case 'herb': for(var i=0;i<5;i++){ var a=i/5*6.283+e.seed;
+        out.push(['cone',Math.cos(a)*0.18,0,Math.sin(a)*0.18,Math.cos(a)*0.4,0,Math.sin(a)*-0.4,0.16,0.55,0.08,[0.36,0.58,0.38]]);
+        out.push(['blob',Math.cos(a)*0.28,0.5,Math.sin(a)*0.28,0,0,0,0.1,0.08,0.1,[0.85*gl,0.95*gl,0.90*gl]]); } break;
+    case 'wood': out.push(['box',0,0.1,0,0,0.4,1.57,0.28,1.3,0.28,[0.45,0.30,0.17]]);
+      out.push(['box',0.15,0.3,0,0,-0.6,1.57,0.22,1.1,0.22,[0.52,0.36,0.20]]);
+      out.push(['blob',-0.2,0.35,0.2,0,0,0,0.25,0.12,0.25,[0.30,0.48,0.25]]); break;
+    case 'ore': out.push(['blobR',0,0,0,0,e.yaw,0,1.0,0.7,0.9,[0.40,0.40,0.42]]);
+      for(var k=0;k<4;k++){ var b=k*1.6+e.seed; out.push(['box',Math.cos(b)*0.35,0.25+k*0.08,Math.sin(b)*0.35,0.3,b,0.4,0.16,0.12,0.12,[0.78*gl,0.46*gl,0.30*gl]]); } break;
+    case 'silk': out.push(['blobR',0,0,0,0,0,0,0.6,0.5,0.6,c]); out.push(['blobR',0.3,0.3,-0.1,0,0,0,0.35,0.35,0.35,c]); break;
+    case 'honey': out.push(['cone',0,0,0,0,e.yaw,0,0.8,0.5,0.8,[0.95*gl,0.72*gl,0.22]]); out.push(['cone',0.25,0.1,0.2,0,0,0,0.5,0.35,0.5,[0.85,0.62,0.18]]); break;
+    case 'glowcap': out.push(['tube',0,0,0,0,0,0,0.12,0.35,0.12,[0.80,0.85,0.80]]); out.push(['blob',0,0.3,0,0,0,0,0.45*gl,0.22,0.45*gl,c]);
+      out.push(['tube',0.3,0,0.15,0,0,0,0.08,0.22,0.08,[0.80,0.85,0.80]]); out.push(['blob',0.3,0.2,0.15,0,0,0,0.28,0.14,0.28,c]); break;
+  }
+}
+function qitemRig(out,e,t){
+  var b=0.55+Math.sin(t*2+e.t)*0.12, gl=0.85+0.15*Math.sin(t*5);
+  // a beacon of light so you can spot it from afar
+  out.push(['cone',0,0.02,0,0,0,0,0.5,0.04,0.5,[1.0*gl,0.86*gl,0.45*gl]]);
+  switch(e.shape){
+    case 'feather': out.push(['cone',0,b,0,0.5,e.t*1.5,0.3,0.22,0.95,0.06,[1.0*gl,0.82*gl,0.30]]); out.push(['box',0,b-0.15,0,0.5,e.t*1.5,0.3,0.03,0.4,0.03,[0.95,0.90,0.75]]); break;
+    case 'egg': out.push(['blob',0,0.1,0,0.1,0,0.1,0.75,1.0,0.75,[0.88,0.92,0.98]]); out.push(['blobR',0,0,0,0,0,0,1.1,0.4,1.1,[0.92,0.92,0.95]]); break;
+    case 'scale': out.push(['blob',0,b-0.3,0,1.0,e.t,0,0.6,0.08,0.7,[0.22*gl+0.2,0.08,0.06]]); out.push(['blob',0,b-0.28,0,1.0,e.t,0,0.4,0.06,0.45,[1.0*gl,0.55*gl,0.15]]); break;
+    case 'satchel': out.push(['box',0,0,0,0,e.yaw,0,0.7,0.45,0.35,[0.45,0.30,0.16]]); out.push(['box',0,0.42,0,0,e.yaw,0,0.72,0.1,0.37,[0.36,0.24,0.12]]); break;
+    case 'cog': out.push(['tube',0,b,0,1.57,e.t*2,0,0.5,0.12,0.5,[0.88*gl,0.70*gl,0.30]]);
+      for(var i=0;i<8;i++){ var a=i/8*6.283; out.push(['box',Math.cos(a)*0.28,b+Math.sin(a)*0.28,0,0,e.t*2,a,0.1,0.12,0.1,[0.85,0.68,0.28]]); } break;
+    case 'spring': for(var j=0;j<5;j++) out.push(['tube',0,b-0.25+j*0.11,0,0.2,e.t+j,0,0.36,0.05,0.36,[0.75*gl,0.75*gl,0.80]]); break;
+    case 'bell': out.push(['cone8',0,b-0.2,0,0,e.t,0,0.55,0.6,0.55,[0.95*gl,0.78*gl,0.30]]); out.push(['blob',0,b-0.25,0,0,0,0,0.14,0.14,0.14,[0.6,0.45,0.2]]); break;
+    case 'lens': out.push(['tube',0,b,0,1.57,e.t*1.5,0,0.45,0.08,0.45,[0.85,0.70,0.30]]); out.push(['blob',0,b-0.2,0,1.57,e.t*1.5,0,0.38,0.05,0.38,[0.70*gl,0.92*gl,1.0]]); break;
+  }
+}
+function drawFolkMarks(){
+  // a gold "!" over a quest giver with work for you, a "?" when you're done
+  ['wren','tobin','eagle'].forEach(function(gid){ var m=giverMark(gid); if(!m) return;
+    var e=gid==='eagle'?{x:FOLKSITE.eyrie.x,y:FOLKSITE.eyrie.top+3.2,z:FOLKSITE.eyrie.z}:folkEnt(gid); if(!e) return;
+    var s=project(e.x,(gid==='eagle'?e.y:e.y+2.9),e.z); if(!s||s.d>70) return;
+    hx.textAlign='center'; hx.font='700 '+Math.round(Math.max(16,30-s.d*0.2))+'px Georgia,serif';
+    hx.fillStyle='rgba(0,0,0,.6)'; hx.fillText(m,s.x+1.5,s.y+1.5); hx.fillStyle=m==='?'?'#9ff07a':'#ffd76a'; hx.fillText(m,s.x,s.y); });
+}
+/* the quest page that heads the journal */
+function questLogHtml(){
+  var act=QUESTS.filter(function(q){ return qActive(q.id); }), done=QUESTS.filter(function(q){ return qDone(q.id); }).length;
+  var html='<h3>Quests ('+done+' of '+QUESTS.length+' done)</h3><div class="lore">';
+  if(!act.length) html+='<div class="lp qp off"><b>— no open quests —</b><p>Wren camps by the fairy ring west of the glade; Tobin\'s cart is stuck on the east road; and far in the south, past the river, something great nests on a pillar of rock.</p></div>';
+  act.forEach(function(q){ html+='<div class="lp qp"><b>'+q.t+' <small style="color:#a89873">— '+FOLK[q.giver].name+'</small></b><p>'+q.say+'</p><p style="color:#ffe6a0;margin-top:4px">'+qProgressText(q)+'</p></div>'; });
+  html+='</div>'+satchelHtml();
+  return html;
+}
+
+</script>
+<script>
 /* ================= Elven Hunter 3D ================= */
 var cvs=document.getElementById('gl'), hud=document.getElementById('hud'), hx=hud.getContext('2d');
 var ui=document.getElementById('ui');
@@ -7623,7 +8231,7 @@ function recalc(){
   S.extra=SK('twin')+SK('fork'); S.pierce=SK('pierce');
   S.burst=SK('burst')?3.0+1.4*SK('burst'):0; S.frost=SK('frost');
   S.allies=2+SK('comp'); S.xp=r.xp*(1+0.25*SK('ley'));
-  S.proj=c.proj; G.S=S;
+  S.proj=c.proj; if(typeof charmStats==='function'&&WILD) charmStats(S); G.S=S;
   if(G.player){var d=S.maxHp-G.player.maxHp; G.player.maxHp=S.maxHp; if(d>0)G.player.hp=Math.min(S.maxHp,G.player.hp+d);}
 }
 function look(race,cls,extra){
@@ -7708,6 +8316,7 @@ function buildWorld(){
   buildCrag(m);
   buildBounce(m);
   buildWaystones(m);
+  buildFolkSites(m);
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
   WORLD.castShadow=true; WORLD.receiveShadow=true;
   SCENE.add(WORLD);
@@ -7760,6 +8369,7 @@ function populate(){
   spawnCritters(); spawnGnomes(); populateCave();
   if(WILD.dragon.t<=0) spawnDragon();
   spawnMinis(); seedChampions();
+  spawnFolk(); spawnNodes(); spawnQuestItems();
 }
 function nearTavern(x,z,r){ return Math.hypot(x-TAVERN.x,z-TAVERN.z)<r||homeSafe(x,z,r*0.8); }
 /* Bram keeps the Greenleaf: rest, potions, hired blades and bounties */
@@ -7770,7 +8380,7 @@ function spawnKeeper(){
     look:look('human','warrior',{tunic:[0.55,0.42,0.30],sleeve:[0.55,0.42,0.30],cloak:null,weapon:null,hair:HAIR.brown,beard:1})});
   if(!G.keeperColl){ collCircle(k.x,k.z,0.5); G.keeperColl=1; }
 }
-function keeper(){ for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind==='npc') return G.ents[i]; return null; }
+function keeper(){ for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind==='npc'&&!G.ents[i].npcId) return G.ents[i]; return null; }
 
 /* ---------- input ---------- */
 var IN={mx:0,mz:0,look:{x:0,y:0},attack:false,shoot:false,shootHeld:false,jump:false,dash:false,interact:false,atkBuf:0,shotBuf:0,jumpBuf:0};
@@ -7795,6 +8405,7 @@ function layoutButtons(){
     {id:'skills',x:W-r*0.90,    y:SAFET+r*2.05, r:r*0.58,label:'SKILL'}
   ];
   if(G.S&&G.S.dash) btns.push({id:'dash',x:right-r*2.4,y:bot-r*2.0,r:r*0.70,label:'DASH'});
+  if(typeof WILD!=='undefined'&&WILD&&WILD.eagle) btns.push({id:'fly',x:W-r*0.90,y:SAFET+r*3.5,r:r*0.58,label:'FLY'});
 }
 function hitBtn(x,y){
   var best=null,bd=1e9;
@@ -7811,6 +8422,7 @@ function press(id){
   else if(id==='dash') IN.dash=true;
   else if(id==='potion') usePotion();
   else if(id==='skills') skillScreen();
+  else if(id==='fly') flyScreen();
   buzz(8);
 }
 function ptrDown(id,x,y){
@@ -7985,6 +8597,7 @@ function hurtEnemy(e,d,quiet){
     stonesKill();
     if(e.boss) bossDown(e);
     if(e.mini) miniDown(e);
+    monsterDrop(e);
     if(e.elite) championDown(e);
     sfx(e.kind+'die',e.x,e.z);
     // monsters burst in a puff of ichor and dust, no blood
@@ -8117,6 +8730,7 @@ function update(dt){
   if(ga>=4&&!p.dead&&Math.random()<dt*(ga>=5?9:3)){ var ma=Math.random()*6.28;
     burst(p.x+Math.cos(ma)*0.45,p.y+0.4+Math.random()*1.2,p.z+Math.sin(ma)*0.45,1,ga>=5?[1.0,0.84,0.38]:[0.70,1.0,0.80],{up:0.9,spread:0.15,size:0.06,life:1.1,grav:-0.6}); }
   if(p.dead){ p.deadT+=dt; p.speed=0; followCam(dt); return; }
+  if(G.flight){ flightUpdate(dt); updateEnts(dt); followCam(dt); return; }   // in Aelfrend's talons
 
   // movement frame: latched when you start pushing, so the auto-camera can't
   // rotate your heading out from under you (that is what made you walk in circles)
@@ -8369,6 +8983,9 @@ function updateEnts(dt){
       continue;
     }
     if(e.kind==='critter'){ updateCritter(e,dt,pd); continue; }
+    if(e.kind==='node'){ updateNode(e,dt,pd); continue; }
+    if(e.kind==='qitem'){ updateQItem(e,dt,pd); continue; }
+    if(e.kind==='eagle'){ updateEagle(e,dt); continue; }
     if(e.kind==='gnome'){ e.yaw+=wrapA(Math.atan2(p.x-e.x,p.z-e.z)-e.yaw)*Math.min(1,dt*(pd<8?3:0));
       if(pd<2.2&&!p.dead) findGnome(e); continue; }
     if(e.boss){ if(pd<130) updateBoss(e,dt); continue; }
@@ -8452,7 +9069,7 @@ function updateEnts(dt){
       // Bram turns to watch you come up the path, and raises a mug when you arrive
       var want=pd<10?Math.atan2(p.x-e.x,p.z-e.z):e.home;
       e.yaw+=(wrapA(want-e.yaw))*Math.min(1,dt*4);
-      if(pd<10&&!e.greeted){ e.greeted=true; e.cheer=1.6; msg(G.bounty&&G.bounty.got>=G.bounty.n?'Back already? Come, collect!':'Welcome to the Greenleaf!','#ffe08a',e.x,e.y+2.6,e.z); }
+      if(pd<10&&!e.greeted){ e.greeted=true; e.cheer=1.6; msg(e.npcId?FOLK[e.npcId].greet:(G.bounty&&G.bounty.got>=G.bounty.n?'Back already? Come, collect!':'Welcome to the Greenleaf!'),'#ffe08a',e.x,e.y+2.6,e.z); }
       if(pd>18) e.greeted=false;
       if(e.cheer>0) e.cheer-=dt;
       continue;
@@ -8538,7 +9155,8 @@ function addShadow(e){
   var sc=(e.kind==='spider')?3.0*(e.scale||1):1.5*(e.scale||1);
   if(e.kind==='cocoon') sc=1.6;
   if(e.boss||(e.kind==='corpse'&&e.boss)) sc=(e.rad||3)*2.4;
-  if(e.kind==='critter'||e.kind==='gnome') sc=0.6;
+  if(e.kind==='critter'||e.kind==='gnome'||e.kind==='node'||e.kind==='qitem') sc=0.6;
+  if(e.kind==='eagle') sc=(e.scale||1)*1.8;
   var air=Math.max(0,e.y-H(e.x,e.z));
   var f=Math.max(0.35,1-air*0.22);
   var m=mat(); m4trs(m,e.x,H(e.x,e.z)+0.06,e.z,0,e.yaw||0,0,sc*f,1,sc*f);
@@ -8647,7 +9265,7 @@ function draw(){
     var e=G.ents[i];
     if(actors.has(e)) continue;
     var ed=Math.hypot(e.x-c.x,e.z-c.z);
-    if(ed>(e.boss?130:(e.kind==='critter'?45:62))) continue;
+    if(ed>(e.boss||e.kind==='eagle'?130:(e.kind==='critter'||e.kind==='node'?45:62))) continue;
     VIS.push([ed,e]);
   }
   VIS.sort(function(a,b){return a[0]-b[0];});
@@ -8741,6 +9359,9 @@ function pushEnt(e){
   else if(rk==='golem') golemRig(RIG,e,G.t);
   else if(rk==='dragon') dragonRig(RIG,e,G.t);
   else if(e.kind==='gnome') gnomeRig(RIG,e,G.t);
+  else if(e.kind==='eagle') eagleRig(RIG,e,G.t);
+  else if(e.kind==='node') nodeRig(RIG,e,G.t);
+  else if(e.kind==='qitem') qitemRig(RIG,e,G.t);
   else if(e.kind==='critter'){ if(e.sub==='fly') flyRig(RIG,e,G.t); else bunnyRig(RIG,e,G.t); }
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
   else if(e.kind==='shot'||e.kind==='eshot'||e.kind==='stuck'){ pushShot(e); return; }
@@ -8822,6 +9443,12 @@ function mapIcon(kind,x,y,s,unknown){
       hx.fillStyle='#bff0ff'; hx.beginPath();
       for(var k=0;k<8;k++){ var a=k/8*6.283, rr=(k&1)?1.2:4; hx.lineTo(Math.sin(a)*rr,-Math.cos(a)*rr); }
       hx.closePath(); hx.fill(); break;
+    case 'folk':                         // Wren and Tobin
+      hx.fillStyle='#2a1a0a'; hx.beginPath(); hx.arc(0,0,4,0,6.3); hx.fill();
+      hx.fillStyle='#9fdc8a'; hx.beginPath(); hx.arc(0,0,3,0,6.3); hx.fill(); break;
+    case 'eagle': case 'eyrie':          // a bird in flight
+      hx.fillStyle='#e8c88a'; hx.beginPath(); hx.moveTo(0,-1); hx.lineTo(5.5,-3.5); hx.lineTo(2.5,0.5); hx.lineTo(0,3.5); hx.lineTo(-2.5,0.5); hx.lineTo(-5.5,-3.5); hx.closePath(); hx.fill();
+      hx.strokeStyle='#2a1a0a'; hx.lineWidth=0.8; hx.stroke(); break;
     case 'keeper':                       // Bram: a gold "!" while he has work or a reward for you
       var ready=!G.bounty||G.bounty.got>=G.bounty.n;
       hx.fillStyle='#2a1a0a'; hx.beginPath(); hx.arc(0,0,4.2,0,6.3); hx.fill();
@@ -8970,11 +9597,11 @@ function drawHUD(){
   var sc=mr/(DESKTOP?86:70), ms=DESKTOP?1:0.85;
   for(var e2=0;e2<G.ents.length;e2++){
     var en=G.ents[e2];
-    if(en.kind==='shot'||en.kind==='eshot'||en.kind==='stuck'||en.kind==='critter'||en.kind==='gnome'||en.kind==='corpse') continue;
+    if(en.kind==='shot'||en.kind==='eshot'||en.kind==='stuck'||en.kind==='critter'||en.kind==='gnome'||en.kind==='corpse'||en.kind==='node'||en.kind==='qitem'||(en.kind==='eagle'&&en.sub==='pet')) continue;
     var ddx=(en.x-p.x)*sc, ddz=(en.z-p.z)*sc;
     if(Math.hypot(ddx,ddz)>mr) continue;
     var rp=rotPt(ddx,ddz,G.cam.yaw);
-    mapIcon(en.kind==='spider'&&en.big?'bigspider':(en.kind==='npc'?'keeper':en.kind),mx+rp.x,my+rp.y,ms);
+    mapIcon(en.kind==='spider'&&en.big?'bigspider':(en.kind==='npc'?(en.npcId?'folk':'keeper'):en.kind),mx+rp.x,my+rp.y,ms);
   }
   if(WILD.inCave){                        // below ground the map shows the chambers instead
     hx.fillStyle='rgba(120,200,220,.16)';
@@ -8990,6 +9617,12 @@ function drawHUD(){
     if(edge){ rot.x*=(mr-7)/rl; rot.y*=(mr-7)/rl; }
     mapIcon(lm.kind,mx+rot.x,my+rot.y,ms*(edge?0.85:1.1),!G.found[lm.name]);
   }
+  // quest objectives: gold diamonds, pinned to the rim when they lie beyond it
+  var QT=questTargets();
+  for(var qi=0;qi<QT.length;qi++){ var qt=QT[qi], qr=rotPt((qt.x-p.x)*sc,(qt.z-p.z)*sc,G.cam.yaw), ql=Math.hypot(qr.x,qr.y);
+    if(ql>mr-6){ qr.x*=(mr-6)/ql; qr.y*=(mr-6)/ql; }
+    hx.save(); hx.translate(mx+qr.x,my+qr.y); hx.rotate(0.785); hx.fillStyle='#ffd76a'; hx.strokeStyle='#2a1a0a'; hx.lineWidth=1;
+    hx.fillRect(-3,-3,6,6); hx.strokeRect(-3,-3,6,6); hx.restore(); }
   // north marker rides the rim (the map turns with the camera)
   var nr=rotPt(0,-mr,G.cam.yaw);
   hx.font='700 '+Math.round(11*ms)+'px Georgia,serif'; hx.textAlign='center';
@@ -9000,7 +9633,7 @@ function drawHUD(){
   if(DESKTOP||SHOWKEY){
     var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['shroom','Mushroom grump'],['cocoon','Captive — free them'],
       ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
-      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['crag',"Dragon's Crag"],['cave','Glimmer Cave — bring a torch']];
+      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['cave','Glimmer Cave — bring a torch']];
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
     hx.textAlign='left'; hx.font='600 '+(DESKTOP?11.5:10.5)+'px Georgia,serif';
@@ -9034,6 +9667,7 @@ function drawHUD(){
     }
   }
   drawBossBar();
+  drawCompass(); drawFolkMarks();
   // tip
   if(G.tipT>0){
     hx.textAlign='center'; hx.globalAlpha=Math.min(1,G.tipT);
@@ -9100,7 +9734,7 @@ function drawHUD(){
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
     var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot';
-    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   L journal   ·   M sound';
+    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   M sound';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
       hx.textAlign='center'; hx.font='600 12.5px Georgia,serif';
@@ -9270,7 +9904,7 @@ function skillScreen(flash){
     '<div class="stat"><span>Health</span><b>'+G.S.maxHp+'</b></div>'+
     '<div class="stat"><span>Melee / ranged</span><b>'+Math.round(G.S.melee*100)+'% / '+Math.round(G.S.ranged*100)+'%</b></div>'+
     '<div class="stat"><span>Prisoners freed / foes slain</span><b>'+G.freed+' / '+G.killed+'</b></div>'+
-    '<div class="stat"><span>Lost gnomes found</span><b>'+gnomeCount()+' / '+GNOMES.length+'</b></div>'+
+    '<div class="stat"><span>Lost gnomes found</span><b>'+gnomeCount()+' / '+GNOMES.length+'</b></div>'+satchelHtml()+
     '<div class="skills">'+rows+'</div>'+
     '<button class="btn" id="close">Back to the wood</button>'+
     '<button class="btn alt" id="jrnl">Journal — '+loreCount()+' of '+LORE.length+' pages'+(G.loreNew?' (new!)':'')+'</button>'+
@@ -9343,6 +9977,7 @@ function keeperScreen(say){
   var full=deployed()>=S.allies;
   opts.push({id:'hire',  t:'Hire a companion', d:full?'Your company is full ('+deployed()+' of '+S.allies+')':'Blades for coin ('+deployed()+' of '+S.allies+' in your company)', off:full});
   if(!WILD.torch) opts.push({id:'torch', t:'Buy a torch — '+TORCH_PRICE+' ◉', d:p.coins<TORCH_PRICE?'Not enough coin':'For the Glimmer Cave under the Dragon\'s Crag', off:p.coins<TORCH_PRICE});
+  bramParcel(opts);
   opts.push({id:'story', t:'Ask for a story', d:'Bram knows the wood\'s old tales — and a few of his own', off:false});
   if(!b) opts.push({id:'work', t:'Ask for work', d:'Bram always has a job going', off:false});
   else if(b.got>=b.n){ var rw=bountyReward(b); opts.push({id:'claim', t:'Collect your bounty', d:'+'+rw.coins+' ◉ and +'+rw.xp+' XP', off:false, gold:true}); }
@@ -9373,6 +10008,7 @@ function keeperDo(id){
     if(WILD.torch||p.coins<TORCH_PRICE) return;
     p.coins-=TORCH_PRICE; WILD.torch=true; sfx('pickup'); saveGame();
     keeperScreen('There. Pitch-soaked, burns for days. The cave\'s in the west face of the crag — and whatever glitters in there, I want to hear about it.');
+  } else if(id==='parcel'){ keeperScreen(bramParcelDo());
   } else if(id==='story'){ var st=bramStory(); sfx('pickup'); keeperScreen(st);
   } else if(id==='hire'){ hireScreen(); }
   else if(id==='gear'){ gearScreen(); }
@@ -9554,6 +10190,7 @@ addEventListener('keydown',function(e){
   if(e.key==='q'||e.key==='Q') usePotion();
   if(e.key==='c'||e.key==='C'||e.key==='Shift') IN.dash=true;
   if(DEBUG&&(e.key==='i'||e.key==='I')) SHOWDBG=!SHOWDBG;
+  if((e.key==='g'||e.key==='G')&&!e.repeat&&G.state==='play'&&WILD.eagle&&!G.flight) flyScreen();
   if((e.key==='l'||e.key==='L')&&!e.repeat){ if(G.state==='play') journalScreen(); else if(G.state==='skills') menuClose(); }
   if(e.key==='e'||e.key==='E'){ IN.attack=true; IN.atkBuf=0.45; }
   setMode(true);

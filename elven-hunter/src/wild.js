@@ -22,15 +22,18 @@ function DF(){ return DIFFS[G.build.diff]||DIFFS.normal; }
 /* ---------- the wild state, saved with your hunter ---------- */
 var WILD=null;
 function wildReset(){
-  WILD={torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0};
+  WILD={torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0,
+    q:{}, inv:{}, recipes:{}, charms:{}, compass:0, eagle:0};
 }
 wildReset();
 function wildSave(){ return {torch:WILD.torch,gnomes:WILD.gnomes,stone:{c:WILD.stone.c,tier:WILD.stone.tier},
-  dragon:WILD.dragon,chestT:Math.round(WILD.chestT),wardens:WILD.wardens,lore:WILD.lore,minis:WILD.minis,trophies:WILD.trophies}; }
+  dragon:WILD.dragon,chestT:Math.round(WILD.chestT),wardens:WILD.wardens,lore:WILD.lore,minis:WILD.minis,trophies:WILD.trophies,
+  q:WILD.q,inv:WILD.inv,recipes:WILD.recipes,charms:WILD.charms,compass:WILD.compass,eagle:WILD.eagle}; }
 function wildLoad(w){
   wildReset(); if(!w) return;
   WILD.torch=!!w.torch; WILD.gnomes=w.gnomes||{}; WILD.chestT=w.chestT||0; WILD.wardens=w.wardens||0;
   WILD.lore=w.lore||{}; WILD.minis=w.minis||{}; WILD.trophies=w.trophies||0;
+  WILD.q=w.q||{}; WILD.inv=w.inv||{}; WILD.recipes=w.recipes||{}; WILD.charms=w.charms||{}; WILD.compass=w.compass||0; WILD.eagle=w.eagle||0;
   if(w.stone){ WILD.stone.c=w.stone.c||0; WILD.stone.tier=w.stone.tier||0; WILD.stone.full=WILD.stone.c>=1; }
   if(w.dragon){ WILD.dragon.t=w.dragon.t||0; WILD.dragon.kills=w.dragon.kills||0; }
 }
@@ -494,7 +497,7 @@ function bounceCheck(p){
 
 /* ---------- what you can walk up to and use ---------- */
 function wildTalk(p,list){
-  legendTalk(p,list);
+  legendTalk(p,list); folkTalk(p,list);
   var g=findKind('golem');
   if(!WILD.inCave){
     if(!g&&Math.hypot(STONES.x-p.x,STONES.z-p.z)<3.6)

@@ -47,6 +47,10 @@ var WAYSTONES=[{id:'way1',x:10,z:-12},{id:'way2',x:-2,z:-58},{id:'way3',x:52,z:-
 var CLEAR=[[0,-34,20],[-72,48,15],[86,-56,15],[-88,-78,11],[35,-60,20],[-18,19,8]];
 BOUNCE.forEach(function(b){ CLEAR.push([b.x,b.z,2.6]); });
 WAYSTONES.forEach(function(w){ CLEAR.push([w.x,w.z,3]); });
+/* where the folk live: Wren's camp by the fairy ring, Tobin's cart on the east road,
+   and Ærtheldor's eyrie far in the south, across the map from the dragon (see folk.js) */
+var FOLKSITE={wren:{x:-30,z:12},tobin:{x:43,z:-28},eyrie:{x:14,z:112,top:0}};
+CLEAR.push([FOLKSITE.wren.x,FOLKSITE.wren.z,8],[FOLKSITE.tobin.x,FOLKSITE.tobin.z,7],[FOLKSITE.eyrie.x,FOLKSITE.eyrie.z,12]);
 function pathDist(x,z){            // distance to the nearest path: glade -> tavern door, tavern -> cottage
   var t=clamp01((z-4)/(-29-4)), px=0+1.4*t*t, pz=4+(-29-4)*t;
   return Math.min(Math.hypot(x-px,z-pz), segDist(x,z,7,-29,30.5,-54.5));
@@ -680,6 +684,44 @@ function buildWaystones(m){
     collCircle(w.x,w.z,0.55);
     w.y=y;
   }
+}
+function buildFolkSites(m){
+  var wood=[0.40,0.28,0.16], dark=[0.26,0.18,0.11], canvas=[0.62,0.70,0.50];
+  // Wren: a patched tent, a cauldron on the boil, a bench of jars, a rack of drying herbs
+  var W=FOLKSITE.wren, wy=H(W.x,W.z);
+  addMesh(m,coneMesh(canvas,6),W.x-2.5,wy-0.1,W.z-2.2,0.4,3.6,3.0,3.6); collCircle(W.x-2.5,W.z-2.2,1.7);
+  addMesh(m,coneMesh([0.20,0.20,0.22],10,0.5,0.42),W.x+2.0,wy,W.z+0.5,0,1.2,0.8,1.2); collCircle(W.x+2.0,W.z+0.5,0.6);
+  addMesh(m,blobMesh([0.45,0.80,0.45],0,1),W.x+2.0,wy+0.7,W.z+0.5,0,0.95,0.2,0.95);
+  for(var f=0;f<5;f++){ var fa=f/5*6.283; addMesh(m,ROCK,W.x+2+Math.cos(fa)*0.85,wy-0.1,W.z+0.5+Math.sin(fa)*0.85,fa,0.35,0.25,0.35); }
+  addMesh(m,boxMesh(wood),W.x-1.2,wy+0.75,W.z+1.8,0.2,2.2,0.12,0.9); collBox(W.x-1.2,W.z+1.8,1.1,0.45,0.2);
+  for(var lg=-1;lg<=1;lg+=2) addMesh(m,boxMesh(dark),W.x-1.2+lg*0.9,wy,W.z+1.8+lg*0.18,0.2,0.12,0.75,0.75);
+  var jars=[[0.6,0.85,0.95],[0.95,0.6,0.6],[0.7,0.95,0.6],[0.95,0.85,0.5]];
+  for(var j=0;j<4;j++) addMesh(m,coneMesh(jars[j],8,0.5,0.4),W.x-1.9+j*0.45,wy+0.87,W.z+1.65+j*0.05,0,0.25,0.35,0.25);
+  for(var r=-1;r<=1;r+=2) addMesh(m,boxMesh(dark),W.x+r*1.1,wy,W.z-4.6,0,0.12,1.9,0.12);
+  addMesh(m,boxMesh(wood),W.x,wy+1.8,W.z-4.6,0,2.4,0.08,0.08);
+  for(var h=0;h<5;h++) addMesh(m,coneMesh([0.45,0.62,0.40],5),W.x-0.9+h*0.45,wy+1.15,W.z-4.6,3.14,0.22,0.65,0.22);
+  // Tobin: a cart with a wheel off, crates, an anvil
+  var T=FOLKSITE.tobin, ty=H(T.x,T.z), R=0.7;
+  addMesh(m,boxMesh(wood),T.x,ty+0.7,T.z,R,3.4,0.6,1.8); collBox(T.x,T.z,1.8,1.0,R);
+  addMesh(m,boxMesh(dark),T.x,ty+1.3,T.z,R,3.4,0.5,0.12);
+  var cR=Math.cos(R), sR=Math.sin(R);
+  function TP(lx,lz){ return {x:T.x+lx*cR+lz*sR,z:T.z-lx*sR+lz*cR}; }
+  [[-1.2,1.0],[1.2,1.0],[-1.2,-1.0]].forEach(function(w){ var q=TP(w[0],w[1]);
+    addMesh(m,coneMesh(dark,12,0.5,0.5),q.x,ty+0.05,q.z,R,1.1,0.18,1.1); });                     // wheels, flat on their axles (near enough)
+  var lw=TP(2.6,-1.8); addMesh(m,coneMesh(dark,12,0.5,0.5),lw.x,ty-0.05,lw.z,0,1.3,0.12,1.3);   // the one that came off
+  var cr=TP(-2.6,1.6); addMesh(m,boxMesh([0.52,0.40,0.24]),cr.x,ty,cr.z,R,0.9,0.9,0.9); collCircle(cr.x,cr.z,0.6);
+  var cr2=TP(-2.4,2.6); addMesh(m,boxMesh([0.48,0.36,0.22]),cr2.x,ty,cr2.z,R+0.3,0.7,0.7,0.7);
+  var an=TP(0.5,2.6); addMesh(m,boxMesh([0.30,0.30,0.32]),an.x,ty,an.z,R,0.5,0.6,0.5); addMesh(m,boxMesh([0.36,0.36,0.40]),an.x,ty+0.6,an.z,R,0.9,0.25,0.45); collCircle(an.x,an.z,0.45);
+  // the eyrie: a pillar of stacked rock with a nest of whole branches on top
+  var E=FOLKSITE.eyrie, ey=H(E.x,E.z), stack=[[2.8,2.2],[2.4,2.0],[2.0,1.9],[1.75,1.7]], hy=ey-0.4;
+  for(var k=0;k<stack.length;k++){ addMesh(m,ROCK,E.x+(k%2)*0.3,hy,E.z-(k%2)*0.2,k*1.3,stack[k][0]*1.3,stack[k][1]*1.25,stack[k][0]*1.3); hy+=stack[k][1]*1.25*0.82; }
+  collCircle(E.x,E.z,2.4);
+  E.top=hy+0.35;
+  for(var n=0;n<12;n++){ var na=n/12*6.283; addMesh(m,tubeLog(),E.x+Math.cos(na)*1.45,E.top-0.1,E.z+Math.sin(na)*1.45,na+1.7,0.35,1.4,0.35); }
+  addMesh(m,coneMesh([0.42,0.32,0.20],10,0.5,0.5),E.x,E.top-0.25,E.z,0,2.6,0.25,2.6);
+  for(var b=0;b<5;b++){ var ba=b*1.25+0.4, bx=E.x+Math.cos(ba)*5.5, bz=E.z+Math.sin(ba)*5.5;     // old bones and feathers at its foot
+    addMesh(m,coneMesh([0.95,0.85,0.55],5),bx,H(bx,bz)+0.05,bz,ba,0.25,1.0,0.06); }
+  LANDMARKS.push({x:E.x,z:E.z,r:9,name:'The Eyrie',kind:'eyrie'});
 }
 /* toadstools big enough to bounce on */
 function buildBounce(m){
