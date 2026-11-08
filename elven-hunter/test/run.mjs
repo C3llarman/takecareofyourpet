@@ -63,6 +63,14 @@ section('World');
   ok('world mesh builds', w.tris > 50000, `${w.tris} triangles in one draw call`);
   ok('eight landmarks placed', w.landmarks.length === 8, w.landmarks.join(', '));
   ok('spawn is above water', w.spawnAboveWater);
+  // the "objectives outside the map" bug: things were scattered over a square, but the
+  // walkable land is a circle inside the mountains, so the corners were unreachable
+  const reach = await page.evaluate(() => { startRun(); QUESTS.forEach((q) => { WILD.q[q.id] = { s: 'on', got: [] }; }); spawnQuestItems();
+    const lim = WHALF * 0.95, bad = [];
+    G.ents.forEach((e) => { if (e.z > CAVE.z0 || e.kind === 'critter' || e.kind === 'eagle') return;
+      if (Math.hypot(e.x, e.z) > lim - 2 || Hn(e.x, e.z) > 0.9) bad.push(e.kind); });
+    return { bad, n: G.ents.length, size: WSIZE }; });
+  ok('everything you can find or fight is somewhere you can reach', reach.bad.length === 0, reach.bad.length ? reach.bad.join(', ') : `${reach.n} things, on a ${reach.size}-unit map`);
   ok('terrain normals face up', w.upward === 1, `${Math.round(w.upward * 100)}% of sampled faces`);
   await page.close();
 }
@@ -463,7 +471,7 @@ section('Tavern');
       const x = TAVERN.x + Math.cos(a) * d, z = TAVERN.z + Math.sin(a) * d; if (solidAt(x, z, 1.0)) c++; } return c; };
     const hs = []; for (let a = 0; a < 6.28; a += 0.5) hs.push(H(TAVERN.x + Math.cos(a) * 9, TAVERN.z + Math.sin(a) * 9));
     return { keeper: !!keeper(), noButtons: !btns.some((b) => b.id === 'dbg'),
-      flat: Math.max(...hs) - Math.min(...hs), pathClear: [0, 0.2, 0.4, 0.6, 0.8, 0.95].every((t) => !solidAt(1.4 * t * t, 4 - 33 * t, 1.0)) };
+      flat: Math.max(...hs) - Math.min(...hs), pathClear: [0, 0.2, 0.4, 0.6, 0.8, 0.95].every((t) => !solidAt(PATH_END.x * t * t, 4 + (PATH_END.z - 4) * t, 1.0)) };
   });
   ok('the innkeeper stands at the tavern', yard.keeper);
   const foes = await page.evaluate(() => { const k = {}; G.ents.forEach((e) => { if (FOE[e.kind]) k[e.kind] = (k[e.kind] || 0) + 1; });
@@ -618,8 +626,8 @@ section('Forest');
   });
   ok('the wood is planted with the nature pack', f.kinds >= 15 && f.props > 1500, `${f.props} props of ${f.kinds} kinds in ${f.chunks} chunks`);
   ok('near chunks draw full detail, far ones the stand-ins', f.nearHi && f.farLo);
-  const trees = await page.evaluate(() => ['pine1', 'pine2', 'pine3', 'oak1', 'oak2', 'oak3', 'birch1', 'birch2', 'dead1'].reduce((a, k) => a + (PROPN[k] || 0), 0));
-  ok('the wood is open, not a thicket', trees < 650, `${trees} trees, with meadows between the stands`);
+  const trees = await page.evaluate(() => ({ n: ['pine1', 'pine2', 'pine3', 'oak1', 'oak2', 'oak3', 'birch1', 'birch2', 'dead1'].reduce((a, k) => a + (PROPN[k] || 0), 0), area: WS * WS }));
+  ok('the wood is open, not a thicket', trees.n / trees.area < 500, `${trees.n} trees, ${Math.round(trees.n / trees.area)} per original map's worth of ground`);
   const size = (await import('node:fs')).statSync(PAGE.replace('file://', '')).size / 1024 / 1024;
   ok('the whole game stays small', size < 3.2, `${size.toFixed(2)} MB with models, forest and music`);
   await page.close();

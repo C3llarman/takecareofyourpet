@@ -191,10 +191,10 @@ function buildWorld(){
   var m=terrainMesh();
   scatterWorld(m);
   LANDMARKS.length=0;
-  buildTavern(m,0,-34);
-  buildHive(m,-72,48);
-  buildHollow(m,86,-56);
-  buildStones(m,-88,-78);
+  buildTavern(m,TAVERN.x,TAVERN.z);
+  buildHive(m,LM.hive.x,LM.hive.z);
+  buildHollow(m,LM.hollow.x,LM.hollow.z);
+  buildStones(m,LM.stones.x,LM.stones.z);
   cottageSite(m);
   buildCrag(m);
   buildBounce(m);
@@ -223,30 +223,31 @@ function populate(){
   G.ents.length=0;
   var r=mulberry(4242);
   // spiders near the hollow + scattered
-  for(var i=0;i<16;i++){ var a=r()*6.28,d=4+r()*16; spawnSpider(86+Math.cos(a)*d,-56+Math.sin(a)*d,r()<0.18); }
-  var D=DF(), np=function(n){ return Math.round(n*D.pop); };
-  for(var i2=0;i2<np(34);i2++){ var x=(r()*2-1)*WHALF*0.8, z=(r()*2-1)*WHALF*0.8;
+  for(var i=0;i<16;i++){ var a=r()*6.28,d=4+r()*16; spawnSpider(LM.hollow.x+Math.cos(a)*d,LM.hollow.z+Math.sin(a)*d,r()<0.18); }
+  // the map is bigger than it was: keep the wood as busy, square metre for square metre
+  var D=DF(), np=function(n){ return Math.round(n*D.pop*WS*WS); };
+  for(var i2=0;i2<np(34);i2++){ var q0=randIn(r), x=q0.x, z=q0.z;
     var dd=Math.hypot(x,z);
     if(dd<34||H(x,z)<WATER+0.5||nearTavern(x,z,32)||cragZone(x,z)<2) continue;
-    spawnSpider(x,z, dd>70&&r()<0.09); }
+    spawnSpider(x,z, dd>70*WS&&r()<0.09); }
   // wasps swarm their hive, snakes lie in the grass around it
   for(var k=0;k<np(16);k++){ var a2=r()*6.28,d2=3+r()*13;
-    spawnBeast(-72+Math.cos(a2)*d2,48+Math.sin(a2)*d2, r()<0.45); }
-  for(var k2=0;k2<np(20);k2++){ var gx=(r()*2-1)*WHALF*0.7, gz=(r()*2-1)*WHALF*0.7;
+    spawnBeast(LM.hive.x+Math.cos(a2)*d2,LM.hive.z+Math.sin(a2)*d2, r()<0.45); }
+  for(var k2=0;k2<np(20);k2++){ var q1=randIn(r,0.9), gx=q1.x, gz=q1.z;
     if(Math.hypot(gx,gz)<40||H(gx,gz)<WATER+0.5||nearTavern(gx,gz,32)||cragZone(gx,gz)<2) continue; spawnBeast(gx,gz,r()<0.3); }
   // clans of mushroom grumps in the meadows
-  for(var k3=0;k3<np(9);k3++){ var mx=(r()*2-1)*WHALF*0.8, mz=(r()*2-1)*WHALF*0.8;
+  for(var k3=0;k3<np(9);k3++){ var q2=randIn(r), mx=q2.x, mz=q2.z;
     if(Math.hypot(mx,mz)<36||H(mx,mz)<WATER+0.5||nearTavern(mx,mz,32)||cragZone(mx,mz)<2) continue; spawnShroomPatch(mx,mz,2+((r()*3)|0)); }
   // prisoners
-  var spots=[[86,-56],[-72,48],[0,0],[-88,-78]];
-  for(var p=0;p<14;p++){
+  var spots=[[LM.hollow.x,LM.hollow.z],[LM.hive.x,LM.hive.z],[0,0],[LM.stones.x,LM.stones.z]];
+  for(var p=0;p<Math.round(14*WS);p++){
     var sp=spots[(r()*spots.length)|0], a3=r()*6.28, d3=8+r()*22;
     var cx=sp[0]+Math.cos(a3)*d3, cz=sp[1]+Math.sin(a3)*d3;
-    cx=Math.max(-WHALF*0.9,Math.min(WHALF*0.9,cx)); cz=Math.max(-WHALF*0.9,Math.min(WHALF*0.9,cz));
+    if(!inBounds(cx,cz,4)) continue;
     if(H(cx,cz)<WATER+0.4||nearTavern(cx,cz,22)||pathDist(cx,cz)<3) continue;
     spawnCocoon(cx,cz);
   }
-  for(var f=0;f<10;f++){ var fx=(r()*2-1)*WHALF*0.8, fz=(r()*2-1)*WHALF*0.8;
+  for(var f=0;f<Math.round(10*WS);f++){ var q3=randIn(r), fx=q3.x, fz=q3.z;
     if(H(fx,fz)<WATER+0.4) continue; spawnFairy(fx,fz); }
   spawnKeeper();
   spawnCritters(); spawnGnomes(); populateCave();
@@ -749,7 +750,7 @@ function update(dt){
     } else if(alive<DD.cap){
       var a=Math.random()*6.28, d=46+Math.random()*26;
       var sx=p.x+Math.cos(a)*d, sz=p.z+Math.sin(a)*d, sd2=Math.hypot(sx,sz);
-      if(sd2>34&&sd2<WHALF*0.9&&H(sx,sz)>WATER+0.5&&!nearTavern(sx,sz,32)&&cragZone(sx,sz)>2){
+      if(sd2>34&&inBounds(sx,sz,4)&&H(sx,sz)>WATER+0.5&&!nearTavern(sx,sz,32)&&cragZone(sx,sz)>2){
         // a pack, not a straggler: two to four together
         var pack=2+((Math.random()*(DD===DIFFS.easy?1.6:3))|0), rk=Math.random();
         for(var pk=0;pk<pack;pk++){ var px2=sx+(Math.random()-0.5)*5, pz2=sz+(Math.random()-0.5)*5;

@@ -133,10 +133,10 @@ var LANDLORE={eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',sto
    come back after eight minutes. They wear the same models as their kin, scaled up. */
 var MINI_RESPAWN=480;
 var MINIS=[
-  {id:'queen', kind:'spider', name:'Vessa, Queen of the Hollow', at:function(){ return {x:86,z:-56}; }, scale:2.2, hp:720, dmg:15, tint:[0.30,0.08,0.30], tricks:['brood','web']},
-  {id:'mother',kind:'wasp',   name:'The Hive Mother',            at:function(){ return {x:-69,z:46}; }, scale:2.0, hp:520, dmg:11, tricks:['volley','swarm']},
-  {id:'coil',  kind:'snake',  name:'Old Coil, the River Adder',  at:function(){ return {x:40,z:61}; },  scale:2.6, hp:650, dmg:19, tricks:['lunge']},
-  {id:'puffcap',kind:'shroom',name:'King Puffcap',               at:function(){ return {x:-56,z:-34}; }, scale:2.6, hp:560, dmg:13, cap:[0.70,0.20,0.62], tricks:['spores','court']},
+  {id:'queen', kind:'spider', name:'Vessa, Queen of the Hollow', at:function(){ return {x:LM.hollow.x,z:LM.hollow.z}; }, scale:2.2, hp:720, dmg:15, tint:[0.30,0.08,0.30], tricks:['brood','web']},
+  {id:'mother',kind:'wasp',   name:'The Hive Mother',            at:function(){ return {x:LM.hive.x+3,z:LM.hive.z-2}; }, scale:2.0, hp:520, dmg:11, tricks:['volley','swarm']},
+  {id:'coil',  kind:'snake',  name:'Old Coil, the River Adder',  at:function(){ return dryNear(40*WS,61*WS); },  scale:2.6, hp:650, dmg:19, tricks:['lunge']},
+  {id:'puffcap',kind:'shroom',name:'King Puffcap',               at:function(){ return dryNear(-56*WS,-34*WS); }, scale:2.6, hp:560, dmg:13, cap:[0.70,0.20,0.62], tricks:['spores','court']},
   {id:'matron',kind:'spider', name:'The Pale Matron',            at:function(){ return {x:CAVE.x-4,z:CAVE.z+24}; }, scale:2.3, hp:860, dmg:17, tint:[0.82,0.82,0.86], cave:1, tricks:['brood','web']}
 ];
 var MINI_BY={}; MINIS.forEach(function(m){ MINI_BY[m.id]=m; });

@@ -25,21 +25,22 @@ function addRes(k,n,x,y,z){
 }
 /* a dry spot near (x,z), out of the water and out of anything solid */
 function dryNear(x,z,minH){
+  if(!inBounds(x,z,3)&&!inCave(x,z)){ var k=(WHALF*PLAY_R-3)/Math.hypot(x,z); x*=k; z*=k; }   // never past the edge of the map
   for(var r=0;r<14;r+=1.5) for(var a=0;a<6.28;a+=0.7){ var px=x+Math.cos(a)*r, pz=z+Math.sin(a)*r;
-    if(H(px,pz)>(minH===undefined?WATER+0.6:minH)&&!solidAt(px,pz,0.5)) return {x:px,z:pz}; }
+    if(H(px,pz)>(minH===undefined?WATER+0.6:minH)&&!solidAt(px,pz,0.5)&&(inCave(px,pz)||(inBounds(px,pz,2)&&Hn(px,pz)<0.6))) return {x:px,z:pz}; }
   return {x:x,z:z};
 }
 function spawnNodes(){
   var r=mulberry(5150);
   function put(res,x,z){ G.ents.push({kind:'node',res:res,x:x,y:H(x,z),z:z,t:0,yaw:r()*6.28,seed:r()*9,scale:1}); }
-  function scatter(res,n,test){ for(var i=0,k=0;i<n&&k<n*30;k++){ var x=(r()*2-1)*WHALF*0.86, z=(r()*2-1)*WHALF*0.86;
-    if(H(x,z)<WATER+0.6||solidAt(x,z,0.5)||nearTavern(x,z,12)||cragZone(x,z)<1||(test&&!test(x,z))) continue; put(res,x,z); i++; } }
+  function scatter(res,n,test){ n=Math.round(n*WS*WS); for(var i=0,k=0;i<n&&k<n*30;k++){ var q=randIn(r), x=q.x, z=q.z;
+    if(H(x,z)<WATER+0.6||solidAt(x,z,0.5)||Hn(x,z)>0.6||nearTavern(x,z,12)||cragZone(x,z)<1||(test&&!test(x,z))) continue; put(res,x,z); i++; } }
   scatter('herb',26,function(x,z){ return fbm(x+500,z-300,2,0.022)>0.42; });     // silverleaf likes the open
   scatter('wood',24);
   scatter('ore',16,function(x,z){ return H(x,z)>4.5; });                        // ore in the high ground
-  for(var h=0;h<5;h++){ var a=h/5*6.28+0.3, q=dryNear(-72+Math.cos(a)*6,48+Math.sin(a)*6); put('honey',q.x,q.z); }
-  for(var s=0;s<6;s++){ var b=s/6*6.28, q2=dryNear(86+Math.cos(b)*9,-56+Math.sin(b)*9); put('silk',q2.x,q2.z); }
-  for(var o=0;o<5;o++){ var c=o/5*6.28, q3=dryNear(CRAG.x+Math.cos(c)*20,CRAG.z+Math.sin(c)*20); put('ore',q3.x,q3.z); }
+  for(var h=0;h<5;h++){ var a=h/5*6.28+0.3, q=dryNear(LM.hive.x+Math.cos(a)*6,LM.hive.z+Math.sin(a)*6); put('honey',q.x,q.z); }
+  for(var s=0;s<6;s++){ var b=s/6*6.28, q2=dryNear(LM.hollow.x+Math.cos(b)*9,LM.hollow.z+Math.sin(b)*9); put('silk',q2.x,q2.z); }
+  for(var o=0;o<5;o++){ var c=o/5*6.28, q3=dryNear(CRAG.x+Math.cos(c)*24,CRAG.z+Math.sin(c)*24); put('ore',q3.x,q3.z); }
   for(var g=0;g<10;g++){ var sp=caveSpawnSpot(0); if(sp) put('glowcap',sp.x,sp.z); }
 }
 function updateNode(e,dt,pd){
@@ -147,9 +148,9 @@ var QUESTS=[
    done:'…She got so close. Thank you. Truly. Take her mantle pattern — she\'d want it worn by someone who goes places.',
    reward:{coins:120,xp:220,recipes:['mantle'],lore:'hesper'}},
   {id:'t_parts',giver:'tobin',t:'Bits and Bobs',short:'Tobin\'s parts',goal:{type:'find',items:[
-     {id:'cog',n:'a brass cog',shape:'cog',at:function(){ return dryNear(83,-50); }},
-     {id:'spring',n:'a coiled spring',shape:'spring',at:function(){ return dryNear(34,63); }},
-     {id:'bell',n:'a brass bell',shape:'bell',at:function(){ return dryNear(-66,42); }},
+     {id:'cog',n:'a brass cog',shape:'cog',at:function(){ return dryNear(LM.hollow.x-3,LM.hollow.z+6); }},
+     {id:'spring',n:'a coiled spring',shape:'spring',at:function(){ return dryNear(34*WS,63*WS); }},
+     {id:'bell',n:'a brass bell',shape:'bell',at:function(){ return dryNear(LM.hive.x+6,LM.hive.z-6); }},
      {id:'lens',n:'Tobin\'s good lens',shape:'lens',at:function(){ return {x:CRAG.lair.x+3.5,z:CRAG.lair.z+4.5}; }}]},
    say:'My cart hit a root, the root won, and my best bits went flying — and then things carried them off. A cog, a spring, a brass bell and my good lens. Find \'em and I\'ll make it worth your while.',
    done:'My lens! Not a scratch. Here — I had a spare compass needle and nothing to point it at. Now it points at whatever you\'re after.',
@@ -163,17 +164,17 @@ var QUESTS=[
    done:'She rolls! And while I waited I worked out a lighter boot sole. The plans are yours.',
    reward:{coins:150,xp:240,recipes:['boots']}},
   {id:'e_feathers',giver:'eagle',t:'Feathers on the Wind',short:'Golden feathers',goal:{type:'find',items:[
-     {id:'f1',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-60,-60); }},
-     {id:'f2',n:'a golden feather',shape:'feather',at:function(){ return dryNear(62,12); }},
-     {id:'f3',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-104,40); }},
-     {id:'f4',n:'a golden feather',shape:'feather',at:function(){ return dryNear(100,30); }},
-     {id:'f5',n:'a golden feather',shape:'feather',at:function(){ return dryNear(28,-82); }},
-     {id:'f6',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-40,100); }}]},
+     {id:'f1',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-60*WS,-60*WS); }},
+     {id:'f2',n:'a golden feather',shape:'feather',at:function(){ return dryNear(62*WS,12*WS); }},
+     {id:'f3',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-104*WS,40*WS); }},
+     {id:'f4',n:'a golden feather',shape:'feather',at:function(){ return dryNear(100*WS,30*WS); }},
+     {id:'f5',n:'a golden feather',shape:'feather',at:function(){ return dryNear(28*WS,-82*WS); }},
+     {id:'f6',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-40*WS,100*WS); }}]},
    say:'Small hunter. The storm took my feathers and scattered them across the wood: gold, and still warm from the sky. Bring me six, and we will speak further.',
    done:'Good. You look up when others look down. That is rare.',
    reward:{coins:60,xp:180}},
   {id:'e_egg',giver:'eagle',need:'e_feathers',t:'The Stolen Egg',short:'The eagle\'s egg',goal:{type:'find',items:[
-     {id:'egg',n:'Ærtheldor\'s egg',shape:'egg',at:function(){ return dryNear(88,-58); }}]},
+     {id:'egg',n:'Ærtheldor\'s egg',shape:'egg',at:function(){ return dryNear(LM.hollow.x+2,LM.hollow.z-2); }}]},
    say:'My last egg was taken. The spinners of the Hollow carried it off in their silk. Bring it home to me.',
    done:'It is cold, but it lives. It needs a warmth that is not mine — and a nest that is whole.',
    reward:{coins:100,xp:240}},

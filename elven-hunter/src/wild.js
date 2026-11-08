@@ -417,7 +417,7 @@ var FLYCOL=[[0.98,0.72,0.20],[0.55,0.75,1.0],[0.98,0.55,0.75],[0.95,0.95,0.98],[
 var BUNCOL=[[0.62,0.50,0.38],[0.78,0.72,0.64],[0.46,0.38,0.32],[0.90,0.88,0.84]];
 function spawnCritters(){
   var r=mulberry(919);
-  for(var i=0;i<48;i++){ var x=(r()*2-1)*WHALF*0.85, z=(r()*2-1)*WHALF*0.85;
+  for(var i=0;i<Math.round(48*WS*WS);i++){ var q0=randIn(r), x=q0.x, z=q0.z;
     if(H(x,z)<WATER+0.4) continue;
     var fly=r()<0.62;
     G.ents.push({kind:'critter',sub:fly?'fly':'bunny',x:x,y:H(x,z),z:z,home:{x:x,z:z},yaw:r()*6.28,seed:r()*9,t:r()*20,
@@ -457,8 +457,8 @@ var GNOMES=[
   {id:'tavern', at:function(){ var c=Math.cos(TAVERN.ry), s=Math.sin(TAVERN.ry), lx=2.6, lz=-4.6; return {x:TAVERN.x+lx*c+lz*s,z:TAVERN.z-lx*s+lz*c}; },
    say:'“Oi! I was promised this was a garden.”', hat:[0.82,0.18,0.16]},
   {id:'ring',   at:function(){ return {x:FAIRYRING.x,z:FAIRYRING.z}; }, say:'“Dance with me! No? Fine. FINE.”', hat:[0.85,0.40,0.80]},
-  {id:'hive',   at:function(){ return {x:-65.5,z:53}; }, say:'“Shh! I\'m hiding from the wasps. Have been since spring.”', hat:[0.95,0.75,0.20]},
-  {id:'hollow', at:function(){ return {x:88.5,z:-52}; }, say:'“The spiders keep knitting me jumpers. I didn\'t ask.”', hat:[0.30,0.60,0.85]},
+  {id:'hive',   at:function(){ return {x:LM.hive.x+6.5,z:LM.hive.z+5}; }, say:'“Shh! I\'m hiding from the wasps. Have been since spring.”', hat:[0.95,0.75,0.20]},
+  {id:'hollow', at:function(){ return {x:LM.hollow.x+2.5,z:LM.hollow.z+4}; }, say:'“The spiders keep knitting me jumpers. I didn\'t ask.”', hat:[0.30,0.60,0.85]},
   {id:'stones', at:function(){ return {x:STONES.x+Math.cos(0.5)*7.6,z:STONES.z+Math.sin(0.5)*7.6}; }, say:'“The stones talk at night, you know. Mostly about you.”', hat:[0.30,0.75,0.40]},
   {id:'crag',   at:function(){ return {x:CRAG.lair.x-5.2,z:CRAG.lair.z-1.5}; }, say:'“Dragons eat gnomes. Allegedly. I\'m not testing it.”', hat:[0.95,0.45,0.15]},
   {id:'cave',   at:function(){ return {x:CAVE.chest.x-3.2,z:CAVE.chest.z-1.6}; }, say:'“It\'s dark. I\'ve been dark for WEEKS. Is that a torch? Can I have it?”', hat:[0.55,0.30,0.75]}

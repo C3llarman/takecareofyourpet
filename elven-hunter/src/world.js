@@ -1,5 +1,14 @@
 /* ---------- noise / terrain ---------- */
-var WSIZE=300, WHALF=WSIZE/2, WATER=-1.6;
+/* WS stretches the whole map: the terrain and every place on it move out by this much,
+   while buildings, camps and the crag keep their size, so there's more wood between them */
+var WS=1.35, WSIZE=Math.round(300*WS/3)*3, WHALF=WSIZE/2, WATER=-1.6;
+function WP(x,z){ return {x:x*WS,z:z*WS}; }               // a place on the map, in the original layout's units
+/* can you actually get there? Inside the ring of mountains, with room to spare.
+   Everything placed in the world (plants, critters, monsters, quest objects) must pass:
+   they used to be scattered over a square, and the corners lay outside the map */
+var PLAY_R=0.82;
+function inBounds(x,z,margin){ return Math.hypot(x,z)<WHALF*PLAY_R-(margin||0); }
+function randIn(r,k){ var a=r()*6.2832, d=Math.sqrt(r())*WHALF*PLAY_R*(k||0.97); return {x:Math.cos(a)*d,z:Math.sin(a)*d}; }
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 var RNG=mulberry(1337);
 var GRAD=[];
@@ -17,14 +26,18 @@ function fbm(x,z,oct,sc){
   return s/norm;
 }
 /* the tavern sits on a level yard at the end of a dirt path from the glade */
-var TAVERN={x:0,z:-34,ry:0.5,yard:19,flat:15,h:null};
+var TAVERN={x:0,z:-34*WS,ry:0.5,yard:19,flat:15,h:null};
 /* the old cottage, out past the tavern on a quiet rise (see home.js) */
-var HOUSE={x:35,z:-60,ry:-0.9,yard:17,flat:14,h:null};
+var HOUSE={x:35*WS,z:-60*WS,ry:-0.9,yard:17,flat:14,h:null};
 var FLATS=[TAVERN,HOUSE];
 /* the Dragon's Crag: a sheer-sided plateau north of the tavern, one ramp up, a
    cave in its western face. The dragon sleeps on top. */
-var CRAG={x:-16,z:-106,r:14,top:null,rd:[0.15,0.989],rl:28,rw:2.7,endH:null,
-  box:[-36,6,-126,-60]};          // the high-detail ground patch (aligned to the 3-unit terrain grid)
+var CRAG={x:-16*WS,z:-106*WS,r:14,top:null,rd:[0.15,0.989],rl:28,rw:2.7,endH:null};
+(function(){                       // the high-detail ground patch round it, aligned to the 3-unit terrain grid
+  function g(v,up){ return -WHALF+3*(up?Math.ceil:Math.floor)((v+WHALF)/3); }
+  var ex=CRAG.x+CRAG.rd[0]*(CRAG.r+CRAG.rl), ez=CRAG.z+CRAG.rd[1]*(CRAG.r+CRAG.rl), m=CRAG.r+8;
+  CRAG.box=[g(Math.min(CRAG.x-m,ex-8)),g(Math.max(CRAG.x+m,ex+8),1),g(Math.min(CRAG.z-m,ez-8)),g(Math.max(CRAG.z+m,ez+8),1)];
+})();
 CRAG.mouth={x:CRAG.x-CRAG.r-3.6,z:CRAG.z+0.6};
 CRAG.lair={x:CRAG.x+2,z:CRAG.z-3};
 /* the Glimmer Cave lies far off the map: walking into the mouth carries you there */
@@ -36,24 +49,27 @@ CAVE.chest={x:CAVE.x+15,z:CAVE.z+41};
 /* bouncy toadstools: a fairy ring by the glade and a few strays in the meadows */
 var BOUNCE=[];
 (function(){
-  var cx=-18,cz=19;
+  var cx=-18*WS,cz=19*WS;
   for(var i=0;i<6;i++){ var a=i/6*6.283; BOUNCE.push({x:cx+Math.cos(a)*4.6,z:cz+Math.sin(a)*4.6}); }
-  [[24,-12],[-52,-30],[58,22],[-110,8],[100,-20],[-40,96],[30,-100]].forEach(function(p){ BOUNCE.push({x:p[0],z:p[1]}); });
+  [[24,-12],[-52,-30],[58,22],[-110,8],[100,-20],[-40,96],[30,-100]].forEach(function(p){ BOUNCE.push(WP(p[0],p[1])); });
 })();
-var FAIRYRING={x:-18,z:19};
+var FAIRYRING=WP(-18,19);
 /* waystones: old carved stones with something written on them (see legends.js) */
-var WAYSTONES=[{id:'way1',x:10,z:-12},{id:'way2',x:-2,z:-58},{id:'way3',x:52,z:-40},{id:'way4',x:0,z:76},{id:'way5',x:-47,z:-26}];
+var WAYSTONES=[['way1',10,-12],['way2',-2,-58],['way3',52,-40],['way4',0,76],['way5',-47,-26]].map(function(w){ var q=WP(w[1],w[2]); q.id=w[0]; return q; });
 /* clearings kept free of trees: landmark grounds and the paths */
-var CLEAR=[[0,-34,20],[-72,48,15],[86,-56,15],[-88,-78,11],[35,-60,20],[-18,19,8]];
+/* the landmarks, where the original map put them, stretched out by WS */
+var LM={hive:WP(-72,48),hollow:WP(86,-56),stones:WP(-88,-78)};
+var CLEAR=[[TAVERN.x,TAVERN.z,20],[LM.hive.x,LM.hive.z,15],[LM.hollow.x,LM.hollow.z,15],[LM.stones.x,LM.stones.z,11],[HOUSE.x,HOUSE.z,20],[FAIRYRING.x,FAIRYRING.z,8]];
 BOUNCE.forEach(function(b){ CLEAR.push([b.x,b.z,2.6]); });
 WAYSTONES.forEach(function(w){ CLEAR.push([w.x,w.z,3]); });
 /* where the folk live: Wren's camp by the fairy ring, Tobin's cart on the east road,
    and Ærtheldor's eyrie far in the south, across the map from the dragon (see folk.js) */
-var FOLKSITE={wren:{x:-30,z:12},tobin:{x:43,z:-28},eyrie:{x:14,z:112,top:0}};
+var FOLKSITE={wren:WP(-30,12),tobin:WP(43,-28),eyrie:WP(14,112)}; FOLKSITE.eyrie.top=0;
 CLEAR.push([FOLKSITE.wren.x,FOLKSITE.wren.z,8],[FOLKSITE.tobin.x,FOLKSITE.tobin.z,7],[FOLKSITE.eyrie.x,FOLKSITE.eyrie.z,12]);
+var PATH_END={x:TAVERN.x+1.4,z:TAVERN.z+5};
 function pathDist(x,z){            // distance to the nearest path: glade -> tavern door, tavern -> cottage
-  var t=clamp01((z-4)/(-29-4)), px=0+1.4*t*t, pz=4+(-29-4)*t;
-  return Math.min(Math.hypot(x-px,z-pz), segDist(x,z,7,-29,30.5,-54.5));
+  var t=clamp01((z-4)/(PATH_END.z-4)), px=PATH_END.x*t*t, pz=4+(PATH_END.z-4)*t;
+  return Math.min(Math.hypot(x-px,z-pz), segDist(x,z,TAVERN.x+7,TAVERN.z+5,HOUSE.x-4.5,HOUSE.z+5.5));
 }
 function segDist(x,z,ax,az,bx,bz){
   var dx=bx-ax, dz=bz-az, t=clamp01(((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz));
@@ -131,6 +147,7 @@ function caveCollide(o,rad){
 }
 function Hraw(x,z){
   var d=Math.hypot(x,z)/WHALF;
+  x/=WS; z/=WS;                    // the hills and the river, stretched with the map
   var base=fbm(x,z,4,0.012)*2-1;
   var hills=fbm(x+120,z-80,3,0.03)*2-1;
   var h=base*12.5 + hills*5.2 + 3.0;
@@ -165,7 +182,7 @@ function groundCol(x,z,y){
   return mix3(col,C_SAND,smooth01((WATER+0.9-y)/0.6));
 }
 function terrainMesh(){
-  var m=new MB(), N=100, S=WSIZE/N, e=0.8;
+  var m=new MB(), N=WSIZE/3, S=3, e=0.8;
   // shared grid of heights, smooth normals and colours, so hills roll instead of facet
   var P=[], NN=[], CC=[];
   for(var i=0;i<=N;i++) for(var j=0;j<=N;j++){
@@ -411,7 +428,7 @@ function pick(r,list){ return list[(r()*list.length)|0]; }
 function scatterWorld(m){
   var r=mulberry(7);
   // fewer trees than before, and open meadows between the stands, so there is room to fight
-  var tries=2700, Q=!!NAT;
+  var tries=Math.round(2700*WS*WS*0.86), Q=!!NAT;
   for(var i=0;i<tries;i++){
     var x=(r()*2-1)*WHALF*0.94, z=(r()*2-1)*WHALF*0.94;
     var y=H(x,z), sl=Hn(x,z), d=Math.hypot(x,z);

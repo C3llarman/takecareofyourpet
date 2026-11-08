@@ -4582,7 +4582,16 @@ function skyMesh(horizon,zenith,ground,seg){
 </script>
 <script>
 /* ---------- noise / terrain ---------- */
-var WSIZE=300, WHALF=WSIZE/2, WATER=-1.6;
+/* WS stretches the whole map: the terrain and every place on it move out by this much,
+   while buildings, camps and the crag keep their size, so there's more wood between them */
+var WS=1.35, WSIZE=Math.round(300*WS/3)*3, WHALF=WSIZE/2, WATER=-1.6;
+function WP(x,z){ return {x:x*WS,z:z*WS}; }               // a place on the map, in the original layout's units
+/* can you actually get there? Inside the ring of mountains, with room to spare.
+   Everything placed in the world (plants, critters, monsters, quest objects) must pass:
+   they used to be scattered over a square, and the corners lay outside the map */
+var PLAY_R=0.82;
+function inBounds(x,z,margin){ return Math.hypot(x,z)<WHALF*PLAY_R-(margin||0); }
+function randIn(r,k){ var a=r()*6.2832, d=Math.sqrt(r())*WHALF*PLAY_R*(k||0.97); return {x:Math.cos(a)*d,z:Math.sin(a)*d}; }
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 var RNG=mulberry(1337);
 var GRAD=[];
@@ -4600,14 +4609,18 @@ function fbm(x,z,oct,sc){
   return s/norm;
 }
 /* the tavern sits on a level yard at the end of a dirt path from the glade */
-var TAVERN={x:0,z:-34,ry:0.5,yard:19,flat:15,h:null};
+var TAVERN={x:0,z:-34*WS,ry:0.5,yard:19,flat:15,h:null};
 /* the old cottage, out past the tavern on a quiet rise (see home.js) */
-var HOUSE={x:35,z:-60,ry:-0.9,yard:17,flat:14,h:null};
+var HOUSE={x:35*WS,z:-60*WS,ry:-0.9,yard:17,flat:14,h:null};
 var FLATS=[TAVERN,HOUSE];
 /* the Dragon's Crag: a sheer-sided plateau north of the tavern, one ramp up, a
    cave in its western face. The dragon sleeps on top. */
-var CRAG={x:-16,z:-106,r:14,top:null,rd:[0.15,0.989],rl:28,rw:2.7,endH:null,
-  box:[-36,6,-126,-60]};          // the high-detail ground patch (aligned to the 3-unit terrain grid)
+var CRAG={x:-16*WS,z:-106*WS,r:14,top:null,rd:[0.15,0.989],rl:28,rw:2.7,endH:null};
+(function(){                       // the high-detail ground patch round it, aligned to the 3-unit terrain grid
+  function g(v,up){ return -WHALF+3*(up?Math.ceil:Math.floor)((v+WHALF)/3); }
+  var ex=CRAG.x+CRAG.rd[0]*(CRAG.r+CRAG.rl), ez=CRAG.z+CRAG.rd[1]*(CRAG.r+CRAG.rl), m=CRAG.r+8;
+  CRAG.box=[g(Math.min(CRAG.x-m,ex-8)),g(Math.max(CRAG.x+m,ex+8),1),g(Math.min(CRAG.z-m,ez-8)),g(Math.max(CRAG.z+m,ez+8),1)];
+})();
 CRAG.mouth={x:CRAG.x-CRAG.r-3.6,z:CRAG.z+0.6};
 CRAG.lair={x:CRAG.x+2,z:CRAG.z-3};
 /* the Glimmer Cave lies far off the map: walking into the mouth carries you there */
@@ -4619,24 +4632,27 @@ CAVE.chest={x:CAVE.x+15,z:CAVE.z+41};
 /* bouncy toadstools: a fairy ring by the glade and a few strays in the meadows */
 var BOUNCE=[];
 (function(){
-  var cx=-18,cz=19;
+  var cx=-18*WS,cz=19*WS;
   for(var i=0;i<6;i++){ var a=i/6*6.283; BOUNCE.push({x:cx+Math.cos(a)*4.6,z:cz+Math.sin(a)*4.6}); }
-  [[24,-12],[-52,-30],[58,22],[-110,8],[100,-20],[-40,96],[30,-100]].forEach(function(p){ BOUNCE.push({x:p[0],z:p[1]}); });
+  [[24,-12],[-52,-30],[58,22],[-110,8],[100,-20],[-40,96],[30,-100]].forEach(function(p){ BOUNCE.push(WP(p[0],p[1])); });
 })();
-var FAIRYRING={x:-18,z:19};
+var FAIRYRING=WP(-18,19);
 /* waystones: old carved stones with something written on them (see legends.js) */
-var WAYSTONES=[{id:'way1',x:10,z:-12},{id:'way2',x:-2,z:-58},{id:'way3',x:52,z:-40},{id:'way4',x:0,z:76},{id:'way5',x:-47,z:-26}];
+var WAYSTONES=[['way1',10,-12],['way2',-2,-58],['way3',52,-40],['way4',0,76],['way5',-47,-26]].map(function(w){ var q=WP(w[1],w[2]); q.id=w[0]; return q; });
 /* clearings kept free of trees: landmark grounds and the paths */
-var CLEAR=[[0,-34,20],[-72,48,15],[86,-56,15],[-88,-78,11],[35,-60,20],[-18,19,8]];
+/* the landmarks, where the original map put them, stretched out by WS */
+var LM={hive:WP(-72,48),hollow:WP(86,-56),stones:WP(-88,-78)};
+var CLEAR=[[TAVERN.x,TAVERN.z,20],[LM.hive.x,LM.hive.z,15],[LM.hollow.x,LM.hollow.z,15],[LM.stones.x,LM.stones.z,11],[HOUSE.x,HOUSE.z,20],[FAIRYRING.x,FAIRYRING.z,8]];
 BOUNCE.forEach(function(b){ CLEAR.push([b.x,b.z,2.6]); });
 WAYSTONES.forEach(function(w){ CLEAR.push([w.x,w.z,3]); });
 /* where the folk live: Wren's camp by the fairy ring, Tobin's cart on the east road,
    and Ærtheldor's eyrie far in the south, across the map from the dragon (see folk.js) */
-var FOLKSITE={wren:{x:-30,z:12},tobin:{x:43,z:-28},eyrie:{x:14,z:112,top:0}};
+var FOLKSITE={wren:WP(-30,12),tobin:WP(43,-28),eyrie:WP(14,112)}; FOLKSITE.eyrie.top=0;
 CLEAR.push([FOLKSITE.wren.x,FOLKSITE.wren.z,8],[FOLKSITE.tobin.x,FOLKSITE.tobin.z,7],[FOLKSITE.eyrie.x,FOLKSITE.eyrie.z,12]);
+var PATH_END={x:TAVERN.x+1.4,z:TAVERN.z+5};
 function pathDist(x,z){            // distance to the nearest path: glade -> tavern door, tavern -> cottage
-  var t=clamp01((z-4)/(-29-4)), px=0+1.4*t*t, pz=4+(-29-4)*t;
-  return Math.min(Math.hypot(x-px,z-pz), segDist(x,z,7,-29,30.5,-54.5));
+  var t=clamp01((z-4)/(PATH_END.z-4)), px=PATH_END.x*t*t, pz=4+(PATH_END.z-4)*t;
+  return Math.min(Math.hypot(x-px,z-pz), segDist(x,z,TAVERN.x+7,TAVERN.z+5,HOUSE.x-4.5,HOUSE.z+5.5));
 }
 function segDist(x,z,ax,az,bx,bz){
   var dx=bx-ax, dz=bz-az, t=clamp01(((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz));
@@ -4714,6 +4730,7 @@ function caveCollide(o,rad){
 }
 function Hraw(x,z){
   var d=Math.hypot(x,z)/WHALF;
+  x/=WS; z/=WS;                    // the hills and the river, stretched with the map
   var base=fbm(x,z,4,0.012)*2-1;
   var hills=fbm(x+120,z-80,3,0.03)*2-1;
   var h=base*12.5 + hills*5.2 + 3.0;
@@ -4748,7 +4765,7 @@ function groundCol(x,z,y){
   return mix3(col,C_SAND,smooth01((WATER+0.9-y)/0.6));
 }
 function terrainMesh(){
-  var m=new MB(), N=100, S=WSIZE/N, e=0.8;
+  var m=new MB(), N=WSIZE/3, S=3, e=0.8;
   // shared grid of heights, smooth normals and colours, so hills roll instead of facet
   var P=[], NN=[], CC=[];
   for(var i=0;i<=N;i++) for(var j=0;j<=N;j++){
@@ -4994,7 +5011,7 @@ function pick(r,list){ return list[(r()*list.length)|0]; }
 function scatterWorld(m){
   var r=mulberry(7);
   // fewer trees than before, and open meadows between the stands, so there is room to fight
-  var tries=2700, Q=!!NAT;
+  var tries=Math.round(2700*WS*WS*0.86), Q=!!NAT;
   for(var i=0;i<tries;i++){
     var x=(r()*2-1)*WHALF*0.94, z=(r()*2-1)*WHALF*0.94;
     var y=H(x,z), sl=Hn(x,z), d=Math.hypot(x,z);
@@ -7215,7 +7232,7 @@ var FLYCOL=[[0.98,0.72,0.20],[0.55,0.75,1.0],[0.98,0.55,0.75],[0.95,0.95,0.98],[
 var BUNCOL=[[0.62,0.50,0.38],[0.78,0.72,0.64],[0.46,0.38,0.32],[0.90,0.88,0.84]];
 function spawnCritters(){
   var r=mulberry(919);
-  for(var i=0;i<48;i++){ var x=(r()*2-1)*WHALF*0.85, z=(r()*2-1)*WHALF*0.85;
+  for(var i=0;i<Math.round(48*WS*WS);i++){ var q0=randIn(r), x=q0.x, z=q0.z;
     if(H(x,z)<WATER+0.4) continue;
     var fly=r()<0.62;
     G.ents.push({kind:'critter',sub:fly?'fly':'bunny',x:x,y:H(x,z),z:z,home:{x:x,z:z},yaw:r()*6.28,seed:r()*9,t:r()*20,
@@ -7255,8 +7272,8 @@ var GNOMES=[
   {id:'tavern', at:function(){ var c=Math.cos(TAVERN.ry), s=Math.sin(TAVERN.ry), lx=2.6, lz=-4.6; return {x:TAVERN.x+lx*c+lz*s,z:TAVERN.z-lx*s+lz*c}; },
    say:'“Oi! I was promised this was a garden.”', hat:[0.82,0.18,0.16]},
   {id:'ring',   at:function(){ return {x:FAIRYRING.x,z:FAIRYRING.z}; }, say:'“Dance with me! No? Fine. FINE.”', hat:[0.85,0.40,0.80]},
-  {id:'hive',   at:function(){ return {x:-65.5,z:53}; }, say:'“Shh! I\'m hiding from the wasps. Have been since spring.”', hat:[0.95,0.75,0.20]},
-  {id:'hollow', at:function(){ return {x:88.5,z:-52}; }, say:'“The spiders keep knitting me jumpers. I didn\'t ask.”', hat:[0.30,0.60,0.85]},
+  {id:'hive',   at:function(){ return {x:LM.hive.x+6.5,z:LM.hive.z+5}; }, say:'“Shh! I\'m hiding from the wasps. Have been since spring.”', hat:[0.95,0.75,0.20]},
+  {id:'hollow', at:function(){ return {x:LM.hollow.x+2.5,z:LM.hollow.z+4}; }, say:'“The spiders keep knitting me jumpers. I didn\'t ask.”', hat:[0.30,0.60,0.85]},
   {id:'stones', at:function(){ return {x:STONES.x+Math.cos(0.5)*7.6,z:STONES.z+Math.sin(0.5)*7.6}; }, say:'“The stones talk at night, you know. Mostly about you.”', hat:[0.30,0.75,0.40]},
   {id:'crag',   at:function(){ return {x:CRAG.lair.x-5.2,z:CRAG.lair.z-1.5}; }, say:'“Dragons eat gnomes. Allegedly. I\'m not testing it.”', hat:[0.95,0.45,0.15]},
   {id:'cave',   at:function(){ return {x:CAVE.chest.x-3.2,z:CAVE.chest.z-1.6}; }, say:'“It\'s dark. I\'ve been dark for WEEKS. Is that a torch? Can I have it?”', hat:[0.55,0.30,0.75]}
@@ -7483,10 +7500,10 @@ var LANDLORE={eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',sto
    come back after eight minutes. They wear the same models as their kin, scaled up. */
 var MINI_RESPAWN=480;
 var MINIS=[
-  {id:'queen', kind:'spider', name:'Vessa, Queen of the Hollow', at:function(){ return {x:86,z:-56}; }, scale:2.2, hp:720, dmg:15, tint:[0.30,0.08,0.30], tricks:['brood','web']},
-  {id:'mother',kind:'wasp',   name:'The Hive Mother',            at:function(){ return {x:-69,z:46}; }, scale:2.0, hp:520, dmg:11, tricks:['volley','swarm']},
-  {id:'coil',  kind:'snake',  name:'Old Coil, the River Adder',  at:function(){ return {x:40,z:61}; },  scale:2.6, hp:650, dmg:19, tricks:['lunge']},
-  {id:'puffcap',kind:'shroom',name:'King Puffcap',               at:function(){ return {x:-56,z:-34}; }, scale:2.6, hp:560, dmg:13, cap:[0.70,0.20,0.62], tricks:['spores','court']},
+  {id:'queen', kind:'spider', name:'Vessa, Queen of the Hollow', at:function(){ return {x:LM.hollow.x,z:LM.hollow.z}; }, scale:2.2, hp:720, dmg:15, tint:[0.30,0.08,0.30], tricks:['brood','web']},
+  {id:'mother',kind:'wasp',   name:'The Hive Mother',            at:function(){ return {x:LM.hive.x+3,z:LM.hive.z-2}; }, scale:2.0, hp:520, dmg:11, tricks:['volley','swarm']},
+  {id:'coil',  kind:'snake',  name:'Old Coil, the River Adder',  at:function(){ return dryNear(40*WS,61*WS); },  scale:2.6, hp:650, dmg:19, tricks:['lunge']},
+  {id:'puffcap',kind:'shroom',name:'King Puffcap',               at:function(){ return dryNear(-56*WS,-34*WS); }, scale:2.6, hp:560, dmg:13, cap:[0.70,0.20,0.62], tricks:['spores','court']},
   {id:'matron',kind:'spider', name:'The Pale Matron',            at:function(){ return {x:CAVE.x-4,z:CAVE.z+24}; }, scale:2.3, hp:860, dmg:17, tint:[0.82,0.82,0.86], cave:1, tricks:['brood','web']}
 ];
 var MINI_BY={}; MINIS.forEach(function(m){ MINI_BY[m.id]=m; });
@@ -7646,21 +7663,22 @@ function addRes(k,n,x,y,z){
 }
 /* a dry spot near (x,z), out of the water and out of anything solid */
 function dryNear(x,z,minH){
+  if(!inBounds(x,z,3)&&!inCave(x,z)){ var k=(WHALF*PLAY_R-3)/Math.hypot(x,z); x*=k; z*=k; }   // never past the edge of the map
   for(var r=0;r<14;r+=1.5) for(var a=0;a<6.28;a+=0.7){ var px=x+Math.cos(a)*r, pz=z+Math.sin(a)*r;
-    if(H(px,pz)>(minH===undefined?WATER+0.6:minH)&&!solidAt(px,pz,0.5)) return {x:px,z:pz}; }
+    if(H(px,pz)>(minH===undefined?WATER+0.6:minH)&&!solidAt(px,pz,0.5)&&(inCave(px,pz)||(inBounds(px,pz,2)&&Hn(px,pz)<0.6))) return {x:px,z:pz}; }
   return {x:x,z:z};
 }
 function spawnNodes(){
   var r=mulberry(5150);
   function put(res,x,z){ G.ents.push({kind:'node',res:res,x:x,y:H(x,z),z:z,t:0,yaw:r()*6.28,seed:r()*9,scale:1}); }
-  function scatter(res,n,test){ for(var i=0,k=0;i<n&&k<n*30;k++){ var x=(r()*2-1)*WHALF*0.86, z=(r()*2-1)*WHALF*0.86;
-    if(H(x,z)<WATER+0.6||solidAt(x,z,0.5)||nearTavern(x,z,12)||cragZone(x,z)<1||(test&&!test(x,z))) continue; put(res,x,z); i++; } }
+  function scatter(res,n,test){ n=Math.round(n*WS*WS); for(var i=0,k=0;i<n&&k<n*30;k++){ var q=randIn(r), x=q.x, z=q.z;
+    if(H(x,z)<WATER+0.6||solidAt(x,z,0.5)||Hn(x,z)>0.6||nearTavern(x,z,12)||cragZone(x,z)<1||(test&&!test(x,z))) continue; put(res,x,z); i++; } }
   scatter('herb',26,function(x,z){ return fbm(x+500,z-300,2,0.022)>0.42; });     // silverleaf likes the open
   scatter('wood',24);
   scatter('ore',16,function(x,z){ return H(x,z)>4.5; });                        // ore in the high ground
-  for(var h=0;h<5;h++){ var a=h/5*6.28+0.3, q=dryNear(-72+Math.cos(a)*6,48+Math.sin(a)*6); put('honey',q.x,q.z); }
-  for(var s=0;s<6;s++){ var b=s/6*6.28, q2=dryNear(86+Math.cos(b)*9,-56+Math.sin(b)*9); put('silk',q2.x,q2.z); }
-  for(var o=0;o<5;o++){ var c=o/5*6.28, q3=dryNear(CRAG.x+Math.cos(c)*20,CRAG.z+Math.sin(c)*20); put('ore',q3.x,q3.z); }
+  for(var h=0;h<5;h++){ var a=h/5*6.28+0.3, q=dryNear(LM.hive.x+Math.cos(a)*6,LM.hive.z+Math.sin(a)*6); put('honey',q.x,q.z); }
+  for(var s=0;s<6;s++){ var b=s/6*6.28, q2=dryNear(LM.hollow.x+Math.cos(b)*9,LM.hollow.z+Math.sin(b)*9); put('silk',q2.x,q2.z); }
+  for(var o=0;o<5;o++){ var c=o/5*6.28, q3=dryNear(CRAG.x+Math.cos(c)*24,CRAG.z+Math.sin(c)*24); put('ore',q3.x,q3.z); }
   for(var g=0;g<10;g++){ var sp=caveSpawnSpot(0); if(sp) put('glowcap',sp.x,sp.z); }
 }
 function updateNode(e,dt,pd){
@@ -7768,9 +7786,9 @@ var QUESTS=[
    done:'…She got so close. Thank you. Truly. Take her mantle pattern — she\'d want it worn by someone who goes places.',
    reward:{coins:120,xp:220,recipes:['mantle'],lore:'hesper'}},
   {id:'t_parts',giver:'tobin',t:'Bits and Bobs',short:'Tobin\'s parts',goal:{type:'find',items:[
-     {id:'cog',n:'a brass cog',shape:'cog',at:function(){ return dryNear(83,-50); }},
-     {id:'spring',n:'a coiled spring',shape:'spring',at:function(){ return dryNear(34,63); }},
-     {id:'bell',n:'a brass bell',shape:'bell',at:function(){ return dryNear(-66,42); }},
+     {id:'cog',n:'a brass cog',shape:'cog',at:function(){ return dryNear(LM.hollow.x-3,LM.hollow.z+6); }},
+     {id:'spring',n:'a coiled spring',shape:'spring',at:function(){ return dryNear(34*WS,63*WS); }},
+     {id:'bell',n:'a brass bell',shape:'bell',at:function(){ return dryNear(LM.hive.x+6,LM.hive.z-6); }},
      {id:'lens',n:'Tobin\'s good lens',shape:'lens',at:function(){ return {x:CRAG.lair.x+3.5,z:CRAG.lair.z+4.5}; }}]},
    say:'My cart hit a root, the root won, and my best bits went flying — and then things carried them off. A cog, a spring, a brass bell and my good lens. Find \'em and I\'ll make it worth your while.',
    done:'My lens! Not a scratch. Here — I had a spare compass needle and nothing to point it at. Now it points at whatever you\'re after.',
@@ -7784,17 +7802,17 @@ var QUESTS=[
    done:'She rolls! And while I waited I worked out a lighter boot sole. The plans are yours.',
    reward:{coins:150,xp:240,recipes:['boots']}},
   {id:'e_feathers',giver:'eagle',t:'Feathers on the Wind',short:'Golden feathers',goal:{type:'find',items:[
-     {id:'f1',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-60,-60); }},
-     {id:'f2',n:'a golden feather',shape:'feather',at:function(){ return dryNear(62,12); }},
-     {id:'f3',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-104,40); }},
-     {id:'f4',n:'a golden feather',shape:'feather',at:function(){ return dryNear(100,30); }},
-     {id:'f5',n:'a golden feather',shape:'feather',at:function(){ return dryNear(28,-82); }},
-     {id:'f6',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-40,100); }}]},
+     {id:'f1',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-60*WS,-60*WS); }},
+     {id:'f2',n:'a golden feather',shape:'feather',at:function(){ return dryNear(62*WS,12*WS); }},
+     {id:'f3',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-104*WS,40*WS); }},
+     {id:'f4',n:'a golden feather',shape:'feather',at:function(){ return dryNear(100*WS,30*WS); }},
+     {id:'f5',n:'a golden feather',shape:'feather',at:function(){ return dryNear(28*WS,-82*WS); }},
+     {id:'f6',n:'a golden feather',shape:'feather',at:function(){ return dryNear(-40*WS,100*WS); }}]},
    say:'Small hunter. The storm took my feathers and scattered them across the wood: gold, and still warm from the sky. Bring me six, and we will speak further.',
    done:'Good. You look up when others look down. That is rare.',
    reward:{coins:60,xp:180}},
   {id:'e_egg',giver:'eagle',need:'e_feathers',t:'The Stolen Egg',short:'The eagle\'s egg',goal:{type:'find',items:[
-     {id:'egg',n:'Ærtheldor\'s egg',shape:'egg',at:function(){ return dryNear(88,-58); }}]},
+     {id:'egg',n:'Ærtheldor\'s egg',shape:'egg',at:function(){ return dryNear(LM.hollow.x+2,LM.hollow.z-2); }}]},
    say:'My last egg was taken. The spinners of the Hollow carried it off in their silk. Bring it home to me.',
    done:'It is cold, but it lives. It needs a warmth that is not mine — and a nest that is whole.',
    reward:{coins:100,xp:240}},
@@ -8308,10 +8326,10 @@ function buildWorld(){
   var m=terrainMesh();
   scatterWorld(m);
   LANDMARKS.length=0;
-  buildTavern(m,0,-34);
-  buildHive(m,-72,48);
-  buildHollow(m,86,-56);
-  buildStones(m,-88,-78);
+  buildTavern(m,TAVERN.x,TAVERN.z);
+  buildHive(m,LM.hive.x,LM.hive.z);
+  buildHollow(m,LM.hollow.x,LM.hollow.z);
+  buildStones(m,LM.stones.x,LM.stones.z);
   cottageSite(m);
   buildCrag(m);
   buildBounce(m);
@@ -8340,30 +8358,31 @@ function populate(){
   G.ents.length=0;
   var r=mulberry(4242);
   // spiders near the hollow + scattered
-  for(var i=0;i<16;i++){ var a=r()*6.28,d=4+r()*16; spawnSpider(86+Math.cos(a)*d,-56+Math.sin(a)*d,r()<0.18); }
-  var D=DF(), np=function(n){ return Math.round(n*D.pop); };
-  for(var i2=0;i2<np(34);i2++){ var x=(r()*2-1)*WHALF*0.8, z=(r()*2-1)*WHALF*0.8;
+  for(var i=0;i<16;i++){ var a=r()*6.28,d=4+r()*16; spawnSpider(LM.hollow.x+Math.cos(a)*d,LM.hollow.z+Math.sin(a)*d,r()<0.18); }
+  // the map is bigger than it was: keep the wood as busy, square metre for square metre
+  var D=DF(), np=function(n){ return Math.round(n*D.pop*WS*WS); };
+  for(var i2=0;i2<np(34);i2++){ var q0=randIn(r), x=q0.x, z=q0.z;
     var dd=Math.hypot(x,z);
     if(dd<34||H(x,z)<WATER+0.5||nearTavern(x,z,32)||cragZone(x,z)<2) continue;
-    spawnSpider(x,z, dd>70&&r()<0.09); }
+    spawnSpider(x,z, dd>70*WS&&r()<0.09); }
   // wasps swarm their hive, snakes lie in the grass around it
   for(var k=0;k<np(16);k++){ var a2=r()*6.28,d2=3+r()*13;
-    spawnBeast(-72+Math.cos(a2)*d2,48+Math.sin(a2)*d2, r()<0.45); }
-  for(var k2=0;k2<np(20);k2++){ var gx=(r()*2-1)*WHALF*0.7, gz=(r()*2-1)*WHALF*0.7;
+    spawnBeast(LM.hive.x+Math.cos(a2)*d2,LM.hive.z+Math.sin(a2)*d2, r()<0.45); }
+  for(var k2=0;k2<np(20);k2++){ var q1=randIn(r,0.9), gx=q1.x, gz=q1.z;
     if(Math.hypot(gx,gz)<40||H(gx,gz)<WATER+0.5||nearTavern(gx,gz,32)||cragZone(gx,gz)<2) continue; spawnBeast(gx,gz,r()<0.3); }
   // clans of mushroom grumps in the meadows
-  for(var k3=0;k3<np(9);k3++){ var mx=(r()*2-1)*WHALF*0.8, mz=(r()*2-1)*WHALF*0.8;
+  for(var k3=0;k3<np(9);k3++){ var q2=randIn(r), mx=q2.x, mz=q2.z;
     if(Math.hypot(mx,mz)<36||H(mx,mz)<WATER+0.5||nearTavern(mx,mz,32)||cragZone(mx,mz)<2) continue; spawnShroomPatch(mx,mz,2+((r()*3)|0)); }
   // prisoners
-  var spots=[[86,-56],[-72,48],[0,0],[-88,-78]];
-  for(var p=0;p<14;p++){
+  var spots=[[LM.hollow.x,LM.hollow.z],[LM.hive.x,LM.hive.z],[0,0],[LM.stones.x,LM.stones.z]];
+  for(var p=0;p<Math.round(14*WS);p++){
     var sp=spots[(r()*spots.length)|0], a3=r()*6.28, d3=8+r()*22;
     var cx=sp[0]+Math.cos(a3)*d3, cz=sp[1]+Math.sin(a3)*d3;
-    cx=Math.max(-WHALF*0.9,Math.min(WHALF*0.9,cx)); cz=Math.max(-WHALF*0.9,Math.min(WHALF*0.9,cz));
+    if(!inBounds(cx,cz,4)) continue;
     if(H(cx,cz)<WATER+0.4||nearTavern(cx,cz,22)||pathDist(cx,cz)<3) continue;
     spawnCocoon(cx,cz);
   }
-  for(var f=0;f<10;f++){ var fx=(r()*2-1)*WHALF*0.8, fz=(r()*2-1)*WHALF*0.8;
+  for(var f=0;f<Math.round(10*WS);f++){ var q3=randIn(r), fx=q3.x, fz=q3.z;
     if(H(fx,fz)<WATER+0.4) continue; spawnFairy(fx,fz); }
   spawnKeeper();
   spawnCritters(); spawnGnomes(); populateCave();
@@ -8866,7 +8885,7 @@ function update(dt){
     } else if(alive<DD.cap){
       var a=Math.random()*6.28, d=46+Math.random()*26;
       var sx=p.x+Math.cos(a)*d, sz=p.z+Math.sin(a)*d, sd2=Math.hypot(sx,sz);
-      if(sd2>34&&sd2<WHALF*0.9&&H(sx,sz)>WATER+0.5&&!nearTavern(sx,sz,32)&&cragZone(sx,sz)>2){
+      if(sd2>34&&inBounds(sx,sz,4)&&H(sx,sz)>WATER+0.5&&!nearTavern(sx,sz,32)&&cragZone(sx,sz)>2){
         // a pack, not a straggler: two to four together
         var pack=2+((Math.random()*(DD===DIFFS.easy?1.6:3))|0), rk=Math.random();
         for(var pk=0;pk<pack;pk++){ var px2=sx+(Math.random()-0.5)*5, pz2=sz+(Math.random()-0.5)*5;
