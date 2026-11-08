@@ -9,11 +9,11 @@
    Easy is the wood as it used to be. Normal and Hard bring more monsters, hitting
    harder and more often, and pay a little better for the trouble. */
 var DIFFS={
-  easy:  {n:'Easy',  hp:1.0, dmg:1.0, spawn:7.0, cap:46, aggro:1.0,  spd:1.0,  cd:1.0,  pop:0.8, pay:1.0,
+  easy:  {n:'Easy',  hp:1.0, dmg:1.0, spawn:7.0, cap:46, aggro:1.0,  spd:1.0,  cd:1.0,  pop:0.8, pay:1.0, elites:0, champ:0,
           d:'The gentle wood. Fewer foes, and they forgive mistakes.'},
-  normal:{n:'Normal',hp:1.35,dmg:1.55,spawn:4.0, cap:64, aggro:1.18, spd:1.08, cd:0.82, pop:1.15,pay:1.2,
+  normal:{n:'Normal',hp:1.35,dmg:1.55,spawn:4.0, cap:64, aggro:1.18, spd:1.08, cd:0.82, pop:1.15,pay:1.2, elites:5, champ:0.12,
           d:'A proper hunt. Foes come in numbers and bite hard.'},
-  hard:  {n:'Hard',  hp:1.8, dmg:2.2, spawn:2.6, cap:84, aggro:1.35, spd:1.16, cd:0.68, pop:1.5, pay:1.5,
+  hard:  {n:'Hard',  hp:1.8, dmg:2.2, spawn:2.6, cap:84, aggro:1.35, spd:1.16, cd:0.68, pop:1.5, pay:1.5, elites:10, champ:0.24,
           d:'The wood wants you dead. Half again the pay, if you live.'}
 };
 var DIFF_ORDER=['easy','normal','hard'];
@@ -22,14 +22,15 @@ function DF(){ return DIFFS[G.build.diff]||DIFFS.normal; }
 /* ---------- the wild state, saved with your hunter ---------- */
 var WILD=null;
 function wildReset(){
-  WILD={torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false};
+  WILD={torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0};
 }
 wildReset();
 function wildSave(){ return {torch:WILD.torch,gnomes:WILD.gnomes,stone:{c:WILD.stone.c,tier:WILD.stone.tier},
-  dragon:WILD.dragon,chestT:Math.round(WILD.chestT),wardens:WILD.wardens}; }
+  dragon:WILD.dragon,chestT:Math.round(WILD.chestT),wardens:WILD.wardens,lore:WILD.lore,minis:WILD.minis,trophies:WILD.trophies}; }
 function wildLoad(w){
   wildReset(); if(!w) return;
   WILD.torch=!!w.torch; WILD.gnomes=w.gnomes||{}; WILD.chestT=w.chestT||0; WILD.wardens=w.wardens||0;
+  WILD.lore=w.lore||{}; WILD.minis=w.minis||{}; WILD.trophies=w.trophies||0;
   if(w.stone){ WILD.stone.c=w.stone.c||0; WILD.stone.tier=w.stone.tier||0; WILD.stone.full=WILD.stone.c>=1; }
   if(w.dragon){ WILD.dragon.t=w.dragon.t||0; WILD.dragon.kills=w.dragon.kills||0; }
 }
@@ -60,9 +61,10 @@ function spawnGolem(x,z,tier){
 function romanN(n){ return ['I','II','III','IV','V','VI','VII','VIII','IX','X'][Math.min(9,n-1)]||(''+n); }
 function spawnDragon(){
   var L=CRAG.lair, k=WILD.dragon.kills, hp=2600*(1+0.4*k)*bossLevel()*DF().hp;
-  G.ents.push({kind:'dragon',boss:1,name:k?'Cinderwing the Undying':'Cinderwing',x:L.x,y:CRAG.top,z:L.z,vy:0,yaw:2.2,scale:1.0,rad:3.0,tall:4.6,
+  G.ents.push({kind:'dragon',boss:1,name:k?'Cinderwing the Undying':'Cinderwing',x:L.x,y:CRAG.top,z:L.z,vy:0,yaw:2.2,scale:1.25,rad:3.6,tall:5.4,
     hp:hp,maxHp:hp,dmg:30*(1+0.2*k)*bossLevel(),speed:0,walkPhase:0,onGround:true,
-    look:{body:[0.55,0.16,0.12],dark:[0.34,0.10,0.08],belly:[0.88,0.66,0.34],horn:[0.88,0.84,0.72],wing:[0.66,0.24,0.16],eye:[1.0,0.85,0.25]},
+    // obsidian scales, a membrane like banked coals, gold-ivory horns and an ember-lit belly
+    look:{body:[0.17,0.13,0.14],dark:[0.10,0.08,0.09],belly:[0.52,0.30,0.18],horn:[0.92,0.80,0.52],wing:[0.62,0.12,0.08],eye:[1.0,0.78,0.22],ember:[1.0,0.52,0.14]},
     aggro:22, atkCd:2, wind:0, hurtT:0, state:'sleep', stT:0, fly:0, flyK:0, fireCd:1.5, home:{x:L.x,z:L.z}, snore:0});
 }
 function findKind(k){ for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind===k) return G.ents[i]; return null; }
@@ -144,6 +146,14 @@ function updateGolem(e,dt){
    Lead him off the crag and he flies home to sulk and heal. */
 function updateDragon(e,dt){
   var p=G.player, D=DF(), L=CRAG.lair, top=CRAG.top;
+  // a third of his life gone and the fire gets out: faster, angrier, more of it
+  if(!e.enraged&&e.hp<e.maxHp*0.35&&e.state!=='sleep'){ e.enraged=true; sfx('roar',e.x,e.z); shake(0.8);
+    tip('Cinderwing\'s scales split with fire!'); msg('ENOUGH!','#ff8a50',e.x,e.y+6,e.z,22); }
+  var cdK=e.enraged?0.6:1;
+  // smoke curls from his nostrils; embers drift off him when he's angry
+  if(e.nose&&Math.random()<dt*(e.state==='sleep'?1.5:4)){ var nz=dragonPoint(e,e.nose);
+    burst(nz.x,nz.y,nz.z,1,[0.32,0.30,0.30],{up:1.4,spread:0.3,size:0.28,life:1.6,grav:-1.2}); }
+  if(e.enraged&&Math.random()<dt*14) burst(e.x+(Math.random()-0.5)*5,e.y+1+Math.random()*2,e.z+(Math.random()-0.5)*6,1,[1.0,0.55,0.15],{up:2.5,spread:0.6,size:0.1,life:0.9,grav:-2});
   var pd=Math.hypot(p.x-e.x,p.z-e.z), pl=Math.hypot(p.x-L.x,p.z-L.z);
   e.stT+=dt; e.breathT=Math.max(0,(e.breathT||0)-dt);
   var flyTo=function(h,k){ e.fly+=(h-e.fly)*Math.min(1,dt*k); };
@@ -152,7 +162,7 @@ function updateDragon(e,dt){
       e.speed=0; flyTo(0,3); e.hp=Math.min(e.maxHp,e.hp+e.maxHp*0.05*dt);
       e.snore-=dt; if(e.snore<=0&&pd<40){ e.snore=2.6; msg('z z z','#d9d2ff',e.x,e.y+3.5,e.z,15);
         burst(e.x+Math.sin(e.yaw)*4.5,e.y+1.2,e.z+Math.cos(e.yaw)*4.5,5,[0.5,0.5,0.5],{up:1.5,spread:0.8,size:0.2,life:1.4,grav:-1}); }
-      if(!p.dead&&pl<CRAG.r+3&&p.y>top-3){ e.state='wake'; e.stT=0; sfx('roar',e.x,e.z); shake(0.7);
+      if(!p.dead&&pl<CRAG.r+3&&p.y>top-3){ e.state='wake'; e.stT=0; sfx('roar',e.x,e.z); shake(0.7); loreGet('cinderwing');
         tip('Cinderwing wakes!'); msg('WHO DISTURBS MY NAP?','#ffb070',e.x,e.y+5,e.z,20); }
       break;
     case 'wake':
@@ -167,15 +177,15 @@ function updateDragon(e,dt){
         e.wind-=dt; e.speed=0; faceTo(e,p.x,p.z,e.windKind==='breath'?2.5:4,dt);
         if(e.wind<=0){
           if(e.windKind==='bite'){ e.atkT=0.4; e.atkDur=0.4;
-            var bx=e.x+Math.sin(e.yaw)*4.2, bz=e.z+Math.cos(e.yaw)*4.2; bossHit(bx,bz,3.0,e.dmg,'Cinderwing\'s jaws'); sfx('bite',bx,bz); shake(0.3); }
-          else { e.breathT=1.5; sfx('fire',e.x,e.z); }
+            var bx=e.x+Math.sin(e.yaw)*7.5, bz=e.z+Math.cos(e.yaw)*7.5; bossHit(bx,bz,3.6,e.dmg,'Cinderwing\'s jaws'); sfx('bite',bx,bz); shake(0.3); }
+          else { e.breathT=e.enraged?2.2:1.5; sfx('fire',e.x,e.z); }
         }
       } else if(e.breathT>0){
         e.speed=0; faceTo(e,p.x,p.z,1.2,dt); breathe(e,dt);
       } else if(e.stT>11||(pl>CRAG.r+1&&e.stT>2)){ e.state='takeoff'; e.stT=0; sfx('wings',e.x,e.z); }
-      else if(pd<6.5&&e.atkCd<=0){ e.atkCd=1.8*D.cd; e.wind=0.65; e.windFull=0.65; e.windKind='bite'; sfx('growl',e.x,e.z); }
-      else if(pd<13&&pd>5&&e.atkCd<=0){ e.atkCd=3.2*D.cd; e.wind=0.8; e.windFull=0.8; e.windKind='breath'; sfx('growl',e.x,e.z); }
-      else if(pd>5) stepTo(e,p.x,p.z,3.6*D.spd,dt); else { e.speed*=0.6; faceTo(e,p.x,p.z,3,dt); }
+      else if(pd<10&&e.atkCd<=0){ e.atkCd=1.8*D.cd*cdK; e.wind=0.65; e.windFull=0.65; e.windKind='bite'; sfx('growl',e.x,e.z); }
+      else if(pd<18&&pd>7&&e.atkCd<=0){ e.atkCd=3.2*D.cd*cdK; e.wind=0.8; e.windFull=0.8; e.windKind='breath'; sfx('growl',e.x,e.z); }
+      else if(pd>7.5) stepTo(e,p.x,p.z,3.6*D.spd*(e.enraged?1.3:1),dt); else { e.speed*=0.6; faceTo(e,p.x,p.z,3,dt); }
       // he keeps to his crag on foot
       var cd=Math.hypot(e.x-CRAG.x,e.z-CRAG.z), lim=CRAG.r-3.5; if(cd>lim){ e.x=CRAG.x+(e.x-CRAG.x)*lim/cd; e.z=CRAG.z+(e.z-CRAG.z)*lim/cd; }
       break;
@@ -193,9 +203,11 @@ function updateDragon(e,dt){
       e.x+=dx/dd*sp*dt; e.z+=dz/dd*sp*dt; e.speed=sp;
       e.yaw+=wrapA(Math.atan2(dx,dz)-e.yaw)*Math.min(1,dt*2.5);
       e.fireCd-=dt;
-      if(e.fireCd<=0){ e.fireCd=1.25*D.cd; var m=dragonMouth(e);
+      if(e.fireCd<=0){ e.fireCd=1.25*D.cd*cdK; var m=dragonMouth(e);
         var lead=0.5, tx=p.x+(p.mvx||0)*(p.speed||0)*lead, tz=p.z+(p.mvz||0)*(p.speed||0)*lead;
-        lob(e,m,tx,H(tx,tz)+0.3,tz,24,'fire',e.dmg*0.6,2.6,true); sfx('fireball',e.x,e.z); }
+        lob(e,m,tx,H(tx,tz)+0.3,tz,24,'fire',e.dmg*0.6,2.6,true); sfx('fireball',e.x,e.z);
+        if(e.enraged) for(var fb=-1;fb<=1;fb+=2){ var ox=tx+fb*4*Math.cos(e.yaw), oz=tz-fb*4*Math.sin(e.yaw);
+          lob(e,m,ox,H(ox,oz)+0.3,oz,22,'fire',e.dmg*0.45,2.4,true); } }
       if(e.stT>9){ e.state='land'; e.stT=0;
         // come down on the crag, near you if you're up there, else by the lair
         var on=Math.hypot(p.x-CRAG.x,p.z-CRAG.z)<CRAG.r-3;
@@ -221,10 +233,8 @@ function updateDragon(e,dt){
   }
   e.y=H(e.x,e.z)+e.fly;
 }
-function dragonMouth(e){
-  var mo=e.mouth||{x:0,y:3.5,z:6}, c=Math.cos(e.yaw), s=Math.sin(e.yaw);
-  return {x:e.x+mo.x*c+mo.z*s, y:e.y+mo.y, z:e.z-mo.x*s+mo.z*c};
-}
+function dragonMouth(e){ return dragonPoint(e,e.mouth||{x:0,y:3.5,z:7}); }
+function dragonPoint(e,mo){ var c=Math.cos(e.yaw), s=Math.sin(e.yaw); return {x:e.x+mo.x*c+mo.z*s, y:e.y+mo.y, z:e.z-mo.x*s+mo.z*c}; }
 /* a cone of fire from the jaws: flames you can see, and harm if you're in it */
 function breathe(e,dt){
   var m=dragonMouth(e), fx=Math.sin(e.yaw), fz=Math.cos(e.yaw), p=G.player, D=DF();
@@ -236,23 +246,23 @@ function breathe(e,dt){
       col:hot<0.5?[1.0,0.80,0.30]:[1.0,0.42,0.12],grav:-2,spin:Math.random()*6,flat:false});
   }
   var dx2=p.x-e.x, dz2=p.z-e.z, d=Math.hypot(dx2,dz2), dot=(dx2*fx+dz2*fz)/(d||1);
-  if(d<13&&dot>0.8&&Math.abs(p.y-(e.y-e.fly))<4) hurtPlayer(e.dmg*0.7,'Cinderwing\'s fire');
+  if(d<19&&dot>0.85&&Math.abs(p.y-(e.y-e.fly))<4) hurtPlayer(e.dmg*0.7,'Cinderwing\'s fire');
   for(var j=0;j<G.ents.length;j++){ var a2=G.ents[j]; if(a2.kind!=='ally') continue;
-    var ax=a2.x-e.x, az=a2.z-e.z, ad=Math.hypot(ax,az); if(ad<13&&(ax*fx+az*fz)/(ad||1)>0.8) a2.hp-=e.dmg*0.4*dt*D.dmg; }
+    var ax=a2.x-e.x, az=a2.z-e.z, ad=Math.hypot(ax,az); if(ad<19&&(ax*fx+az*fz)/(ad||1)>0.8) a2.hp-=e.dmg*0.4*dt*D.dmg; }
 }
 /* a boss falls: a proper reward, and the world remembers */
 function bossDown(e){
   var p=G.player, pay=DF().pay;
   if(e.kind==='golem'){
     var c=Math.round((140+70*e.tier)*pay); p.coins+=c; p.potions+=2; WILD.wardens++;
-    WILD.stone.tier++; WILD.stone.c=0; WILD.stone.full=false;
+    WILD.stone.tier++; WILD.stone.c=0; WILD.stone.full=false; loreGet('warden');
     gainXp(500+200*e.tier,e.x,e.y+5,e.z,'+'+(500+200*e.tier)+' XP — the Warden falls');
     msg('+'+c+' ◉  +2 potions','#ffe08a',e.x,e.y+4,e.z,18);
     tip('The Warden crumbles. The stones fall quiet… for now');
     burst(e.x,e.y+2,e.z,60,[0.45,0.95,1.0],{up:6,spread:6,size:0.2,life:1.5,grav:-1});
   } else {
     var c2=Math.round((450+150*WILD.dragon.kills)*pay); p.coins+=c2; p.potions+=3;
-    WILD.dragon.kills++; WILD.dragon.t=600;
+    WILD.dragon.kills++; WILD.dragon.t=600; loreGet('dragonslayer');
     gainXp(1500,e.x,e.y+5,e.z,'+1500 XP — DRAGONSLAYER');
     msg('+'+c2+' ◉  +3 potions','#ffe08a',e.x,e.y+4,e.z,20);
     tip(WILD.dragon.kills>1?'Cinderwing falls again. He always comes back.':'Dragonslayer! Cinderwing is slain');
@@ -369,7 +379,7 @@ function chestScreen(){
   menuOpen('talk'); sfx('click');
   var p=G.player, ready=WILD.chestT<=0;
   if(ready){
-    var c=Math.round((180+p.level*12)*DF().pay); p.coins+=c; p.potions+=2; WILD.chestT=480;
+    var c=Math.round((180+p.level*12)*DF().pay); p.coins+=c; p.potions+=2; WILD.chestT=480; loreGet('hoard',true);
     sfx('coin'); sfx('freed');
     show('<h1>The Glimmer Hoard</h1><p class="say">Under a crust of crystal: coins, old and new, and two stoppered bottles that still smell of mint.</p>'+
       '<div class="stat"><span>You take</span><b>+'+c+' ◉ &nbsp; +2 ✚</b></div><p class="sub">The cave seems to fill it again, given time.</p><button class="btn" id="leave">Lovely</button>');
@@ -457,12 +467,12 @@ function spawnGnomes(){
 function gnomeCount(){ var n=0; for(var k in WILD.gnomes) if(WILD.gnomes[k]) n++; return n; }
 function findGnome(e){
   var g=null; for(var i=0;i<GNOMES.length;i++) if(GNOMES[i].id===e.gid) g=GNOMES[i];
-  WILD.gnomes[e.gid]=1;
+  WILD.gnomes[e.gid]=1; loreGet('gnomes');
   var p=G.player, n=gnomeCount(), c=Math.round(35*DF().pay);
   p.coins+=c; gainXp(80,e.x,e.y+1.6,e.z,'+80 XP — a gnome!');
   msg(g?g.say:'“Hello!”','#ffe6b0',e.x,e.y+2.4,e.z,15); msg('+'+c+' ◉','#ffe08a',e.x+0.6,e.y+1.2,e.z,13);
   sfx('gnome',e.x,e.z); burst(e.x,e.y+0.6,e.z,20,e.hat,{up:3,spread:2,size:0.12,life:1,grav:-1});
-  if(n>=GNOMES.length){ p.coins+=300; tip('All seven gnomes found! Bram sends 300 coins, and his thanks'); sfx('levelup'); }
+  if(n>=GNOMES.length){ p.coins+=300; loreGet('marigold'); tip('All seven gnomes found! Bram sends 300 coins, and his thanks'); sfx('levelup'); }
   else tip('Lost gnomes found: '+n+' of '+GNOMES.length);
   var i2=G.ents.indexOf(e); if(i2>=0) G.ents.splice(i2,1);
   setTimeout(saveGame,50);
@@ -484,6 +494,7 @@ function bounceCheck(p){
 
 /* ---------- what you can walk up to and use ---------- */
 function wildTalk(p,list){
+  legendTalk(p,list);
   var g=findKind('golem');
   if(!WILD.inCave){
     if(!g&&Math.hypot(STONES.x-p.x,STONES.z-p.z)<3.6)
@@ -507,6 +518,7 @@ function wildUpdate(dt){
   setCaveEnv(inCave(p.x,p.z));
   torchUpdate();
   stonesUpdate(dt);
+  minisTick(dt);
   if(WILD.chestT>0) WILD.chestT-=dt;
   p.bounceCd=Math.max(0,(p.bounceCd||0)-dt);
   if(!WILD.inCave) bounceCheck(p);
@@ -519,15 +531,16 @@ function wildUpdate(dt){
 /* the boss's name and health across the top while it's awake */
 function drawBossBar(){
   var p=G.player, b=null, bd=1e9;
-  for(var i=0;i<G.ents.length;i++){ var e=G.ents[i]; if(!e.boss||e.state==='sleep') continue;
+  for(var i=0;i<G.ents.length;i++){ var e=G.ents[i]; if(!(e.boss||e.mini)||e.state==='sleep') continue;
+    if(e.mini&&!(e.hp<e.maxHp||Math.hypot(e.x-p.x,e.z-p.z)<e.aggro*DF().aggro)) continue;
     var d=Math.hypot(e.x-p.x,e.z-p.z); if(d<60&&d<bd){ bd=d; b=e; } }
   if(!b) return;
   var w=Math.min(420,W*0.62), x=W/2-w/2, y=DESKTOP?18:Math.max(SAFET+8,12)+(DESKTOP?0:0);
   if(!DESKTOP){ var P=panelGeom(); y=Math.max(y,P.y); x=Math.max(P.x+P.w+10,x); w=Math.min(w,W-x-74); }
   hx.textAlign='center'; hx.font='700 13px Georgia,serif';
   hx.fillStyle='rgba(0,0,0,.6)'; hx.fillText(b.name,x+w/2+1,y+12+1);
-  hx.fillStyle=b.kind==='dragon'?'#ffb070':'#9fe8ff'; hx.fillText(b.name,x+w/2,y+12);
+  hx.fillStyle=b.kind==='dragon'?'#ffb070':(b.mini?'#e0c0ff':'#9fe8ff'); hx.fillText(b.name,x+w/2,y+12);
   hx.fillStyle='rgba(8,11,8,.7)'; roundRect(x-2,y+18,w+4,12,5); hx.fill();
   var f=clamp(b.hp/b.maxHp,0,1);
-  hx.fillStyle=b.kind==='dragon'?'#d6584a':'#5fb8c8'; if(f>0){ roundRect(x,y+20,Math.max(6,w*f),8,4); hx.fill(); }
+  hx.fillStyle=b.kind==='dragon'?'#d6584a':(b.mini?'#b070d8':'#5fb8c8'); if(f>0){ roundRect(x,y+20,Math.max(6,w*f),8,4); hx.fill(); }
 }

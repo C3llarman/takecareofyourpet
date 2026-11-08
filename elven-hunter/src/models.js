@@ -120,12 +120,13 @@ function actorSpec(e){
     var w=cls==='warrior'?['1H_Axe']:(cls==='wizard'?['2H_Staff']:['1H_Crossbow','Knife_Offhand']);
     // the rogue carries a crossbow but draws the knife to strike
     var mw=cls==='rogue'?['Knife','Knife_Offhand']:null;
-    return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null};
+    var gr=G.build.gear||{w:0,a:0};
+    return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null, armor:gr.a, wtier:gr.w};
   }
   if(e.kind==='npc')                  // the innkeeper: a barbarian with a mug, in warm tones
     return {model:'barbarian', weapons:['Mug'], beard:true, tint:[1.0,0.88,0.74], key:'keeper'};
   var ck=e.kind==='corpse'?e.of:e.kind;
-  if(ck==='spider') return {model:'spider', weapons:[], tint:e.look&&e.look.body, key:(e.cave?'cave':'')+(e.big?'bigspider':'spider')};
+  if(ck==='spider') return {model:'spider', weapons:[], tint:e.look&&e.look.body, key:(e.cave?'cave':'')+(e.mini?'mini'+e.mini:'')+(e.elite?'elite':'')+(e.big?'bigspider':'spider')};
   if(ck==='snake'||ck==='wasp') return {model:ck, weapons:[], key:ck};
   var K=ALLYKIND[e.ak]||ALLYKIND[0];
   switch(K.k){
@@ -138,7 +139,58 @@ function actorSpec(e){
   }
 }
 
-var ACTORS=[], EARGEO=null, BEARDGEO=null;
+var ACTORS=[], EARGEO=null, BEARDGEO=null, ARMGEO=null;
+/* Armour you can see. Each tier of Bram's cousin's armour hangs more metal on the
+   hunter's bones: leather pauldrons, then iron, steel with a breastplate, elvensteel
+   with a leaf circlet, and at Legendary: gold plate, a spiked crown and a glowing gem.
+   Sizes are in world units (inv converts to the model's bone space). */
+var ARMOR_LOOK=[null,
+  {plate:[0.42,0.28,0.16]},
+  {plate:[0.52,0.53,0.56]},
+  {plate:[0.70,0.72,0.76],chest:1},
+  {plate:[0.72,0.84,0.80],trim:[0.40,0.62,0.48],chest:1,circlet:[0.80,0.90,0.86],leaf:1},
+  {plate:[0.96,0.76,0.30],trim:[0.98,0.95,0.86],chest:1,crown:1,gem:[0.55,0.85,1.0],gold:1}];
+function addArmor(root,tier,inv,mats,glow,model){
+  var A=ARMOR_LOOK[Math.min(5,tier)]; if(!A) return;
+  if(!ARMGEO) ARMGEO={blob:toGeom(blobMesh([1,1,1],0,2)),cone:toGeom(coneMesh([1,1,1],10)),box:toGeom(boxMesh([1,1,1])),
+    ring:toGeom(coneMesh([1,1,1],18,0.5,0.5,true))};
+  function mat(c,em){ var m=new THREE.MeshLambertMaterial({color:new THREE.Color(c[0],c[1],c[2])});
+    if(em) glow.push({m:m,c:em}); else mats.push(m); return m; }
+  function bone(n){ return root.getObjectByName(n); }
+  var chest=bone('chest'), head=bone('head');
+  var plate=mat(A.plate,A.gold?[0.26,0.16,0.02]:null), trim=A.trim?mat(A.trim,A.gold?[0.20,0.18,0.12]:null):plate;
+  function put(b,g,m,x,y,z,sx,sy,sz,rx,ry,rz){ if(!b) return null;
+    var o=new THREE.Mesh(ARMGEO[g],m); o.position.set(x*inv,y*inv,z*inv); o.scale.set(sx*inv,sy*inv,sz*inv);
+    o.rotation.set(rx||0,ry||0,rz||0); o.castShadow=true; b.add(o); return o; }
+  // the hats differ: how high the top of the head sits, how wide a crown must be
+  var top=model==='mage'?{y:0.50,r:0.80}:(model==='barbarian'?{y:0.84,r:0.62}:{y:0.72,r:0.60});
+  var big=tier>=3?1.2:1;
+  for(var sd=-1;sd<=1;sd+=2){
+    put(chest,'blob',plate,sd*0.30,0.02,0,0.40*big,0.27*big,0.44*big,0,0,sd*-0.4);              // pauldron
+    if(tier>=2) put(chest,'blob',trim,sd*0.31,0.10*big,0,0.30*big,0.09,0.34*big,0,0,sd*-0.4);   // its rim
+    if(A.leaf) put(chest,'cone',trim,sd*0.44,0.16,0,0.09,0.30,0.16,0,0,sd*-0.9);                 // elvensteel leaf
+    if(A.gold) for(var k=0;k<3;k++) put(chest,'cone',trim,sd*(0.34+k*0.07),0.18+k*0.02,(k-1)*0.14,0.07,0.28,0.07,0,0,sd*-0.7);
+    if(tier>=3){                                                                                // bracers and knee guards
+      put(bone(sd<0?'wristr':'wristl'),'blob',plate,0,-0.06,0,0.24,0.24,0.24);
+      put(bone(sd<0?'lowerlegr':'lowerlegl'),'blob',plate,0,0.02,0.07,0.20,0.20,0.16);
+    }
+  }
+  if(A.chest){
+    put(chest,'blob',plate,0,-0.16,0.17,0.52,0.42,0.30);                                       // breastplate
+    put(chest,'box',A.gold?trim:mat([0.34,0.33,0.36]),0,-0.38,0.11,0.54,0.07,0.36);              // a belt of plate
+  }
+  if(A.gem) put(chest,'blob',mat(A.gem,[0.30,0.62,0.85]),0,-0.12,0.32,0.13,0.15,0.08);
+  if(A.circlet){
+    put(head,'ring',mat(A.circlet,[0.06,0.12,0.09]),0,top.y-0.04,0.02,top.r*1.02,0.08,top.r,-0.08,0,0);
+    put(head,'cone',trim,0,top.y+0.02,top.r*0.5,0.12,0.26,0.07,0.25,0,0);
+  }
+  if(A.crown){
+    put(head,'ring',plate,0,top.y,0.0,top.r,0.14,top.r*0.96,-0.08,0,0);
+    for(var c=0;c<8;c++){ var an=c/8*6.283;
+      put(head,'cone',plate,Math.sin(an)*top.r*0.48,top.y+0.12,Math.cos(an)*top.r*0.47,0.10,c===0?0.34:0.24,0.10); }
+    put(head,'blob',mat(A.gem,[0.30,0.62,0.85]),0,top.y+0.03,top.r*0.5,0.12,0.14,0.07);
+  }
+}
 function makeActor(spec){
   var T=MODELS[spec.model];
   var root=THREE.cloneSkinned(T.scene);
@@ -173,9 +225,13 @@ function makeActor(spec){
       beard.castShadow=true; head.add(beard); mats.push(beard.material);
     }
   }
+  var glow=[];
+  if(spec.armor) addArmor(root,spec.armor,1/T.k,mats,glow,spec.model);
+  // a weapon of the top tiers shines: elvensteel pale, legendary gold
+  if(spec.wtier>=4) for(var hn in held){ var hm=held[hn].material; glow.push({m:hm,c:spec.wtier>=5?[0.55,0.38,0.08]:[0.10,0.30,0.34]}); }
   var group=new THREE.Group(); group.add(root);
   root.scale.setScalar(T.k); root.position.y=T.lift*T.k;
-  var a={creature:T.creature||null, held:held, wNorm:spec.weapons, wMelee:spec.melee||null, wCur:spec.weapons, key:spec.key||spec.model, group:group, root:root, mats:mats, mixer:new THREE.AnimationMixer(root),
+  var a={glow:glow, armor:spec.armor||0, creature:T.creature||null, held:held, wNorm:spec.weapons, wMelee:spec.melee||null, wCur:spec.weapons, key:spec.key||spec.model, group:group, root:root, mats:mats, mixer:new THREE.AnimationMixer(root),
     acts:{}, ent:null, used:false, ov:null, ovT:0, lastAtk:0, base:null, dead:false};
   SCENE.add(group);
   ACTORS.push(a);
@@ -251,6 +307,8 @@ function animateCreature(a,e,dt){
   a.group.scale.setScalar(e.scale||1);
   var flash=e.hurtT>0?Math.min(1,e.hurtT/0.18)*0.6:0;
   for(var i=0;i<a.mats.length;i++) a.mats[i].emissive.setRGB(flash,flash*0.15,flash*0.1);
+  var gp=0.8+0.2*Math.sin(G.t*3);
+  for(var gi=0;gi<a.glow.length;gi++){ var g=a.glow[gi]; g.m.emissive.setRGB(g.c[0]*gp+flash,g.c[1]*gp+flash*0.15,g.c[2]*gp+flash*0.1); }
   a.group.visible=true;
 }
 function animateActor(a,e,dt){
@@ -307,6 +365,8 @@ function animateActor(a,e,dt){
   var s=e.scale||1; a.group.scale.setScalar(s);
   var flash=e.hurtT>0?Math.min(1,e.hurtT/0.18)*0.55:0;
   for(var i=0;i<a.mats.length;i++) a.mats[i].emissive.setRGB(flash,flash*0.15,flash*0.1);
+  var gp=0.8+0.2*Math.sin(G.t*3);
+  for(var gi=0;gi<a.glow.length;gi++){ var g=a.glow[gi]; g.m.emissive.setRGB(g.c[0]*gp+flash,g.c[1]*gp+flash*0.15,g.c[2]*gp+flash*0.1); }
   a.group.visible=true;
 }
 
@@ -346,5 +406,5 @@ function assignActors(dt){
 }
 function specKey(e){
   var s=actorSpec(e);
-  return s.model+'|'+(s.key||'')+'|'+s.weapons.join(',')+'|'+(s.ears?1:0)+(s.beard?1:0);
+  return s.model+'|'+(s.key||'')+'|'+s.weapons.join(',')+'|'+(s.ears?1:0)+(s.beard?1:0)+'|'+(s.armor||0)+(s.wtier||0);
 }

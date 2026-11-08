@@ -52,6 +52,7 @@ const MODULES = [
   ['/*AUDIO*/',  'audio.js'],
   ['/*HOME*/',   'home.js'],
   ['/*WILD*/',   'wild.js'],
+  ['/*LEGENDS*/','legends.js'],
   ['/*GAME*/',   'game.js'],
 ];
 

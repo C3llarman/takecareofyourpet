@@ -198,6 +198,7 @@ function buildWorld(){
   cottageSite(m);
   buildCrag(m);
   buildBounce(m);
+  buildWaystones(m);
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
   WORLD.castShadow=true; WORLD.receiveShadow=true;
   SCENE.add(WORLD);
@@ -249,6 +250,7 @@ function populate(){
   spawnKeeper();
   spawnCritters(); spawnGnomes(); populateCave();
   if(WILD.dragon.t<=0) spawnDragon();
+  spawnMinis(); seedChampions();
 }
 function nearTavern(x,z,r){ return Math.hypot(x-TAVERN.x,z-TAVERN.z)<r||homeSafe(x,z,r*0.8); }
 /* Bram keeps the Greenleaf: rest, potions, hired blades and bounties */
@@ -409,7 +411,7 @@ function doAttack(){
       impact(e,dx/(d||1),dz/(d||1));
       hurtEnemy(e,dmg); if(S.lifesteal) p.hp=Math.min(p.maxHp,p.hp+dmg*S.lifesteal);
       if(e.hp<=0) kills++;
-      if(e.hp>0&&d>0.01&&!e.boss){ var kb=e.big?0.25:0.6; e.x+=dx/d*kb; e.z+=dz/d*kb; collide(e,bodyR(e)); }
+      if(e.hp>0&&d>0.01&&!e.boss&&!e.mini){ var kb=e.big?0.25:0.6; e.x+=dx/d*kb; e.z+=dz/d*kb; collide(e,bodyR(e)); }
     }
     hit++;
   }
@@ -473,6 +475,8 @@ function hurtEnemy(e,d,quiet){
     bountyTick(e.kind==='spider'?(e.big?['spider','giant']:['spider']):[e.kind]);
     stonesKill();
     if(e.boss) bossDown(e);
+    if(e.mini) miniDown(e);
+    if(e.elite) championDown(e);
     sfx(e.kind+'die',e.x,e.z);
     // monsters burst in a puff of ichor and dust, no blood
     burst(e.x,e.y+(e.kind==='wasp'?aimH(e):0.7*(e.scale||1)),e.z,16,ICHOR[e.kind],{up:4,spread:4,size:0.16*(e.scale||1),life:0.9});
@@ -482,7 +486,7 @@ function hurtEnemy(e,d,quiet){
     if(Math.random()<0.16){ G.player.potions++; msg('+potion','#ff9d9d',e.x,e.y+2,e.z); sfx('pickup'); }
     var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
     // leave a body that plays its death and sinks away
-    G.ents.push({kind:'corpse',of:e.kind,hover:e.hover,big:e.big,boss:e.boss,cave:e.cave,x:e.x,y:e.boss?H(e.x,e.z):e.y,z:e.z,yaw:e.yaw,scale:e.scale,
+    G.ents.push({kind:'corpse',of:e.kind,hover:e.hover,big:e.big,boss:e.boss,cave:e.cave,mini:e.mini,elite:e.elite,crown:e.crown,x:e.x,y:e.boss?H(e.x,e.z):e.y,z:e.z,yaw:e.yaw,scale:e.scale,
       look:e.look,t:0,deadT:0.001,speed:0,walkPhase:e.walkPhase,state:e.state,flyK:0});
   }
 }
@@ -552,7 +556,7 @@ function bigLand(e,already){
 function breakCocoon(c,d){
   c.hp-=d; c.hurtT=0.18;
   if(c.hp<=0){
-    G.freed++; gainXp(100,c.x,c.y+2.4,c.z,'+100 XP — FREED'); bountyTick(['freed']);
+    G.freed++; gainXp(100,c.x,c.y+2.4,c.z,'+100 XP — FREED'); bountyTick(['freed']); loreGet('weaving');
     sfx('freed',c.x,c.z); burst(c.x,c.y+1.4,c.z,22,[0.92,0.94,0.90],{up:3,spread:3.5,size:0.15,life:1.1});
     var i=G.ents.indexOf(c); if(i>=0) G.ents.splice(i,1);
     var deployed=0; for(var k=0;k<G.ents.length;k++) if(G.ents[k].kind==='ally') deployed++;
@@ -599,6 +603,10 @@ function update(dt){
   if(p.buff===3&&p.hp<p.maxHp) p.hp=Math.min(p.maxHp,p.hp+6*dt);
   updateFX(dt);
   G.shakeA=(G.shakeA||0)*Math.exp(-dt*9);
+  // legendary armour shimmers: gold motes drifting up off the plate (elvensteel: a faint green)
+  var ga=(G.build.gear||{}).a||0;
+  if(ga>=4&&!p.dead&&Math.random()<dt*(ga>=5?9:3)){ var ma=Math.random()*6.28;
+    burst(p.x+Math.cos(ma)*0.45,p.y+0.4+Math.random()*1.2,p.z+Math.sin(ma)*0.45,1,ga>=5?[1.0,0.84,0.38]:[0.70,1.0,0.80],{up:0.9,spread:0.15,size:0.06,life:1.1,grav:-0.6}); }
   if(p.dead){ p.deadT+=dt; p.speed=0; followCam(dt); return; }
 
   // movement frame: latched when you start pushing, so the auto-camera can't
@@ -642,6 +650,9 @@ function update(dt){
   if(p.dashT>0){ p.x+=Math.sin(p.dashDir)*spd*dt; p.z+=Math.cos(p.dashDir)*spd*dt; p.inv=Math.max(p.inv,0.2); }
   p.dodgeT=Math.max(0,(p.dodgeT||0)-dt);
   p.slowT=Math.max(0,(p.slowT||0)-dt);
+  // poison (Old Coil's bite, Puffcap's spores) burns for a few seconds but never kills
+  if(p.poisonT>0&&!p.dead){ p.poisonT-=dt; p.hp=Math.max(1,p.hp-3.5*dt*DF().dmg*G.S.armor);
+    if(Math.random()<dt*8) burst(p.x,p.y+1+Math.random(),p.z,1,[0.55,0.95,0.35],{up:1,spread:0.5,size:0.08,life:0.6,grav:-1}); }
   // bounds
   var bd=Math.hypot(p.x,p.z), lim=WHALF*0.95;
   if(bd>lim&&!inCave(p.x,p.z)){ p.x*=lim/bd; p.z*=lim/bd; }
@@ -710,7 +721,7 @@ function update(dt){
   for(var i=0;i<LANDMARKS.length;i++){
     var lm=LANDMARKS[i], ld=Math.hypot(p.x-lm.x,p.z-lm.z);
     if(!G.found[lm.name]&&ld<lm.r+4&&!WILD.inCave){
-      G.found[lm.name]=1; tip('Discovered: '+lm.name); sfx('discover');
+      G.found[lm.name]=1; tip('Discovered: '+lm.name); sfx('discover'); if(LANDLORE[lm.kind]) loreGet(LANDLORE[lm.kind]);
       gainXp(60,p.x,p.y+3,p.z,'+60 XP — discovery');
     }
     if(lm.kind==='tavern'&&ld<TAVERN.yard){
@@ -738,7 +749,8 @@ function update(dt){
         for(var pk=0;pk<pack;pk++){ var px2=sx+(Math.random()-0.5)*5, pz2=sz+(Math.random()-0.5)*5;
           if(rk<0.48) spawnSpider(px2,pz2,sd2>70&&Math.random()<0.08);
           else if(rk<0.8) spawnBeast(px2,pz2,Math.random()<0.35);
-          else spawnShroom(px2,pz2); }
+          else spawnShroom(px2,pz2);
+          if(pk===0&&Math.random()<DD.champ) makeChampion(G.ents[G.ents.length-1]); }
       }
     }
   }
@@ -780,7 +792,7 @@ function separate(){
       var push=(R-d), nx=dx/d, nz=dz/d;
       // the hunter is heavy: creatures give way, she barely moves
       var wa=(A===p)?0.15:0.5, wb=(A===p)?0.85:0.5;
-      if(B.boss){ wa=1; wb=0; } else if(A.boss){ wa=0; wb=1; }    // nothing shoves a boss about
+      if(B.boss||B.mini){ wa=1; wb=0; } else if(A.boss||A.mini){ wa=0; wb=1; }    // nothing shoves a boss about
       A.x-=nx*push*wa; A.z-=nz*push*wa; B.x+=nx*push*wb; B.z+=nz*push*wb;
     }
   }
@@ -836,7 +848,7 @@ function updateEnts(dt){
     if(e.kind==='fairy'){
       e.t+=dt; e.bx=Math.sin(e.t*0.9)*2.2; e.by=Math.sin(e.t*1.7)*0.5;
       if(pd<2.6){
-        p.buff=e.col; p.buffT=26;
+        p.buff=e.col; p.buffT=26; loreGet('fairies');
         msg(FAIRYNAME[e.col],'#bff0ff',e.x,e.y+1.4,e.z); sfx('fairy');
         burst(e.x+e.bx,e.y+e.by,e.z,24,FAIRYCOL[e.col],{up:2,spread:3,size:0.12,life:1.0,grav:-1});
         buzz([12,30,12]); G.ents.splice(i,1);
@@ -855,6 +867,7 @@ function updateEnts(dt){
 
     if(FOE[e.kind]){
       e.slowT=Math.max(0,(e.slowT||0)-dt);
+      eliteGlow(e,dt);
       var DD=DF();
       var spd=(e.kind==='spider'?(e.big?3.4:4.2):(e.kind==='wasp'?4.4:(e.kind==='shroom'?3.5:3.8)))*(e.slowT>0?0.5:1)*DD.spd;
       if(e.kind==='wasp') e.hover=1.25+Math.sin(G.t*2.2+e.walkPhase)*0.18;
@@ -867,7 +880,8 @@ function updateEnts(dt){
         }
       }
       e.atkCd-=dt;
-      if(tdist<e.aggro*DD.aggro&&!p.dead&&!(tgt===p&&p.safe)){
+      var leashed=(e.mini||e.minion)&&Math.hypot(e.x-e.home.x,e.z-e.home.z)>(e.minion?50:36);
+      if(tdist<e.aggro*DD.aggro&&!p.dead&&!(tgt===p&&p.safe)&&!leashed&&!(e.mini&&miniAct(e,dt,tgt,tdist))){
         if(e.kind==='wasp'){
           if(tdist>11) moveCreature(e,dt,tgt.x,tgt.z,spd);
           else if(tdist<7) moveCreature(e,dt,e.x-(tgt.x-e.x),e.z-(tgt.z-e.z),spd*0.7);
@@ -895,12 +909,15 @@ function updateEnts(dt){
             else { e.speed*=0.6; var fy=Math.atan2(tgt.x-e.x,tgt.z-e.z);
               e.yaw+=wrapA(fy-e.yaw)*Math.min(1,dt*8); }
             if(tdist<1.6+(e.scale||1)&&e.atkCd<=0){
-              e.atkCd=(e.big?1.9:1.35)*DD.cd; e.wind=e.big?0.55:0.38;
+              e.atkCd=(e.mini?1.7:(e.big?1.9:1.35))*DD.cd; e.wind=e.mini?0.62:(e.big?0.55:0.38); e.windFull=e.wind;
               sfx(e.kind==='snake'?'rattle':(e.kind==='shroom'?'growl':'hissup'),e.x,e.z);
             }
           }
         }
-      } else {
+      } else if(e.mini&&(e.lungeT>0||e.puffT>0)){ if(tdist>=e.aggro*DD.aggro||leashed||p.dead){ e.lungeT=0; e.puffT=0; } }
+      else {
+        if(e.mini) e.hp=Math.min(e.maxHp,e.hp+e.maxHp*0.06*dt);     // a mini-boss you ran from licks its wounds at home
+        if(leashed){ moveCreature(e,dt,e.home.x,e.home.z,spd); if(e.atkT>0) e.atkT-=dt; continue; }
         e.wanderT-=dt;
         if(e.wanderT<=0){ e.wanderT=2+Math.random()*3; e.wander=Math.random()*6.28; }
         var wx2=e.home.x+Math.cos(e.wander)*7, wz2=e.home.z+Math.sin(e.wander)*7;
@@ -914,7 +931,8 @@ function updateEnts(dt){
       var st2=Math.max(1,Math.ceil(Math.hypot(e.vx,e.vy,e.vz)*dt/0.55)), sd2=dt/st2, hit=false;
       for(var q2=0;q2<st2;q2++){
         e.x+=e.vx*sd2; e.y+=e.vy*sd2; e.z+=e.vz*sd2; if(!e.aimed) e.vy-=11*sd2;
-        if(Math.hypot(e.x-p.x,e.z-p.z)<(e.aoe?1.5:1.2) && e.y>p.y-0.2 && e.y<p.y+2.4){ hurtPlayer(e.dmg,e.src||'arrow'); if(e.aoe) bigLand(e,true); hit=true; break; }
+        if(Math.hypot(e.x-p.x,e.z-p.z)<(e.aoe?1.5:1.2) && e.y>p.y-0.2 && e.y<p.y+2.4){ hurtPlayer(e.dmg,e.src||'arrow');
+          if(e.slow){ p.slowT=Math.max(p.slowT||0,e.slow); msg('webbed!','#e8e8f0',p.x,p.y+2.6,p.z,14); } if(e.aoe) bigLand(e,true); hit=true; break; }
         var gy2=H(e.x,e.z);
         if(e.y<gy2-0.05||solidAt(e.x,e.z,e.y-gy2)){ if(e.aoe) bigLand(e); else landShot(e,e.y<gy2-0.05); hit=true; break; }
       }
@@ -1180,6 +1198,10 @@ function pushShot(e){
       if(Math.random()<0.6) burst(x,y,z,1,[1.0,0.5,0.15],{up:0.5,spread:0.5,size:0.18,life:0.4,grav:-1}); }
     return;
   }
+  if(e.proj==='web'){                   // a gob of spider silk
+    var mw=mat(); m4trs(mw,x,y-0.3,z,G.t*5,G.t*3,0,0.6,0.6,0.6); DRAW.push(['blobR',mw,[0.92,0.92,0.95]]);
+    return;
+  }
   if(e.proj==='sting'){                 // a wasp's stinger: short, dark, gold-tipped
     DRAW.push(['box',axisMat(x,y,z,ux,uy,uz,vx,0,vz,-0.42,0.06,0.42,0.06),[0.14,0.11,0.08]]);
     DRAW.push(['cone',axisMat(x,y,z,ux,uy,uz,vx,0,vz,0,0.10,0.18,0.10),[0.95,0.78,0.25]]);
@@ -1360,12 +1382,14 @@ function drawHUD(){
   // enemy health bars
   for(var k=0;k<G.ents.length;k++){
     var e=G.ents[k];
-    if((!FOE[e.kind]&&e.kind!=='cocoon'&&e.kind!=='ally')||e.hp>=e.maxHp||e.boss) continue;
+    if((!FOE[e.kind]&&e.kind!=='cocoon'&&e.kind!=='ally')||(e.hp>=e.maxHp&&!e.elite)||e.boss||e.mini) continue;
     var sp=project(e.x,e.y+(e.kind==='wasp'?2.7:2.3)*(e.scale||1),e.z); if(!sp) continue;
     var w=Math.max(22,40-sp.d*0.25);
     hx.fillStyle='rgba(0,0,0,.55)'; hx.fillRect(sp.x-w/2-1,sp.y-1,w+2,6);
-    hx.fillStyle=(e.kind==='ally')?'#7fbf5a':(e.kind==='cocoon'?'#cfe8e8':'#d6584a');
+    hx.fillStyle=(e.kind==='ally')?'#7fbf5a':(e.kind==='cocoon'?'#cfe8e8':(e.elite?'#ffc84a':'#d6584a'));
     hx.fillRect(sp.x-w/2,sp.y,w*Math.max(0,e.hp/e.maxHp),4);
+    if(e.elite&&sp.d<30){ hx.font='600 11px Georgia,serif'; hx.fillStyle='rgba(0,0,0,.6)'; hx.fillText(e.name,sp.x+1,sp.y-3);
+      hx.fillStyle='#ffd76a'; hx.fillText(e.name,sp.x,sp.y-4); }
   }
   // status panel
   var P=panelGeom(), UI=P.UI, pad=P.x, bx=P.x+P.ins, by=P.y+P.ins, bw=P.bw;
@@ -1567,7 +1591,7 @@ function drawHUD(){
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
     var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot';
-    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   M sound';
+    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   L journal   ·   M sound';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
       hx.textAlign='center'; hx.font='600 12.5px Georgia,serif';
@@ -1649,7 +1673,7 @@ function titleScreen(){
     (G.best?'<p class="hint">Best: level '+G.best+'</p>':'')+
     (DESKTOP
       ? '<p class="hint"><b>Laptop:</b> WASD to move · move the mouse to look · E or left-click strike · F or right-click shoot<br>'+
-        'Space jump · Shift dash · Q potion · Tab skills · M sound · scroll to zoom · Esc frees the cursor</p>'
+        'Space jump · Shift dash · Q potion · Tab skills · L journal · M sound · scroll to zoom · Esc frees the cursor</p>'
       : '<p class="hint"><b>Phone:</b> drag the left side to move, the right side to look, buttons to fight.<br>'+
         'Your hunter swings on her own when something gets close.</p>'));
   document.getElementById('make').onclick=makeScreen;
@@ -1690,7 +1714,7 @@ function makeScreen(){
 function startRun(sv){
   if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; }
   else { G.build.skills={}; G.build.points=0; G.build.gear={w:0,a:0}; if(!G.build.diff) G.build.diff='normal'; }
-  wildLoad(sv&&sv.wild); CAVEENV=null;
+  wildLoad(sv&&sv.wild); CAVEENV=null; WILD.lore.wood=1;
   G.player=null; recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
   homeReset();
@@ -1740,9 +1764,11 @@ function skillScreen(flash){
     '<div class="stat"><span>Lost gnomes found</span><b>'+gnomeCount()+' / '+GNOMES.length+'</b></div>'+
     '<div class="skills">'+rows+'</div>'+
     '<button class="btn" id="close">Back to the wood</button>'+
+    '<button class="btn alt" id="jrnl">Journal — '+loreCount()+' of '+LORE.length+' pages'+(G.loreNew?' (new!)':'')+'</button>'+
     '<button class="btn alt" id="diff">Difficulty: '+DF().n+' — tap to change</button>'+
     '<button class="btn alt" id="snd2">'+sndLabel()+'</button>');
   document.getElementById('snd2').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
+  document.getElementById('jrnl').onclick=function(){ journalScreen(function(){ skillScreen(); }); };
   document.getElementById('diff').onclick=function(){
     var i=DIFF_ORDER.indexOf(G.build.diff||'normal'); G.build.diff=DIFF_ORDER[(i+1)%DIFF_ORDER.length];
     this.textContent='Difficulty: '+DF().n+' — tap to change'; saveGame(); };
@@ -1808,6 +1834,7 @@ function keeperScreen(say){
   var full=deployed()>=S.allies;
   opts.push({id:'hire',  t:'Hire a companion', d:full?'Your company is full ('+deployed()+' of '+S.allies+')':'Blades for coin ('+deployed()+' of '+S.allies+' in your company)', off:full});
   if(!WILD.torch) opts.push({id:'torch', t:'Buy a torch — '+TORCH_PRICE+' ◉', d:p.coins<TORCH_PRICE?'Not enough coin':'For the Glimmer Cave under the Dragon\'s Crag', off:p.coins<TORCH_PRICE});
+  opts.push({id:'story', t:'Ask for a story', d:'Bram knows the wood\'s old tales — and a few of his own', off:false});
   if(!b) opts.push({id:'work', t:'Ask for work', d:'Bram always has a job going', off:false});
   else if(b.got>=b.n){ var rw=bountyReward(b); opts.push({id:'claim', t:'Collect your bounty', d:'+'+rw.coins+' ◉ and +'+rw.xp+' XP', off:false, gold:true}); }
   else opts.push({id:'none', t:'Bounty: '+b.def.t.replace('{n}',b.n), d:'Progress '+b.got+' of '+b.n, off:true});
@@ -1837,6 +1864,7 @@ function keeperDo(id){
     if(WILD.torch||p.coins<TORCH_PRICE) return;
     p.coins-=TORCH_PRICE; WILD.torch=true; sfx('pickup'); saveGame();
     keeperScreen('There. Pitch-soaked, burns for days. The cave\'s in the west face of the crag — and whatever glitters in there, I want to hear about it.');
+  } else if(id==='story'){ var st=bramStory(); sfx('pickup'); keeperScreen(st);
   } else if(id==='hire'){ hireScreen(); }
   else if(id==='gear'){ gearScreen(); }
   else if(id==='work'){
@@ -2017,6 +2045,7 @@ addEventListener('keydown',function(e){
   if(e.key==='q'||e.key==='Q') usePotion();
   if(e.key==='c'||e.key==='C'||e.key==='Shift') IN.dash=true;
   if(DEBUG&&(e.key==='i'||e.key==='I')) SHOWDBG=!SHOWDBG;
+  if((e.key==='l'||e.key==='L')&&!e.repeat){ if(G.state==='play') journalScreen(); else if(G.state==='skills') menuClose(); }
   if(e.key==='e'||e.key==='E'){ IN.attack=true; IN.atkBuf=0.45; }
   setMode(true);
   if(e.key==='Tab'){ e.preventDefault(); if(G.state==='play') skillScreen(); else if(G.state==='skills') menuClose(); }

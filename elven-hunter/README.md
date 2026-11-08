@@ -19,8 +19,9 @@ their hive, cross little mushrooms hop about the meadows, and your kin hang in c
 waiting to be cut down. Free them and they follow you and fight. Bram keeps the tavern;
 from level 10 an abandoned cottage can be bought, fixed up and farmed. The standing stones
 wake while you hunt and can call up a boss; a dragon sleeps on the Dragon's Crag; and the
-Glimmer Cave under it opens to anyone with a torch. Pick Easy, Normal or Hard. Progress is
-saved in the browser.
+Glimmer Cave under it opens to anyone with a torch. Five named mini-bosses guard their
+homes, golden champions roam on Normal and Hard, and a journal fills with the wood's story
+as you explore. Pick Easy, Normal or Hard. Progress is saved in the browser.
 
 ---
 
@@ -46,6 +47,7 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 | Dash | `Shift` *(unlocked by a skill; rolls the way you are pushing)* |
 | Drink a potion | `Q` |
 | Skills | `Tab` |
+| Journal | `L` (or the button on the skills screen) |
 | Sound | `M` cycles all on → effects only → off (also a button on the title and skills screens) |
 | Zoom | Scroll wheel |
 
@@ -78,6 +80,8 @@ src/
   home.js     the cottage, its farm, and saving / continuing
   wild.js     difficulty, mushroom grumps, the Stone Warden, the dragon, the Glimmer
               Cave and its torch, butterflies, rabbits, toadstools and gnomes
+  legends.js  the journal (31 pages of lore), waystones, Bram's tales, the five
+              mini-bosses and the golden champions
   audio.js    synthesised sound effects and the music loop (Web Audio)
   game.js     state, input, camera, combat, AI, allies, skills, HUD, particles, telemetry
 assets/       compressed models (*.glb), the forest (nature.json), music.mp3 — all CC0,
@@ -118,6 +122,7 @@ strike button, which reads **TALK** beside him). He offers:
   mage, druid or dwarf), 45–70 coins, up to your company size.
 - **Gear**: five tiers of weapon (+15% damage each) and armour (+20 health and 6% less
   damage each), 35–360 coins a tier.
+- **A story**: Bram has four tales of his own; each goes in your journal.
 - **A torch**: 60 coins, once. You need it to go into the Glimmer Cave.
 - **Bounties**: slay spiders, drive off snakes, swat wasps, squash mushroom grumps, free
   captives or, from level 3, slay a giant spider. Progress shows in the status panel; come back for coins and XP.
@@ -197,6 +202,37 @@ live at the top of `src/home.js`.
   you sky-high, more flowers, and **seven lost garden gnomes** hidden about the wood. Each
   pays a little and has something to say; find all seven for a bonus from Bram. Your
   count is on the skills screen.
+
+### Legends (`src/legends.js`)
+
+- **The journal** (`L`, or from the skills screen). Thirty-one pages: the story of the
+  Elderwood and the Long Weaving, every landmark, every named foe, Bram's tales and five
+  carved **waystones** set about the wood (walk up and `E` / **READ**). Pages fill as you
+  discover, read, listen and kill; empty pages carry a hint where to look.
+- **Mini-bosses**, each guarding its home with a trick, each back eight minutes after it
+  falls, each paying ~110 coins, a potion, 300 XP and a journal page:
+
+  | | Where | Trick |
+  |---|---|---|
+  | Vessa, Queen of the Hollow | the Queen's Hollow | spits webs that slow you; calls spiderlings |
+  | The Hive Mother | the Wasp Hive | fans of five stings; calls her daughters |
+  | Old Coil, the River Adder | the river's far bank | strikes from 12 units away; his bite burns |
+  | King Puffcap | the meadow west of the glade | stinging spore clouds; calls his court |
+  | The Pale Matron | the deepest den of the Glimmer Cave | webs and brood, in the dark |
+
+  Run far enough and they go home and heal.
+- **Champions.** Golden, 40% bigger, three times the health and harder-hitting, named over
+  their health bar. Five roam from the start on Normal (ten on Hard, none on Easy), and new
+  packs may bring one along. They pay extra and often drop a potion.
+- **The dragon, rebuilt.** Cinderwing now has obsidian scales with ember-lit belly seams, a
+  long S-curved neck, a horned head with teeth and a jaw that opens (his throat glows before
+  he breathes), smoke from his nostrils, and true bat wings: two membrane panels each with
+  finger bones and a scalloped edge, folded over his back on the ground and beating in the
+  air. Below a third of his health he **enrages**: faster, longer breath, fireballs in threes.
+- **Armour you can see.** Each armour tier hangs more on the hunter's bones: leather
+  pauldrons; iron; steel with a breastplate, bracers and knee guards; elvensteel with a leaf
+  circlet; and at **Legendary**, gold plate with spikes, a jewelled crown and a glowing chest
+  gem, with gold motes drifting off you. Weapons glow at the top two tiers.
 
 ### Characters
 
@@ -313,7 +349,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-121 assertions run the actual game in headless Chromium with software WebGL and check
+137 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames

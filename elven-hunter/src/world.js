@@ -41,9 +41,12 @@ var BOUNCE=[];
   [[24,-12],[-52,-30],[58,22],[-110,8],[100,-20],[-40,96],[30,-100]].forEach(function(p){ BOUNCE.push({x:p[0],z:p[1]}); });
 })();
 var FAIRYRING={x:-18,z:19};
+/* waystones: old carved stones with something written on them (see legends.js) */
+var WAYSTONES=[{id:'way1',x:10,z:-12},{id:'way2',x:-2,z:-58},{id:'way3',x:52,z:-40},{id:'way4',x:0,z:76},{id:'way5',x:-47,z:-26}];
 /* clearings kept free of trees: landmark grounds and the paths */
 var CLEAR=[[0,-34,20],[-72,48,15],[86,-56,15],[-88,-78,11],[35,-60,20],[-18,19,8]];
 BOUNCE.forEach(function(b){ CLEAR.push([b.x,b.z,2.6]); });
+WAYSTONES.forEach(function(w){ CLEAR.push([w.x,w.z,3]); });
 function pathDist(x,z){            // distance to the nearest path: glade -> tavern door, tavern -> cottage
   var t=clamp01((z-4)/(-29-4)), px=0+1.4*t*t, pz=4+(-29-4)*t;
   return Math.min(Math.hypot(x-px,z-pz), segDist(x,z,7,-29,30.5,-54.5));
@@ -668,6 +671,16 @@ function buildCrag(m){
   LANDMARKS.push({x:M.x,z:M.z,r:5,name:'The Glimmer Cave',kind:'cave'});
 }
 
+function buildWaystones(m){
+  for(var i=0;i<WAYSTONES.length;i++){ var w=WAYSTONES[i], y=H(w.x,w.z), ry=i*1.3;
+    addMesh(m,boxMesh([0.46,0.45,0.42],0.78),w.x,y-0.3,w.z,ry,0.9,2.6,0.55);
+    addMesh(m,boxMesh([0.30,0.46,0.28]),w.x,y+2.05,w.z,ry,0.75,0.25,0.5);          // moss on its shoulders
+    var c=Math.cos(ry), s2=Math.sin(ry);
+    addMesh(m,boxMesh([0.62,0.80,0.72]),w.x+s2*0.29,y+0.9,w.z+c*0.29,ry,0.42,0.9,0.04);   // the carved face, faintly pale
+    collCircle(w.x,w.z,0.55);
+    w.y=y;
+  }
+}
 /* toadstools big enough to bounce on */
 function buildBounce(m){
   for(var i=BOUNCE.length-1;i>=0;i--){ var b=BOUNCE[i], y=H(b.x,b.z);

@@ -13,6 +13,8 @@ function initParts(){
   reg('cone8',coneMesh([1,1,1],12));
   reg('tube',coneMesh([1,1,1],10,0.5,0.42));
   reg('disc',discMesh(14));
+  reg('wingIn',wingMesh(0));
+  reg('wingOut',wingMesh(1));
   reg('sky',skyMesh([0.62,0.70,0.68],[0.30,0.45,0.52],[0.20,0.25,0.22],20));
 }
 
@@ -205,6 +207,9 @@ function shroomRig(out,e,t){
   var sp=[[0.22,0.18],[-0.24,0.12],[0.04,-0.28],[-0.08,0.30],[0.30,-0.12]];
   for(var i=0;i<sp.length;i++)
     out.push(['blob',sp[i][0]*s,(1.34+hop/s)*s,sp[i][1]*s,0,0,0, 0.22*s,0.12*s,0.22*s,L.spot]);
+  if(e.crown){                                   // King Puffcap's crown (a bottle cap, frankly)
+    out.push(['tube',0,(1.38+hop/s)*s,0,0,0,0,0.55*s,0.22*s,0.55*s,[0.95,0.78,0.25]]);
+    for(var c=0;c<6;c++){ var ca=c/6*6.283; out.push(['cone',Math.sin(ca)*0.24*s,(1.58+hop/s)*s,Math.cos(ca)*0.24*s,0,0,0,0.10*s,0.20*s,0.10*s,[0.95,0.78,0.25]]); } }
   if(typeof LOD!=='undefined'&&LOD) return;
   // angry little face, and stubby feet
   out.push(['box',-0.14*s,0.52*s+hop,0.30*s,0,0, 0.35,0.12*s,0.05*s,0.04*s,[0.08,0.06,0.05]]);
@@ -248,60 +253,138 @@ function golemRig(out,e,t){
   out.push(['blob',-0.6*s,y0+3.0*s,-0.3*s,0,0,0,0.22*s,0.16*s,0.22*s,[0.95,0.70,0.85]]);
   out.push(['blob', 0.7*s,y0+2.95*s,-0.5*s,0,0,0,0.20*s,0.14*s,0.20*s,[0.98,0.92,0.45]]);
 }
-/* the dragon: long neck, wings that fold on the ground and beat in the air */
+/* the dragon. A long S-necked, horned head with a jaw that opens, ember-lit belly
+   seams, a spade-tipped tail, and proper bat wings (two membrane parts, built in
+   wingMesh, with finger bones) that fold over his back on the ground and beat in
+   the air. */
+/* where a local offset lands under m4trs's rotation (Ry * Rx * Rz) */
+function trsv(rx,ry,rz,x,y,z){
+  var cx=Math.cos(rx),sx=Math.sin(rx),cy=Math.cos(ry),sy=Math.sin(ry),cz=Math.cos(rz),sz=Math.sin(rz);
+  var r00=cy*cz+sy*sx*sz, r01=cx*sz, r02=-sy*cz+cy*sx*sz;
+  var r10=-cy*sz+sy*sx*cz, r11=cx*cz, r12=sy*sz+cy*sx*cz;
+  var r20=sy*cx, r21=-sx, r22=cy*cx;
+  return [r00*x+r01*y+r02*z, r10*x+r11*y+r12*z, r20*x+r21*y+r22*z];
+}
+/* a wing panel, flat in y=0, running out along +x, seen from both sides.
+   part 0: shoulder to elbow, with the membrane back to the flank.
+   part 1: elbow to tip: four fingers and a scalloped trailing edge. */
+function wingMesh(part){
+  var m=new MB(), MEM=[1,1,1], BONE=[0.38,0.30,0.30];
+  function tri(a,b,c,col,y){
+    var A=[a[0],y,a[1]],B=[b[0],y,b[1]],C=[c[0],y,c[1]], up=[0,1,0], dn=[0,-1,0];
+    m.triV(A,C,B,up,up,up,col,col,col); m.triV(A,B,C,dn,dn,dn,col,col,col);
+  }
+  function bone(a,b,w){                  // a thin darker strip, a hair above and below the skin
+    var dx=b[0]-a[0], dz=b[1]-a[1], l=Math.hypot(dx,dz)||1, nx=-dz/l*w, nz=dx/l*w;
+    var p1=[a[0]+nx,a[1]+nz],p2=[b[0]+nx*0.4,b[1]+nz*0.4],p3=[b[0]-nx*0.4,b[1]-nz*0.4],p4=[a[0]-nx,a[1]-nz];
+    [0.02,-0.02].forEach(function(y){ tri(p1,p2,p3,BONE,y); tri(p1,p3,p4,BONE,y); });
+  }
+  if(part===0){
+    var c=[0.6,-0.7], pts=[[0,0.25],[2.2,0.42],[2.2,-0.25],[1.55,-1.35],[0.75,-2.15],[0,-2.45]];
+    for(var i=0;i<pts.length-1;i++) tri(c,pts[i],pts[i+1],MEM,0);
+    tri(c,pts[pts.length-1],pts[0],MEM,0);
+    bone([0,0.25],[2.2,0.42],0.17);
+  } else {
+    var w=[0.35,0.1], tips=[[3.5,0.35],[3.05,-1.05],[2.15,-1.95],[0.95,-2.05],[0,-0.3]];
+    for(var j=0;j<tips.length-1;j++){
+      var A=tips[j], B=tips[j+1], M=[(A[0]+B[0])/2, (A[1]+B[1])/2];
+      M=[M[0]+(w[0]-M[0])*0.22, M[1]+(w[1]-M[1])*0.22];          // the scallop between two fingers
+      tri(w,A,M,MEM,0); tri(w,M,B,MEM,0);
+    }
+    tri(w,tips[tips.length-1],[0,0.2],MEM,0);
+    bone([0,0.2],w,0.15);
+    for(var k=0;k<4;k++) bone(w,tips[k],k===0?0.12:0.08);
+  }
+  return m;
+}
 function dragonRig(out,e,t){
   var s=e.scale||1, L=e.look, ph=(e.walkPhase||0), mv=Math.min(1,(e.speed||0)/4), fly=e.flyK||0;
-  var sleep=e.state==='sleep'?1:0;
-  var bob=fly?Math.sin(t*3.2)*0.25*s:0;
-  var by=(1.7-sleep*0.7)*s+bob;
-  var breath=e.breathT>0||e.wind>0&&e.windKind==='breath';
-  var jaw=breath?0.55:(e.wind>0?0.35:0.05);
-  // body and belly
-  out.push(['blobR',0,by,0, fly*0.12,0,0, 2.4*s,2.0*s,4.2*s,L.body]);
-  out.push(['blob',0,by-0.45*s,0.3*s, fly*0.12,0,0, 1.9*s,1.3*s,3.4*s,L.belly]);
-  // legs (tucked up in flight)
-  for(var lg=0;lg<4;lg++){ var sd=(lg&1)?1:-1, fz=(lg<2?1.2:-1.2)*s, sw=Math.sin(ph+lg*1.6)*0.5*mv*(1-fly);
-    out.push(['limbT',sd*1.0*s,by-0.2*s,fz, sw-fly*1.1,0,sd*0.25, 0.55*s,(1.4-sleep*0.6)*s,0.55*s,L.body]);
-    if(!(typeof LOD!=='undefined'&&LOD)) out.push(['blob',sd*1.05*s,by-(1.5-sleep*0.6)*s+fly*1.0*s,fz+0.25*s+fly*0.6*s,0,0,0,0.6*s,0.35*s,0.8*s,L.dark]); }
-  // neck: a chain of blobs rising forward to the head
-  var sway=Math.sin(t*1.3)*0.3*(1-sleep), nk=5, hx=0, hy=by, hz=0;
-  var look=e.headLift||0;
-  for(var i=1;i<=nk;i++){ var k=i/nk;
-    hx=Math.sin(sway*k)*0.6*s*k; hy=by+(0.5+k*(1.7-sleep*1.9+look))*s; hz=(1.9+k*2.2)*s;
-    out.push(['blobR',hx,hy,hz,0,0,0,(1.15-k*0.35)*s,(1.15-k*0.35)*s,(1.25-k*0.35)*s,i&1?L.body:L.dark]); }
-  // head, snout, jaw, horns, eyes
-  var hz2=hz+0.9*s;
-  out.push(['blobR',hx,hy+0.2*s,hz2,0,0,0,1.1*s,0.85*s,1.5*s,L.body]);
-  out.push(['box',hx,hy+0.05*s,hz2+0.9*s,-0.08,0,0,0.75*s,0.45*s,1.2*s,L.body]);
-  out.push(['box',hx,hy-0.30*s,hz2+0.6*s,jaw,0,0,0.65*s,0.20*s,1.1*s,L.dark]);
-  out.push(['cone',hx-0.35*s,hy+0.55*s,hz2-0.3*s,-1.0,0,0.25,0.22*s,1.0*s,0.22*s,L.horn]);
-  out.push(['cone',hx+0.35*s,hy+0.55*s,hz2-0.3*s,-1.0,0,-0.25,0.22*s,1.0*s,0.22*s,L.horn]);
-  var eye=sleep?L.dark:L.eye;
-  out.push(['box',hx-0.36*s,hy+0.38*s,hz2+0.45*s,0,0,0,0.18*s,0.12*s,0.25*s,eye]);
-  out.push(['box',hx+0.36*s,hy+0.38*s,hz2+0.45*s,0,0,0,0.18*s,0.12*s,0.25*s,eye]);
-  e.mouth={x:hx,y:hy,z:hz2+1.5*s};
-  // tail: a tapering chain that swishes
-  var tx=0, ty=by, tz=-2.0*s;
-  for(var j=1;j<=7;j++){ var q=j/7, sw2=Math.sin(t*1.8-q*2.4)*0.9*q*s;
-    tx=sw2; ty=by-q*1.1*s+fly*q*0.6*s; tz=(-2.0-q*5.2)*s;
-    out.push(['blobR',tx,ty,tz,0,0,0,(0.95-q*0.7)*s,(0.85-q*0.6)*s,(1.1-q*0.6)*s,j&1?L.body:L.dark]);
-    if(j<6&&!(typeof LOD!=='undefined'&&LOD)) out.push(['cone',tx,ty+(0.4-q*0.3)*s,tz,0,0,0,0.25*s,(0.6-q*0.4)*s,0.25*s,L.horn]); }
-  out.push(['cone',tx,ty,tz-0.5*s,-1.57,0,0,0.7*s,0.9*s,0.12*s,L.horn]);
-  // spines along the back
-  for(var b=0;b<5;b++) out.push(['cone',0,by+0.95*s,(1.4-b*0.75)*s,0,0,0,0.30*s,0.7*s,0.30*s,L.horn]);
-  // wings: two panels and a bony leading edge each; folded over the back on the
-  // ground, beating in the air. (A box turned by -sd*al about z points along
-  // (sd*cos al, sin al), so al is how far the wing is raised.)
-  var flap=fly?Math.sin(t*(e.state==='takeoff'?9:5.5))*0.7:0, fold=fly?0:1;
-  for(var sd2=-1;sd2<=1;sd2+=2){
-    var al=fold?0.45:(0.2+flap), span=(fold?2.3:4.8)*s, sx=sd2*0.9*s, wy=by+0.9*s;
-    var cxw=sx+sd2*Math.cos(al)*span*0.5, cyw=wy+Math.sin(al)*span*0.5;
-    out.push(['box',cxw,cyw,-0.4*s, 0,0,-sd2*al, span,0.10*s,(fold?1.7:3.6)*s, L.wing]);
-    out.push(['box',cxw,cyw,1.25*s, 0,0,-sd2*al, span,0.26*s,0.26*s, L.dark]);
-    var al2=fold?al+0.55:al+flap*0.5-0.1, ex=sx+sd2*Math.cos(al)*span, ey=wy+Math.sin(al)*span;
-    var ox=ex+sd2*Math.cos(al2)*span*0.42, oy=ey+Math.sin(al2)*span*0.42;
-    out.push(['box',ox,oy,-0.7*s, 0,0,-sd2*al2, span*0.84,0.08*s,(fold?1.3:2.8)*s, L.wing]);
-    out.push(['box',ox,oy,0.85*s, 0,0,-sd2*al2, span*0.84,0.22*s,0.22*s, L.dark]);
+  var LOW=(typeof LOD!=='undefined'&&LOD);
+  var sleep=e.state==='sleep'||e.state==='settle'?1:0, hot=e.enraged?1:0;
+  var breath=e.breathT>0, wind=e.wind>0?(1-e.wind/(e.windFull||1)):0, bite=e.windKind==='bite';
+  var bob=fly?Math.sin(t*3.0)*0.3*s:Math.sin(t*1.4)*0.05*s;
+  var by=(1.75-sleep*0.85)*s+bob+fly*0.3*s;
+  var glowK=0.75+0.25*Math.sin(t*(hot?9:3)), ember=[Math.min(1,L.ember[0]*glowK*(1+hot*0.3)),L.ember[1]*glowK,L.ember[2]*glowK];
+  var tiltB=fly?-0.12:0;
+  function P(k,x,y,z,rx,ry,rz,sx,sy,sz,c){ out.push([k,x,y,z,rx,ry,rz,sx,sy,sz,c]); }
+  // body: a deep chest and lean haunches, a pale armoured belly with glowing seams
+  P('blobR',0,by-0.95*s,0.9*s, tiltB,0,0, 2.35*s,2.0*s,2.7*s,L.body);
+  P('blobR',0,by-0.85*s,-1.35*s, tiltB,0,0, 2.0*s,1.75*s,2.6*s,L.body);
+  P('blob',0,by-1.20*s,-0.1*s, tiltB,0,0, 1.75*s,1.05*s,3.9*s,L.belly);
+  if(!LOW) for(var sd0=-1;sd0<=1;sd0+=2) for(var v=0;v<3;v++)
+    P('box',sd0*0.78*s,by-0.55*s,(1.2-v*1.15)*s, 0,sd0*0.08,sd0*0.5, 0.08*s,0.55*s,0.55*s,ember);
+  // spine plates from the shoulders back along the tail
+  for(var b=0;b<6;b++) P('cone',0,by+0.78*s-(b>3?(b-3)*0.15*s:0),(1.7-b*0.75)*s, -0.25,0,0, 0.42*s,(0.95-b*0.08)*s,0.14*s,L.horn);
+  // legs: haunch, shin, clawed foot; tucked up in flight, folded under when asleep
+  for(var lg=0;lg<4;lg++){ var sd=(lg&1)?1:-1, front=lg<2, fz=(front?1.35:-1.55)*s, sw=Math.sin(ph+lg*1.6)*0.55*mv*(1-fly);
+    var tuck=fly*1.2+sleep*1.1, hip=[sd*1.05*s,by-0.75*s,fz];
+    P('blobR',hip[0],hip[1]-0.35*s,hip[2], 0,0,0, 0.85*s,1.15*s,1.05*s,L.body);
+    var shin=(1.25-sleep*0.55)*s, srx=sw-tuck*(front?-0.6:1);
+    P('limbT',hip[0],hip[1]-0.25*s,hip[2], srx,0,sd*0.1, 0.5*s,shin,0.5*s,L.dark);
+    if(!LOW){ var fx=hip[0], fy=hip[1]-0.25*s-Math.cos(srx)*shin, fzz=hip[2]+Math.sin(srx)*shin;
+      P('blob',fx,fy-0.12*s,fzz+0.15*s,0,0,0,0.62*s,0.32*s,0.85*s,L.dark);
+      for(var cl=-1;cl<=1;cl++) P('cone',fx+cl*0.2*s,fy-0.05*s,fzz+0.55*s,-1.3,0,0,0.12*s,0.38*s,0.12*s,L.horn); }
+  }
+  // the neck: an S-curve from the chest up to the head. Asleep it lies along the
+  // ground; winding up a breath it draws back, then thrusts the head forward.
+  var sway=Math.sin(t*1.1)*0.35*(1-sleep), lift=(e.headLift===undefined?1:e.headLift);
+  var draw=(e.windKind==='breath'&&e.wind>0)?wind:0, thrust=breath?1:(bite&&e.wind>0?wind:0);
+  var N=8, hx=0, hy=by, hz=0, prev=null;
+  for(var i=1;i<=N;i++){ var k=i/N;
+    var up=(sleep?(-0.55*k):(2.1*k+Math.sin(k*Math.PI)*0.35)*(0.35+0.65*lift))-draw*0.9*k+thrust*(-0.5*k);
+    hx=Math.sin(sway*k*1.5)*0.9*s*k; hy=by+0.25*s+up*s; hz=(2.15+k*(3.0+thrust*0.9-draw*0.8)+sleep*k*0.3)*s;
+    var r=(1.08-k*0.48)*s;
+    P('blobR',hx,hy-r*0.5,hz,0,0,0,r*1.05,r,r*1.15,L.body);
+    if(!LOW&&i<N) P('cone',hx,hy+r*0.35,hz-0.1*s,-0.35,0,0,0.3*s,(0.6-k*0.25)*s,0.12*s,L.horn);
+    if(!LOW) P('blob',hx,hy-r*0.85,hz+0.15*s,0,0,0,r*0.75,r*0.5,r*0.9,L.belly);
+  }
+  // the head: a horned skull, a long snout, a jaw that drops, teeth, burning eyes
+  var hd=hz+0.55*s, hh=hy-0.15*s, look=e.headPitch||0, jaw=breath?0.75:(e.wind>0?0.25+wind*0.4:(sleep?0:0.08+Math.max(0,Math.sin(t*0.7))*0.05));
+  P('blobR',hx,hh-0.45*s,hd,look,0,0,1.15*s,0.95*s,1.35*s,L.body);
+  P('cone',hx,hh+0.05*s,hd+0.45*s,-1.57+look,0,0,0.95*s,1.85*s,0.6*s,L.body);              // snout
+  P('cone',hx,hh-0.30*s,hd+0.35*s,-1.57-jaw+look,0,0,0.80*s,1.65*s,0.34*s,L.dark);          // jaw
+  var thr=breath||e.windKind==='breath'&&e.wind>0;
+  if(thr) P('blob',hx,hh-0.35*s,hd+0.55*s,0,0,0,0.6*s,0.45*s,0.9*s,[1.0,0.85,0.35]);       // the fire in his throat
+  if(!LOW){
+    for(var tq=0;tq<4;tq++) for(var sd2=-1;sd2<=1;sd2+=2)
+      P('cone',hx+sd2*(0.32-tq*0.06)*s,hh-0.02*s,hd+(0.55+tq*0.32)*s,3.14,0,0,0.09*s,0.22*s,0.09*s,[0.96,0.94,0.86]);
+    for(var sd3=-1;sd3<=1;sd3+=2){
+      P('cone',hx+sd3*0.42*s,hh+0.30*s,hd-0.35*s, 1.05,0,sd3*-0.35, 0.30*s,1.75*s,0.30*s,L.horn);      // great horns, swept back
+      P('cone',hx+sd3*0.58*s,hh-0.05*s,hd-0.55*s, 1.35,0,sd3*-0.9, 0.18*s,0.85*s,0.18*s,L.horn);
+      P('cone',hx+sd3*0.55*s,hh-0.30*s,hd-0.10*s, 1.57,sd3*0.5,0, 0.55*s,0.75*s,0.06*s,L.wing);        // cheek frills
+      P('box',hx+sd3*0.36*s,hh+0.12*s,hd+0.25*s,0.35,0,sd3*0.25,0.34*s,0.12*s,0.42*s,L.dark);          // brow ridge
+    }
+  }
+  var eye=sleep?L.dark:(hot?[1.0,0.35,0.15]:L.eye);
+  P('box',hx-0.34*s,hh+0.02*s,hd+0.30*s,0,0,0,0.20*s,0.12*s,0.22*s,eye);
+  P('box',hx+0.34*s,hh+0.02*s,hd+0.30*s,0,0,0,0.20*s,0.12*s,0.22*s,eye);
+  e.mouth={x:hx,y:hh-0.2*s,z:hd+2.1*s};
+  e.nose={x:hx,y:hh+0.25*s,z:hd+1.9*s};
+  // the tail: long, swishing, a spade at the end
+  var tx=0, ty=by, tz=-2.8*s, TN=LOW?5:10;
+  for(var j=1;j<=TN;j++){ var q=j/TN, sw3=Math.sin(t*(fly?2.6:1.5)-q*2.6)*1.3*q*s*(1-sleep*0.6)+sleep*q*q*2.5*s;
+    tx=sw3; ty=by-0.75*s-q*(0.7-fly*0.5)*s+(sleep?-0.25*s*q:0); tz=(-2.8-q*6.4+sleep*q*q*1.5)*s;
+    var rr=(0.85-q*0.62)*s;
+    P('blobR',tx,ty-rr*0.5,tz,0,0,0,rr*1.1,rr,rr*1.4,j&1?L.body:L.dark);
+    if(!LOW&&j%2===0) P('cone',tx,ty+rr*0.3,tz,-0.4,0,0,0.25*s,(0.5-q*0.3)*s,0.1*s,L.horn); }
+  P('cone',tx,ty-0.15*s,tz-0.45*s,-1.57,0,0,0.95*s,0.9*s,0.08*s,L.horn);
+  P('cone',tx,ty-0.15*s,tz-0.25*s,1.57,0,0,0.95*s,0.5*s,0.08*s,L.horn);
+  // wings: roll raises them (a box turned by -sd*al about z points along (sd cos al, sin al));
+  // yaw sweeps them back. The outer panel hinges at the elbow.
+  var W=1.05*s, flapW=e.state==='takeoff'?8.5:(e.state==='land'?6:4.6);
+  var flap=Math.sin(t*flapW), beat=fly?1:0;
+  for(var sd4=-1;sd4<=1;sd4+=2){
+    var al, sweep, al2, sweep2;
+    if(beat){ al=0.18+flap*0.78; sweep=0.05; al2=al+flap*0.35-0.05; sweep2=0.05; }
+    else if(sleep){ al=0.2; sweep=0.95; al2=al+2.75; sweep2=0.95; }
+    else { var alert=e.wind>0||breath?0.4:0; al=0.95+alert+Math.sin(t*1.2)*0.04; sweep=0.55-alert*0.4; al2=al+2.25-alert*0.9; sweep2=sweep; }
+    var sh=[sd4*0.95*s,by+0.55*s,1.0*s];
+    P('wingIn',sh[0],sh[1],sh[2],0,-sd4*sweep,-sd4*al,sd4*W,W,W,L.wing);
+    var el=trsv(0,-sd4*sweep,-sd4*al,sd4*2.2*W,0,0.42*W);
+    P('wingOut',sh[0]+el[0],sh[1]+el[1],sh[2]+el[2],0,-sd4*sweep2,-sd4*al2,sd4*W,W,W,L.wing);
+    if(!LOW){ var tip=trsv(0,-sd4*sweep2,-sd4*al2,sd4*3.5*W,0,0.35*W);
+      P('cone',sh[0]+el[0]+tip[0],sh[1]+el[1]+tip[1],sh[2]+el[2]+tip[2],-1.2,0,0,0.16*s,0.5*s,0.16*s,L.horn);
+      P('blob',sh[0]+el[0],sh[1]+el[1]-0.15*s,sh[2]+el[2],0,0,0,0.35*s,0.3*s,0.35*s,L.dark); }
   }
 }
 /* ambient life: butterflies, rabbits and the gnomes hiding about the wood */

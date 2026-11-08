@@ -751,6 +751,81 @@ section('Difficulty, bosses, the cave and the gnomes');
   await page.close();
 }
 
+/* ---------------- legends: lore, mini-bosses, champions, armour ---------------- */
+section('Lore, mini-bosses, champions and armour');
+{
+  const page = await open(browser, LAPTOP);
+  await page.evaluate(() => { G.build.diff = 'normal'; startRun(); });
+  await page.waitForTimeout(300);
+  const start = await page.evaluate(() => ({ minis: G.ents.filter((e) => e.mini).map((e) => e.mini), champs: G.ents.filter((e) => e.elite).length,
+    pages: loreCount(), total: LORE.length }));
+  ok('five mini-bosses guard their homes', start.minis.length === 5, start.minis.join(', '));
+  ok('golden champions roam on Normal', start.champs >= 4, `${start.champs} champions`);
+  const easy = await page.evaluate(() => { G.build.diff = 'easy'; startRun(); const n = G.ents.filter((e) => e.elite).length; G.build.diff = 'normal'; startRun(); return n; });
+  ok('but not on Easy', easy === 0);
+  ok('the journal starts with the story of the wood', start.pages === 1 && start.total >= 30, `${start.total} pages to find`);
+
+  const mini = await page.evaluate(() => new Promise((res) => {
+    const q = G.ents.find((e) => e.mini === 'queen'), p = G.player; p.inv = 1e9;
+    p.x = q.x + 6; p.z = q.z; p.y = H(p.x, p.z); q.abT = 0; q.ab2 = 0;
+    const t0 = G.t; let webs = 0;
+    const tick = () => { if (G.ents.some((e) => e.proj === 'web')) webs++;
+      if (G.t - t0 < 2.5) { requestAnimationFrame(tick); return; }
+      const brood = G.ents.filter((e) => e.minion === 'queen').length, c0 = p.coins;
+      hurtEnemy(q, 1e8);
+      res({ brood, webs, paid: p.coins - c0, lore: !!WILD.lore.queen, cd: WILD.minis.queen, big: q.scale }); };
+    tick();
+  }));
+  ok('Vessa spits webs and calls her brood', mini.webs > 0 && mini.brood >= 2, `${mini.brood} spiderlings`);
+  ok('a slain mini-boss pays, writes a journal page, and returns later', mini.paid > 100 && mini.lore && mini.cd > 0, `+${mini.paid} coins`);
+  const champ = await page.evaluate(() => { const e = G.ents.find((x) => x.elite); const c0 = G.player.coins; hurtEnemy(e, 1e8); return { paid: G.player.coins - c0, lore: !!WILD.lore.champions }; });
+  ok('a champion pays extra', champ.paid > 20 && champ.lore, `+${champ.paid} coins`);
+
+  const lore = await page.evaluate(() => new Promise((res) => {
+    const p = G.player, w = WAYSTONES[0]; G.ents = G.ents.filter((e) => !FOE[e.kind] || e.boss);
+    p.x = w.x + 1.6; p.z = w.z; p.y = H(p.x, p.z);
+    const t0 = G.t; const tick = () => { if (G.t - t0 < 0.3) { requestAnimationFrame(tick); return; }
+      const tap = G.talk && G.talk.tap; if (G.talk) G.talk.open(); const read = !!WILD.lore.way1; menuClose();
+      G.state = 'play'; keeperScreen(); keeperDo('story'); const tale = !!WILD.lore.bram1; menuClose();
+      res({ tap, read, tale, pages: loreCount() }); }; tick();
+  }));
+  ok('waystones can be read into the journal', lore.tap === 'READ' && lore.read);
+  ok('Bram tells his stories', lore.tale, `${lore.pages} pages written`);
+  await page.evaluate(() => { G.state = 'play'; journalScreen(); });
+  const jp = await page.evaluate(() => ({ written: document.querySelectorAll('.lp:not(.off)').length, empty: document.querySelectorAll('.lp.off').length, total: LORE.length }));
+  ok('the journal shows written pages and hints for the rest', jp.written === lore.pages && jp.empty === jp.total - lore.pages, `${jp.written} written, ${jp.empty} to find`);
+  await page.evaluate(() => menuClose());
+
+  // armour you can see: more pieces at each tier, gold and glowing at Legendary
+  const armour = await page.evaluate(() => new Promise((res) => {
+    const count = () => { const a = ACTOR_OF.get(G.player); let n = 0; a.root.traverse((o) => { if (o.isMesh && o.geometry && ARMGEO && Object.values(ARMGEO).includes(o.geometry)) n++; }); return { n, glow: a.glow.length }; };
+    const r = {}; const tiers = [0, 1, 3, 5]; let i = 0;
+    const step = () => { if (i >= tiers.length) { res(r); return; } G.build.gear = { w: tiers[i], a: tiers[i] }; recalc();
+      const t0 = G.t; const wait = () => { if (G.t - t0 < 0.2) { requestAnimationFrame(wait); return; } r[tiers[i]] = count(); i++; step(); }; wait(); };
+    step();
+  }));
+  ok('better armour shows on your hunter', armour[0].n === 0 && armour[1].n > 0 && armour[3].n > armour[1].n && armour[5].n > armour[3].n,
+    `pieces by tier: ${[0, 1, 3, 5].map((t) => armour[t].n).join(' / ')}`);
+  ok('legendary armour and weapons shine gold', armour[5].glow > 5, `${armour[5].glow} glowing parts`);
+
+  // the dragon: proper wings and a head that opens its jaws
+  const dragon = await page.evaluate(() => { const d = findKind('dragon'), out = []; d.state = 'ground'; d.breathT = 1; dragonRig(out, d, 1);
+    return { wings: out.filter((r) => r[0] === 'wingIn' || r[0] === 'wingOut').length, parts: out.length, mouth: !!d.mouth }; });
+  ok('the dragon has bat wings, horns, teeth and a jaw', dragon.wings === 4 && dragon.parts > 100 && dragon.mouth, `${dragon.parts} parts`);
+  const enrage = await page.evaluate(() => new Promise((res) => { const d = findKind('dragon'), p = G.player; p.inv = 1e9;
+    p.x = CRAG.x + 2; p.z = CRAG.z + 7; p.y = H(p.x, p.z); d.state = 'ground'; d.hp = d.maxHp * 0.3;
+    const t0 = G.t; const tick = () => { if (G.t - t0 < 0.3) { requestAnimationFrame(tick); return; } res(!!d.enraged); }; tick(); }));
+  ok('wounded, the dragon enrages', enrage);
+
+  const before = await page.evaluate(() => { saveGame(); return loreCount(); });
+  await page.reload(); await page.waitForFunction('window.__ready===true', { timeout: 60000 });
+  await page.click('#cont'); await page.waitForTimeout(300);
+  const kept = await page.evaluate(() => ({ pages: loreCount(), queenDown: WILD.minis.queen > 0 && !G.ents.some((e) => e.mini === 'queen') }));
+  ok('journal and fallen mini-bosses are saved', kept.pages >= before && kept.queenDown, JSON.stringify(kept));
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
+  await page.close();
+}
+
 /* ---------------- rendering budget ---------------- */
 section('Rendering');
 {
