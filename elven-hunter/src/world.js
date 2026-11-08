@@ -21,8 +21,29 @@ var TAVERN={x:0,z:-34,ry:0.5,yard:19,flat:15,h:null};
 /* the old cottage, out past the tavern on a quiet rise (see home.js) */
 var HOUSE={x:35,z:-60,ry:-0.9,yard:17,flat:14,h:null};
 var FLATS=[TAVERN,HOUSE];
+/* the Dragon's Crag: a sheer-sided plateau north of the tavern, one ramp up, a
+   cave in its western face. The dragon sleeps on top. */
+var CRAG={x:-16,z:-106,r:14,top:null,rd:[0.15,0.989],rl:28,rw:2.7,endH:null,
+  box:[-36,6,-126,-60]};          // the high-detail ground patch (aligned to the 3-unit terrain grid)
+CRAG.mouth={x:CRAG.x-CRAG.r-3.6,z:CRAG.z+0.6};
+CRAG.lair={x:CRAG.x+2,z:CRAG.z-3};
+/* the Glimmer Cave lies far off the map: walking into the mouth carries you there */
+var CAVE={x:0,z:420,y:2,z0:330,w:3.1,
+  rooms:[[0,-40,7],[10,-22,9],[-8,-6,11],[14,10,9],[-4,24,12],[14,38,8]],
+  links:[[0,1],[1,2],[2,3],[1,3],[3,4],[4,5]]};
+CAVE.exit={x:CAVE.x-1.5,z:CAVE.z-44};
+CAVE.chest={x:CAVE.x+15,z:CAVE.z+41};
+/* bouncy toadstools: a fairy ring by the glade and a few strays in the meadows */
+var BOUNCE=[];
+(function(){
+  var cx=-18,cz=19;
+  for(var i=0;i<6;i++){ var a=i/6*6.283; BOUNCE.push({x:cx+Math.cos(a)*4.6,z:cz+Math.sin(a)*4.6}); }
+  [[24,-12],[-52,-30],[58,22],[-110,8],[100,-20],[-40,96],[30,-100]].forEach(function(p){ BOUNCE.push({x:p[0],z:p[1]}); });
+})();
+var FAIRYRING={x:-18,z:19};
 /* clearings kept free of trees: landmark grounds and the paths */
-var CLEAR=[[0,-34,20],[-72,48,15],[86,-56,15],[-88,-78,11],[35,-60,20]];
+var CLEAR=[[0,-34,20],[-72,48,15],[86,-56,15],[-88,-78,11],[35,-60,20],[-18,19,8]];
+BOUNCE.forEach(function(b){ CLEAR.push([b.x,b.z,2.6]); });
 function pathDist(x,z){            // distance to the nearest path: glade -> tavern door, tavern -> cottage
   var t=clamp01((z-4)/(-29-4)), px=0+1.4*t*t, pz=4+(-29-4)*t;
   return Math.min(Math.hypot(x-px,z-pz), segDist(x,z,7,-29,30.5,-54.5));
@@ -34,10 +55,20 @@ function segDist(x,z,ax,az,bx,bz){
 function clamp01(v){ return v<0?0:(v>1?1:v); }
 function inClearing(x,z,pad){
   for(var i=0;i<CLEAR.length;i++){ var c=CLEAR[i]; if(Math.hypot(x-c[0],z-c[1])<c[2]+(pad||0)) return true; }
+  if(cragZone(x,z)<4+(pad||0)) return true;
+  if(Math.hypot(x-CRAG.mouth.x,z-CRAG.mouth.z)<6) return true;
   return pathDist(x,z)<3.2+(pad||0);
+}
+/* how far a point is outside the crag (its plateau and its ramp); negative inside */
+function cragZone(x,z){
+  var dx=x-CRAG.x, dz=z-CRAG.z, d=Math.hypot(dx,dz)-CRAG.r-3;
+  var along=dx*CRAG.rd[0]+dz*CRAG.rd[1], lat=Math.abs(-dx*CRAG.rd[1]+dz*CRAG.rd[0]);
+  if(along>0&&along<CRAG.r+CRAG.rl) d=Math.min(d,lat-CRAG.rw-1.6);
+  return d;
 }
 /* world height */
 function H(x,z){
+  if(z>CAVE.z0) return caveH(x,z);
   var h=Hraw(x,z);
   // level the tavern yard and the cottage's plot
   for(var i=0;i<FLATS.length;i++){ var F=FLATS[i], dt=Math.hypot(x-F.x,z-F.z);
@@ -47,7 +78,49 @@ function H(x,z){
       h=h*(1-w)+F.h*w;
     }
   }
-  return h;
+  return cragH(x,z,h);
+}
+/* the crag: a level top with a sheer edge, and a ramp down one side */
+function cragH(x,z,h){
+  var dx=x-CRAG.x, dz=z-CRAG.z, d=Math.hypot(dx,dz);
+  if(d>CRAG.r+CRAG.rl+8) return h;
+  if(CRAG.top===null){ CRAG.top=Hraw(CRAG.x,CRAG.z)+13;
+    CRAG.endH=Hraw(CRAG.x+CRAG.rd[0]*(CRAG.r+CRAG.rl),CRAG.z+CRAG.rd[1]*(CRAG.r+CRAG.rl)); }
+  var T=CRAG.top, w=1-smooth01((d-CRAG.r)/2.6);
+  var rough=(vnoise(x*0.6,z*0.6)-0.5)*1.4*(1-w)*w*4;     // a broken, rocky lip
+  var out=h*(1-w)+T*w+rough;
+  var along=dx*CRAG.rd[0]+dz*CRAG.rd[1], lat=Math.abs(-dx*CRAG.rd[1]+dz*CRAG.rd[0]);
+  if(along>CRAG.r-3&&along<CRAG.r+CRAG.rl+1&&lat<CRAG.rw+2){
+    var t=clamp01((along-CRAG.r)/CRAG.rl), rh=T+(CRAG.endH-T)*t*t*(3-2*t)*0.6+(CRAG.endH-T)*t*0.4;
+    var lw=1-smooth01((lat-CRAG.rw)/1.8);
+    if(rh>out) out+=(rh-out)*lw;
+  }
+  return out;
+}
+function onCrag(x,z,y){ return CRAG.top!==null&&Math.hypot(x-CRAG.x,z-CRAG.z)<CRAG.r+1&&y>CRAG.top-2.5; }
+
+/* ---------- the Glimmer Cave ----------
+   A set of chambers joined by tunnels, as a signed distance: negative inside.
+   The floor is gently lumpy, the walls climb steeply into the dark. */
+function caveSD(x,z){
+  var lx=x-CAVE.x, lz=z-CAVE.z, d=1e9, R=CAVE.rooms;
+  for(var i=0;i<R.length;i++){ var q=Math.hypot(lx-R[i][0],lz-R[i][1])-R[i][2]; if(q<d) d=q; }
+  for(var j=0;j<CAVE.links.length;j++){ var a=R[CAVE.links[j][0]], b=R[CAVE.links[j][1]];
+    var q2=segDist(lx,lz,a[0],a[1],b[0],b[1])-CAVE.w; if(q2<d) d=q2; }
+  return d+(vnoise(x*0.35,z*0.35)-0.5)*1.2;
+}
+function inCave(x,z){ return z>CAVE.z0; }
+function caveH(x,z){
+  var sd=caveSD(x,z), n=vnoise(x*0.5+40,z*0.5);
+  if(sd<0) return CAVE.y+n*0.35;
+  return CAVE.y+n*0.35+Math.min(12,sd*2.4+sd*sd*0.6);
+}
+/* push a body back out of the cave walls */
+function caveCollide(o,rad){
+  var sd=caveSD(o.x,o.z); if(sd<-rad) return false;
+  var e=0.25, gx=caveSD(o.x+e,o.z)-caveSD(o.x-e,o.z), gz=caveSD(o.x,o.z+e)-caveSD(o.x,o.z-e), gl=Math.hypot(gx,gz)||1;
+  var push=sd+rad; o.x-=gx/gl*push; o.z-=gz/gl*push;
+  return true;
 }
 function Hraw(x,z){
   var d=Math.hypot(x,z)/WHALF;
@@ -96,11 +169,15 @@ function terrainMesh(){
     CC.push([Math.max(0,c[0]+t),Math.max(0,c[1]+t),Math.max(0,c[2]+t)]);
   }
   function id(i,j){ return i*(N+1)+j; }
+  var B=CRAG.box;
   for(var i2=0;i2<N;i2++) for(var j2=0;j2<N;j2++){
+    var qx=-WHALF+(i2+0.5)*S, qz=-WHALF+(j2+0.5)*S;
+    if(qx>B[0]&&qx<B[1]&&qz>B[2]&&qz<B[3]) continue;       // the crag gets its own finer patch
     var a=id(i2,j2), b=id(i2+1,j2), c2=id(i2+1,j2+1), d=id(i2,j2+1);
     m.triV(P[a],P[c2],P[b],NN[a],NN[c2],NN[b],CC[a],CC[c2],CC[b]);
     m.triV(P[a],P[d],P[c2],NN[a],NN[d],NN[c2],CC[a],CC[d],CC[c2]);
   }
+  cragPatch(m,S);
   // water plane
   var wc=C_WATER;
   for(var i2=0;i2<22;i2++) for(var j2=0;j2<22;j2++){
@@ -108,6 +185,31 @@ function terrainMesh(){
     m.quad([a,WATER,b],[a,WATER,b+s2],[a+s2,WATER,b+s2],[a+s2,WATER,b],wc,1);
   }
   return m;
+}
+
+/* the crag's ground at 1-unit spacing, so its sheer edge and ramp read crisply.
+   Vertices on the patch's rim follow the coarse grid's edges exactly, so no cracks. */
+function cragPatch(m,S){
+  var B=CRAG.box, nx=Math.round(B[1]-B[0]), nz=Math.round(B[3]-B[2]), e=0.5, P=[], NN=[], CC=[];
+  function coarse(x,z){        // the coarse mesh's height along its grid lines
+    var fx=(x+WHALF)/S, fz=(z+WHALF)/S, ix=Math.floor(fx+1e-6), iz=Math.floor(fz+1e-6), tx=fx-ix, tz=fz-iz;
+    if(tx<1e-4) return H(-WHALF+ix*S,-WHALF+iz*S)*(1-tz)+H(-WHALF+ix*S,-WHALF+(iz+1)*S)*tz;
+    return H(-WHALF+ix*S,-WHALF+iz*S)*(1-tx)+H(-WHALF+(ix+1)*S,-WHALF+iz*S)*tx;
+  }
+  for(var i=0;i<=nx;i++) for(var j=0;j<=nz;j++){
+    var x=B[0]+i, z=B[2]+j, rim=(i===0||j===0||i===nx||j===nz), y=rim?coarse(x,z):H(x,z);
+    P.push([x,y,z]); NN.push(nrm([H(x-e,z)-H(x+e,z),2*e,H(x,z-e)-H(x,z+e)]));
+    var c=groundCol(x,z,y);
+    var top=CRAG.top!==null&&y>CRAG.top-1.5&&Math.hypot(x-CRAG.x,z-CRAG.z)<CRAG.r;
+    if(top) c=mix3(c,[0.34,0.30,0.26],0.55);                 // scorched, trampled ground up top
+    var t=(RNG()-0.5)*0.03; CC.push([Math.max(0,c[0]+t),Math.max(0,c[1]+t),Math.max(0,c[2]+t)]);
+  }
+  function id(i,j){ return i*(nz+1)+j; }
+  for(var a=0;a<nx;a++) for(var b=0;b<nz;b++){
+    var A=id(a,b), Bq=id(a+1,b), C=id(a+1,b+1), D=id(a,b+1);
+    m.triV(P[A],P[C],P[Bq],NN[A],NN[C],NN[Bq],CC[A],CC[C],CC[Bq]);
+    m.triV(P[A],P[D],P[C],NN[A],NN[D],NN[C],CC[A],CC[D],CC[C]);
+  }
 }
 
 function mix3(a,b,t){ t=t<0?0:(t>1?1:t); return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]; }
@@ -167,6 +269,7 @@ function collide(o,rad){
       }
     }
   }
+  if(o.z>CAVE.z0&&caveCollide(o,rad)) hitAny=true;
   return hitAny;
 }
 
@@ -300,7 +403,8 @@ function pick(r,list){ return list[(r()*list.length)|0]; }
 
 function scatterWorld(m){
   var r=mulberry(7);
-  var tries=3600, Q=!!NAT;
+  // fewer trees than before, and open meadows between the stands, so there is room to fight
+  var tries=2700, Q=!!NAT;
   for(var i=0;i<tries;i++){
     var x=(r()*2-1)*WHALF*0.94, z=(r()*2-1)*WHALF*0.94;
     var y=H(x,z), sl=Hn(x,z), d=Math.hypot(x,z);
@@ -308,8 +412,9 @@ function scatterWorld(m){
     if(sl>0.7) { if(r()<0.86) continue; }
     if(d<7 && r()<0.8) continue;            // keep a small clearing at the spawn
     var k=r();
-    if(inClearing(x,z,k<0.62?1.5:0)) continue;     // landmark grounds and the tavern path stay open
-    if(k<0.42){ // pine
+    if(inClearing(x,z,k<0.48?1.5:0)) continue;     // landmark grounds and the tavern path stay open
+    if(k<0.48&&fbm(x+500,z-300,2,0.022)>0.56&&r()<0.9) continue;   // a meadow: grass and flowers, few trees
+    if(k<0.30){ // pine
       var hh=3.6+r()*4.2, rr=0.9+r()*0.5, ry=r()*6.28;
       collCircle(x,z,0.30*rr);
       if(Q){ var tn=0.92+r()*0.16; addProp(pick(r,['pine1','pine2','pine3']),x,y-0.1,z,ry,hh*1.18,0.95+r()*0.2,[tn,tn+r()*0.06,tn]); continue; }
@@ -318,7 +423,7 @@ function scatterWorld(m){
       addMeshCh(p,x,y+hh*0.26,z,ry,2.5*rr,hh*0.52,2.5*rr);
       addMeshCh(p,x,y+hh*0.58,z,ry+0.7,1.9*rr,hh*0.46,1.9*rr);
       addMeshCh(p,x,y+hh*0.86,z,ry+1.4,1.3*rr,hh*0.40,1.3*rr);
-    } else if(k<0.62){ // broadleaf
+    } else if(k<0.48){ // broadleaf
       var hh2=3.0+r()*3.0, rr2=1.0+r()*0.6, ry2=r()*6.28;
       collCircle(x,z,0.36*rr2);
       if(Q){
@@ -330,23 +435,23 @@ function scatterWorld(m){
       addMeshCh(TRUNK,x,y,z,ry2,0.62*rr2,hh2*0.72,0.62*rr2);
       addMeshCh(OAK_A,x,y+hh2*0.58,z,ry2,3.5*rr2,3.2*rr2,3.5*rr2);
       if(r()<0.5) addMeshCh(OAK_A,x+rr2,y+hh2*0.75,z-rr2*0.6,ry2+1,2.3*rr2,2.1*rr2,2.3*rr2);
-    } else if(k<0.74){ // rock
+    } else if(k<0.60){ // rock
       var s=0.8+r()*2.6;
       if(s>1.3) collCircle(x,z,0.40*s,0.55*s);
       if(Q){ var rn=pick(r,['rock1','rock2','rock3','rock4']), wd=s*1.25;    // footprint wd wide
         addProp(rn,x,y-0.12*s,z,r()*6.28,wd/NAT[rn].w*(0.8+r()*0.5),1,null); continue; }
       addMeshCh(ROCK,x,y-0.18*s,z,r()*6.28,s,s*(0.6+r()*0.5),s);
-    } else if(k<0.82){ // stump / log
+    } else if(k<0.68){ // stump / log
       collCircle(x,z,0.50,0.9);
       if(Q){ if(r()<0.55) addProp('stump',x,y-0.05,z,r()*6.28,0.9+r()*0.5,1,null);
              else addProp('log',x,y-0.08,z,r()*6.28,0.85+r()*0.3,1,null); continue; }
       addMeshCh(STUMP,x,y,z,r()*6.28,1.1,0.8+r()*0.6,1.1);
-    } else if(k<0.93){ // undergrowth: ferns, bushes, flowers
+    } else if(k<0.90){ // undergrowth: ferns, bushes, flowers
       var n=2+((r()*3)|0);
       for(var q=0;q<n;q++){
         var ax=x+(r()-0.5)*2.4, az=z+(r()-0.5)*2.4, ay=H(ax,az)-0.05;
         if(inClearing(ax,az)) continue;
-        if(Q){ var u=r(), un=u<0.45?pick(r,['fern1','fern2']):(u<0.8?pick(r,['bush1','bush2']):(u<0.9?'berry':'flower'));
+        if(Q){ var u=r(), un=u<0.36?pick(r,['fern1','fern2']):(u<0.62?pick(r,['bush1','bush2']):(u<0.72?'berry':'flower'));
           addProp(un,ax,ay,az,r()*6.28,un==='flower'?0.5+r()*0.3:(un.indexOf('bush')===0||un==='berry'?0.9+r()*0.6:0.8+r()*0.5),1,null); continue; }
         addMeshCh(FERN,ax,ay,az,r()*6.28,1.5+r()*0.8,1.1+r()*0.7,1.5+r()*0.8);
       }
@@ -501,5 +606,135 @@ function buildStones(m,x,z){
     collCircle(px,pz,0.65);
   }
   addMesh(m,boxMesh([0.46,0.46,0.49],0.9),x,H(x,z),z,0,2.4,0.6,2.4);
+  // the altar stone's carved spiral, and a ring of pale flowers that never seem to wilt
+  addMesh(m,coneMesh([0.30,0.36,0.40],12,0.5,0.5),x,H(x,z)+0.58,z,0,1.6,0.04,1.6);
+  for(var f=0;f<14;f++){ var fa=f/14*6.283+0.2, fx=x+Math.cos(fa)*3.4, fz=z+Math.sin(fa)*3.4;
+    addMesh(m,blobMesh([0.86,0.84,0.95],0,1),fx,H(fx,fz)-0.05,fz,0,0.32,0.22,0.32); }
+  STONES.x=x; STONES.z=z;
+  for(var k=0;k<6;k++){ var ka=k/6*6.28; STONES.rune.push({x:x+Math.cos(ka)*4.85,z:z+Math.sin(ka)*4.85,a:ka,h:2.4+(k%2)*0.6}); }
   LANDMARKS.push({x:x,z:z,r:9,name:'The Standing Stones',kind:'stones'});
+}
+var STONES={x:0,z:0,rune:[]};
+
+/* ---------- the Dragon's Crag ----------
+   Boulders ring the cliff's foot (and its lip), so the only way up is the ramp.
+   The dragon's lair on top: a ring of scorched rock, old bones and a heap of gold. */
+function cragRing(m,R,step,skipRamp,yOf,big){
+  var n=Math.round(6.283*R/step);
+  for(var i=0;i<n;i++){
+    var a=i/n*6.283, ux=Math.cos(a), uz=Math.sin(a);
+    if(skipRamp&&ux*CRAG.rd[0]+uz*CRAG.rd[1]>0.93) continue;     // leave the ramp open
+    if(big>1.5&&-ux>0.985) continue;                              // and the cave mouth
+    var x=CRAG.x+ux*R, z=CRAG.z+uz*R, s=big*(0.85+((i*37)%10)/22);
+    var nm=['rock1','rock2','rock3','rock4'][i%4];
+    if(NAT&&NAT[nm]) addMesh(m,natMB(nm)||ROCK,x,yOf(x,z)-0.5*s,z,a*2.3,s/NAT[nm].w*1.6,s*1.3,s/NAT[nm].w*1.6);
+    else addMesh(m,ROCK,x,yOf(x,z)-0.4*s,z,a,s*1.6,s*1.2,s*1.6);
+    collCircle(x,z,big*0.75);
+  }
+}
+function buildCrag(m){
+  H(CRAG.x,CRAG.z);                       // settles CRAG.top
+  var T=CRAG.top;
+  // the cliff foot: big boulders, a ring you cannot squeeze through
+  cragRing(m,CRAG.r+1.6,2.0,true,function(x,z){ return H(x,z)+0.6; },1.9);
+  // the lip up top, so nobody wanders off the edge (except down the ramp)
+  cragRing(m,CRAG.r-0.6,1.5,true,function(){ return T; },0.9);
+  // rails along the ramp
+  for(var t=0.08;t<1;t+=0.12) for(var sd=-1;sd<=1;sd+=2){
+    var al=CRAG.r+CRAG.rl*t, lx=CRAG.x+CRAG.rd[0]*al-CRAG.rd[1]*sd*(CRAG.rw+0.7), lz=CRAG.z+CRAG.rd[1]*al+CRAG.rd[0]*sd*(CRAG.rw+0.7);
+    addMesh(m,ROCK,lx,H(lx,lz)-0.25,lz,t*9,0.9,0.75,0.9); collCircle(lx,lz,0.45,1.0);
+  }
+  // the lair: scorched ring, ribs of something that lost, a heap of gold
+  var L=CRAG.lair, ly=T;
+  for(var q=0;q<10;q++){ var qa=q/10*6.283, qx=L.x+Math.cos(qa)*6.2, qz=L.z+Math.sin(qa)*6.2;
+    addMesh(m,ROCK,qx,ly-0.2,qz,qa,1.2,0.6+(q%3)*0.25,1.2); }
+  var bone=[0.86,0.82,0.70], gold=[0.95,0.76,0.25], goldD=[0.80,0.58,0.16];
+  for(var b=0;b<5;b++){ var ba=2.2+b*0.32, bx=L.x+Math.cos(ba)*4.0, bz=L.z+Math.sin(ba)*4.0;
+    addMesh(m,coneMesh(bone,6,0.5,0.25),bx,ly-0.1,bz,ba,0.25,2.0-b*0.15,0.25); }
+  addMesh(m,blobMesh(bone,0.1,1),L.x+3.6,ly,L.z+1.8,0.5,1.1,0.8,1.3);                     // a skull, or near enough
+  for(var g=0;g<16;g++){ var ga=g*2.4, gr=(g%5)*0.5, gx=L.x-3+Math.cos(ga)*gr, gz=L.z+2.5+Math.sin(ga)*gr;
+    addMesh(m,blobMesh(g%2?gold:goldD,0.15,1),gx,ly-0.1,gz,ga,1.6-gr*0.4,0.9-gr*0.15,1.6-gr*0.4); }
+  addMesh(m,boxMesh([0.42,0.28,0.16]),L.x-4.6,ly,L.z+1.2,0.6,1.4,0.9,0.9);            // a chest, lid off
+  addMesh(m,boxMesh(gold),L.x-4.6,ly+0.85,L.z+1.2,0.6,1.2,0.15,0.75);
+  // the cave mouth, black in the western face, with a lintel of rock
+  var M=CRAG.mouth, my=H(M.x,M.z), fx=CRAG.x-CRAG.r-0.4, fz=M.z;
+  addMesh(m,blobMesh([0.03,0.025,0.02],0,2),fx,my-1.2,fz,0,2.0,5.4,5.0);
+  addMesh(m,blobMesh([0.07,0.06,0.05],0,2),fx-0.4,my-0.8,fz,0,1.6,4.4,4.0);
+  for(var k=-2;k<=2;k++){ var kz=fz+k*1.4, ky=my+3.1-Math.abs(k)*0.55;
+    addMesh(m,ROCK,fx-0.9,ky,kz,k,1.4,1.1,1.5); }
+  addMesh(m,ROCK,fx-1.1,my-0.2,fz-3.0,1,1.5,2.6,1.5); addMesh(m,ROCK,fx-1.1,my-0.2,fz+3.0,2,1.5,2.6,1.5);
+  collCircle(fx-0.6,fz,2.3); collCircle(fx-1.1,fz-3.0,0.9); collCircle(fx-1.1,fz+3.0,0.9);   // the dark is solid until you have a light
+  LANDMARKS.push({x:CRAG.x,z:CRAG.z,r:CRAG.r+4,name:"The Dragon's Crag",kind:'crag'});
+  LANDMARKS.push({x:M.x,z:M.z,r:5,name:'The Glimmer Cave',kind:'cave'});
+}
+
+/* toadstools big enough to bounce on */
+function buildBounce(m){
+  for(var i=BOUNCE.length-1;i>=0;i--){ var b=BOUNCE[i], y=H(b.x,b.z);
+    if(y<WATER+0.6){ BOUNCE.splice(i,1); continue; }
+    var cap=(i%3===0)?[0.86,0.30,0.52]:((i%3===1)?[0.92,0.42,0.30]:[0.62,0.40,0.86]);
+    addMesh(m,coneMesh([0.92,0.88,0.76],10,0.5,0.36),b.x,y-0.1,b.z,0,0.75,1.25,0.75);
+    addMesh(m,blobMesh(cap,0.05,2),b.x,y+0.85,b.z,i,2.4,1.0,2.4);
+    for(var s=0;s<5;s++){ var sa=s*1.3+i, sx=b.x+Math.cos(sa)*0.75, sz=b.z+Math.sin(sa)*0.75;
+      addMesh(m,blobMesh([0.98,0.96,0.92],0,1),sx,y+1.62,sz,0,0.32,0.14,0.32); }
+    b.y=y;
+  }
+}
+
+/* ---------- the cave interior ----------
+   A heightfield (floor and walls) for the world material, plus crystals and
+   glowing caps for an unlit material, so they shine in the dark. */
+function caveMeshes(){
+  var rock=new MB(), glow=new MB(), shaft=new MB(), S=1.1, X0=CAVE.x-26, X1=CAVE.x+32, Z0=CAVE.z-52, Z1=CAVE.z+52;
+  var nx=Math.round((X1-X0)/S), nz=Math.round((Z1-Z0)/S), P=[], NN=[], CC=[], FL=[], SD=[], e=0.4;
+  var floorC=[0.22,0.19,0.16], wallC=[0.27,0.26,0.29], mossC=[0.18,0.26,0.16];
+  for(var i=0;i<=nx;i++) for(var j=0;j<=nz;j++){
+    var x=X0+i*S, z=Z0+j*S, y=caveH(x,z), sd=caveSD(x,z);
+    P.push([x,y,z]); NN.push(nrm([caveH(x-e,z)-caveH(x+e,z),2*e,caveH(x,z-e)-caveH(x,z+e)]));
+    var c=sd<0?mix3(floorC,mossC,clamp01(vnoise(x*0.2,z*0.2)*1.6-0.8)):mix3(floorC,wallC,clamp01(sd/1.2));
+    var t=(RNG()-0.5)*0.04; CC.push([c[0]+t,c[1]+t,c[2]+t]); FL.push(sd>0.9?2:0); SD.push(sd);
+  }
+  function id(a,b){ return a*(nz+1)+b; }
+  for(var a=0;a<nx;a++) for(var b=0;b<nz;b++){
+    var A=id(a,b), B=id(a+1,b), C=id(a+1,b+1), D=id(a,b+1);
+    if(SD[A]>5&&SD[B]>5&&SD[C]>5&&SD[D]>5) continue;           // solid rock: nothing to see
+    var f=Math.max(FL[A],FL[B],FL[C],FL[D]);
+    rock.triV(P[A],P[C],P[B],NN[A],NN[C],NN[B],CC[A],CC[C],CC[B],f);
+    rock.triV(P[A],P[D],P[C],NN[A],NN[D],NN[C],CC[A],CC[D],CC[C],f);
+  }
+  var r=mulberry(77), cols=[[0.45,0.95,1.0],[0.75,0.55,1.0],[0.55,1.0,0.75]];
+  // crystals in clusters along the walls, glow-caps on the floor, stalagmites (solid)
+  for(var k=0;k<170;k++){
+    var R=CAVE.rooms[(r()*CAVE.rooms.length)|0], a2=r()*6.283, rr=R[2]*(0.85+r()*0.25);
+    var cx=CAVE.x+R[0]+Math.cos(a2)*rr, cz=CAVE.z+R[1]+Math.sin(a2)*rr;
+    var sd2=caveSD(cx,cz); if(sd2<-0.4||sd2>1.6) continue;
+    var col=cols[(r()*3)|0], cy=caveH(cx,cz);
+    for(var q=0;q<3;q++){ var h=0.8+r()*1.8;
+      addMesh(glow,coneMesh(col,5),cx+(r()-0.5)*0.9,cy-0.2,cz+(r()-0.5)*0.9,r()*6,0.35+r()*0.3,h,0.35+r()*0.3); }
+  }
+  for(var g=0;g<60;g++){
+    var R2=CAVE.rooms[(r()*CAVE.rooms.length)|0], ga=r()*6.283, gr=r()*R2[2]*0.8;
+    var gx=CAVE.x+R2[0]+Math.cos(ga)*gr, gz=CAVE.z+R2[1]+Math.sin(ga)*gr, gy=caveH(gx,gz);
+    if(caveSD(gx,gz)>-1) continue;
+    if(r()<0.6){
+      addMesh(glow,blobMesh([0.40,0.85,0.95],0,1),gx,gy+0.18,gz,0,0.45,0.22,0.45);
+      addMesh(rock,coneMesh([0.70,0.72,0.66],6,0.5,0.4),gx,gy-0.05,gz,0,0.12,0.28,0.12);
+    } else if(Math.hypot(gx-CAVE.chest.x,gz-CAVE.chest.z)>4&&Math.hypot(gx-CAVE.exit.x,gz-CAVE.exit.z)>5){
+      var sh=1.4+r()*2.2;
+      addMesh(rock,coneMesh(wallC,7),gx,gy-0.2,gz,r()*6,0.9+r()*0.5,sh,0.9+r()*0.5); collCircle(gx,gz,0.45);
+    }
+  }
+  // the way out: a shaft of daylight
+  var ex=CAVE.exit, ey=caveH(ex.x,ex.z);
+  addMesh(shaft,coneMesh([1.0,0.95,0.75],12,0.5,0.62,true),ex.x,ey,ex.z,0,3.0,14,3.0);
+  addMesh(glow,coneMesh([0.95,0.90,0.70],12,0.5,0.5),ex.x,ey-0.02,ex.z,0,3.2,0.04,3.2);
+  // the hoard chest
+  var ch=CAVE.chest, chy=caveH(ch.x,ch.z);
+  addMesh(rock,boxMesh([0.40,0.26,0.14]),ch.x,chy,ch.z,0.4,1.5,0.85,1.0);
+  addMesh(rock,boxMesh([0.30,0.20,0.10]),ch.x,chy+0.85,ch.z,0.4,1.55,0.35,1.05);
+  addMesh(rock,boxMesh([0.85,0.66,0.22]),ch.x,chy+0.4,ch.z,0.4,1.56,0.12,1.06);
+  collBox(ch.x,ch.z,0.8,0.55,0.4);
+  for(var gc=0;gc<9;gc++){ var ga2=gc*0.7, gx2=ch.x+Math.cos(ga2)*(1.4+gc*0.08), gz2=ch.z+Math.sin(ga2)*(1.4+gc*0.08);
+    addMesh(glow,blobMesh([0.95,0.76,0.25],0,1),gx2,caveH(gx2,gz2)-0.05,gz2,0,0.5,0.22,0.5); }
+  return {rock:rock,glow:glow,shaft:shaft};
 }

@@ -94,7 +94,7 @@ var TELE={
 
 /* ---------- state ---------- */
 var G={
-  state:'title', t:0, build:{race:'elf',cls:'rogue',skills:{},points:0,gear:{w:0,a:0}},
+  state:'title', t:0, build:{race:'elf',cls:'rogue',skills:{},points:0,gear:{w:0,a:0},diff:'normal'},
   player:null, ents:[], S:null, cam:{yaw:0.6,pitch:0.34,dist:7.0,x:0,y:0,z:0},
   msgs:[], found:{}, killed:0, freed:0, spawnT:0, hitFlash:0, best:0, tip:'', tipT:0
 };
@@ -140,27 +140,27 @@ function newPlayer(){
     hurtT:0,inv:0,buff:null,buffT:0,dashT:0,dashCd:0,potions:2,coins:0,dead:false,deadT:undefined};
 }
 function spawnSpider(x,z,big){
-  var s=big?1.12:(0.70+Math.random()*0.30);
+  var s=big?1.12:(0.70+Math.random()*0.30), hp=(big?105:24)*(1+G.player.level*0.10)*DF().hp;
   G.ents.push({kind:'spider',x:x,y:H(x,z),z:z,vy:0,yaw:Math.random()*6.28,scale:s,
-    hp:(big?105:24)*(1+G.player.level*0.10),maxHp:(big?105:24)*(1+G.player.level*0.10),
+    hp:hp,maxHp:hp,
     dmg:(big?12:6.5)*Math.min(1.6,0.55+G.player.level*0.07),speed:0,walkPhase:Math.random()*6,
     look:{body:big?[0.26,0.10,0.11]:[0.20,0.13,0.12],dark:[0.13,0.09,0.09],eye:[0.95,0.25,0.18]},
     aggro:big?22:15, atkCd:0, wind:0, hurtT:0, home:{x:x,z:z}, wander:Math.random()*6.28, wanderT:0, big:big});
 }
 /* what you fight: all monsters, no people. Spiders, snakes in the grass (bite up
    close) and wasps (hover and fire stingers from range) */
-var FOE={spider:1,snake:1,wasp:1};
+var FOE={spider:1,snake:1,wasp:1,shroom:1,golem:1,dragon:1};
 function lvlHp(b){ return b*(1+G.player.level*0.10); }
 function lvlDmg(b){ return b*Math.min(1.6,0.55+G.player.level*0.07); }
 function spawnSnake(x,z){
-  var hp=lvlHp(40);
+  var hp=lvlHp(40)*DF().hp;
   G.ents.push({kind:'snake',x:x,y:H(x,z),z:z,vy:0,yaw:Math.random()*6.28,scale:0.85+Math.random()*0.25,
     hp:hp,maxHp:hp,dmg:lvlDmg(9),speed:0,walkPhase:Math.random()*6,onGround:true,
     look:{body:[0.28,0.52,0.34],belly:[0.50,0.66,0.42],eye:[0.95,0.80,0.20]},
     aggro:17, atkCd:0, wind:0, hurtT:0, home:{x:x,z:z}, wander:Math.random()*6.28, wanderT:0});
 }
 function spawnWasp(x,z){
-  var hp=lvlHp(30);
+  var hp=lvlHp(30)*DF().hp;
   G.ents.push({kind:'wasp',x:x,y:H(x,z),z:z,vy:0,yaw:Math.random()*6.28,scale:0.9+Math.random()*0.2,hover:1.25,
     hp:hp,maxHp:hp,dmg:lvlDmg(8),speed:0,walkPhase:Math.random()*6,onGround:true,
     look:{body:[0.12,0.10,0.08],stripe:[0.92,0.72,0.18],wing:[0.70,0.86,0.92]},
@@ -168,7 +168,7 @@ function spawnWasp(x,z){
 }
 function spawnBeast(x,z,ranged){ if(ranged) spawnWasp(x,z); else spawnSnake(x,z); }
 /* where on a foe to aim: wasps fly at chest height */
-function aimH(o){ return (o.kind==='wasp'?(o.hover||1.25):1.0)*(o.scale||1); }
+function aimH(o){ if(o.boss) return (o.kind==='dragon'?1.8:2.4); return (o.kind==='wasp'?(o.hover||1.25):1.0)*(o.scale||1); }
 function spawnCocoon(x,z){
   G.ents.push({kind:'cocoon',x:x,y:H(x,z),z:z,scale:1,hp:34,maxHp:34,seed:Math.random()*6,
     anchor:0,hurtT:0});
@@ -196,6 +196,8 @@ function buildWorld(){
   buildHollow(m,86,-56);
   buildStones(m,-88,-78);
   cottageSite(m);
+  buildCrag(m);
+  buildBounce(m);
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
   WORLD.castShadow=true; WORLD.receiveShadow=true;
   SCENE.add(WORLD);
@@ -203,6 +205,7 @@ function buildWorld(){
   PROPS3=chunkMeshes(WORLDMAT);
   for(var i=0;i<PROPS3.length;i++){ SCENE.add(PROPS3[i].hi); SCENE.add(PROPS3[i].lo); }
   initCropParts(); buildCottage();
+  buildCave();
   WORLDTRIS=m.count()/3+PROPTRIS;
 }
 var WORLDTRIS=0, PROPS3=[];
@@ -219,15 +222,19 @@ function populate(){
   var r=mulberry(4242);
   // spiders near the hollow + scattered
   for(var i=0;i<16;i++){ var a=r()*6.28,d=4+r()*16; spawnSpider(86+Math.cos(a)*d,-56+Math.sin(a)*d,r()<0.18); }
-  for(var i2=0;i2<22;i2++){ var x=(r()*2-1)*WHALF*0.8, z=(r()*2-1)*WHALF*0.8;
+  var D=DF(), np=function(n){ return Math.round(n*D.pop); };
+  for(var i2=0;i2<np(34);i2++){ var x=(r()*2-1)*WHALF*0.8, z=(r()*2-1)*WHALF*0.8;
     var dd=Math.hypot(x,z);
-    if(dd<34||H(x,z)<WATER+0.5||nearTavern(x,z,32)) continue;
+    if(dd<34||H(x,z)<WATER+0.5||nearTavern(x,z,32)||cragZone(x,z)<2) continue;
     spawnSpider(x,z, dd>70&&r()<0.09); }
   // wasps swarm their hive, snakes lie in the grass around it
-  for(var k=0;k<13;k++){ var a2=r()*6.28,d2=3+r()*13;
+  for(var k=0;k<np(16);k++){ var a2=r()*6.28,d2=3+r()*13;
     spawnBeast(-72+Math.cos(a2)*d2,48+Math.sin(a2)*d2, r()<0.45); }
-  for(var k2=0;k2<8;k2++){ var gx=(r()*2-1)*WHALF*0.7, gz=(r()*2-1)*WHALF*0.7;
-    if(Math.hypot(gx,gz)<40||H(gx,gz)<WATER+0.5||nearTavern(gx,gz,32)) continue; spawnBeast(gx,gz,r()<0.3); }
+  for(var k2=0;k2<np(20);k2++){ var gx=(r()*2-1)*WHALF*0.7, gz=(r()*2-1)*WHALF*0.7;
+    if(Math.hypot(gx,gz)<40||H(gx,gz)<WATER+0.5||nearTavern(gx,gz,32)||cragZone(gx,gz)<2) continue; spawnBeast(gx,gz,r()<0.3); }
+  // clans of mushroom grumps in the meadows
+  for(var k3=0;k3<np(9);k3++){ var mx=(r()*2-1)*WHALF*0.8, mz=(r()*2-1)*WHALF*0.8;
+    if(Math.hypot(mx,mz)<36||H(mx,mz)<WATER+0.5||nearTavern(mx,mz,32)||cragZone(mx,mz)<2) continue; spawnShroomPatch(mx,mz,2+((r()*3)|0)); }
   // prisoners
   var spots=[[86,-56],[-72,48],[0,0],[-88,-78]];
   for(var p=0;p<14;p++){
@@ -240,6 +247,8 @@ function populate(){
   for(var f=0;f<10;f++){ var fx=(r()*2-1)*WHALF*0.8, fz=(r()*2-1)*WHALF*0.8;
     if(H(fx,fz)<WATER+0.4) continue; spawnFairy(fx,fz); }
   spawnKeeper();
+  spawnCritters(); spawnGnomes(); populateCave();
+  if(WILD.dragon.t<=0) spawnDragon();
 }
 function nearTavern(x,z,r){ return Math.hypot(x-TAVERN.x,z-TAVERN.z)<r||homeSafe(x,z,r*0.8); }
 /* Bram keeps the Greenleaf: rest, potions, hired blades and bounties */
@@ -359,6 +368,10 @@ function readStick(){
   IN.mx=mx; IN.mz=mz;
 }
 function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+/* an angle difference folded into -PI..PI, whatever its size. (The old fold used
+   JavaScript's %, which keeps the sign: once the camera had turned more than about
+   a turn and a half it folded the wrong way, and the auto-camera spun you round.) */
+function wrapA(a){ return a-Math.PI*2*Math.floor((a+Math.PI)/(Math.PI*2)); }
 function buzz(ms){ try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){} }
 
 /* ---------- actions ---------- */
@@ -382,8 +395,9 @@ function doAttack(){
   for(var i=0;i<G.ents.length;i++){
     var e=G.ents[i];
     if(!FOE[e.kind]&&e.kind!=='cocoon') continue;
+    if(e.fly>1.6||e.riseT>0) continue;              // out of reach in the air, or still in the ground
     var dx=e.x-p.x, dz=e.z-p.z, d=Math.hypot(dx,dz);
-    if(d>reach+(e.scale||1)) continue;
+    if(d>reach+(e.rad||e.scale||1)) continue;
     if(!S.whirl){
       var fx=Math.sin(p.yaw), fz=Math.cos(p.yaw);
       if((dx*fx+dz*fz)/(d||1) < -0.15) continue;   // a forgiving arc, not a narrow cone
@@ -395,7 +409,7 @@ function doAttack(){
       impact(e,dx/(d||1),dz/(d||1));
       hurtEnemy(e,dmg); if(S.lifesteal) p.hp=Math.min(p.maxHp,p.hp+dmg*S.lifesteal);
       if(e.hp<=0) kills++;
-      if(e.hp>0&&d>0.01){ var kb=e.big?0.25:0.6; e.x+=dx/d*kb; e.z+=dz/d*kb; collide(e,bodyR(e)); }
+      if(e.hp>0&&d>0.01&&!e.boss){ var kb=e.big?0.25:0.6; e.x+=dx/d*kb; e.z+=dz/d*kb; collide(e,bodyR(e)); }
     }
     hit++;
   }
@@ -410,7 +424,8 @@ function aimTarget(p,maxD){
   for(var i=0;i<G.ents.length;i++){
     var o=G.ents[i];
     if(!FOE[o.kind]&&o.kind!=='cocoon') continue;
-    var dx=o.x-p.x, dz=o.z-p.z, d=Math.hypot(dx,dz);
+    if(o.riseT>0||o.state==='sleep') continue;
+    var dx=o.x-p.x, dz=o.z-p.z, d=Math.hypot(dx,dz)-(o.rad?o.rad*0.6:0);
     if(d<0.4||d>maxD) continue;
     var dot=(dx*fx+dz*fz)/d;
     if(dot<0.30) continue;                      // generous: catches what you meant
@@ -449,22 +464,26 @@ function doShoot(){
   buzz(10);
 }
 function hurtEnemy(e,d,quiet){
+  if(e.inv>0) return;
+  if(e.state==='sleep'){ e.state='wake'; e.stT=0; sfx('roar',e.x,e.z); tip('Cinderwing wakes!'); }
   e.hp-=d; e.hurtT=0.18;
   if(!quiet) msg(''+Math.round(d),'#fff1d0',e.x+(Math.random()-0.5)*0.6,e.y+2.0*(e.scale||1),e.z,13);
   if(e.hp<=0){
-    G.killed++; gainXp(50,e.x,e.y+2,e.z);
+    G.killed++; if(!e.boss) gainXp(50,e.x,e.y+2,e.z);
     bountyTick(e.kind==='spider'?(e.big?['spider','giant']:['spider']):[e.kind]);
+    stonesKill();
+    if(e.boss) bossDown(e);
     sfx(e.kind+'die',e.x,e.z);
     // monsters burst in a puff of ichor and dust, no blood
     burst(e.x,e.y+(e.kind==='wasp'?aimH(e):0.7*(e.scale||1)),e.z,16,ICHOR[e.kind],{up:4,spread:4,size:0.16*(e.scale||1),life:0.9});
     // every kill pays a little; giants pay well
-    var cn=(e.big?16:3)+((Math.random()*(3+G.player.level/3))|0);
+    var cn=Math.round(((e.big?16:3)+((Math.random()*(3+G.player.level/3))|0))*DF().pay);
     G.player.coins+=cn; msg('+'+cn+' ◉','#ffe08a',e.x+0.6,e.y+1.6,e.z,13); sfx('coin');
     if(Math.random()<0.16){ G.player.potions++; msg('+potion','#ff9d9d',e.x,e.y+2,e.z); sfx('pickup'); }
     var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
     // leave a body that plays its death and sinks away
-    G.ents.push({kind:'corpse',of:e.kind,hover:e.hover,big:e.big,x:e.x,y:e.y,z:e.z,yaw:e.yaw,scale:e.scale,
-      look:e.look,t:0,deadT:0.001,speed:0,walkPhase:e.walkPhase});
+    G.ents.push({kind:'corpse',of:e.kind,hover:e.hover,big:e.big,boss:e.boss,cave:e.cave,x:e.x,y:e.boss?H(e.x,e.z):e.y,z:e.z,yaw:e.yaw,scale:e.scale,
+      look:e.look,t:0,deadT:0.001,speed:0,walkPhase:e.walkPhase,state:e.state,flyK:0});
   }
 }
 /* ---------- feel: particles, shake, hit-stop ---------- */
@@ -501,7 +520,7 @@ function drawFX(){
 }
 function shake(a){ G.shakeA=Math.max(G.shakeA||0,a); }
 /* a hit on a foe: sparks where the blow lands, and a splash of what it bleeds */
-var ICHOR={spider:[0.32,0.46,0.18],snake:[0.36,0.58,0.40],wasp:[0.92,0.78,0.26]};
+var ICHOR={spider:[0.32,0.46,0.18],snake:[0.36,0.58,0.40],wasp:[0.92,0.78,0.26],shroom:[0.95,0.75,0.88],golem:[0.50,0.48,0.44],dragon:[1.0,0.55,0.20]};
 function impact(e,nx,nz,hy){
   var y=(hy!==undefined)?hy:e.y+aimH(e), x=e.x-nx*0.5*(e.scale||1), z=e.z-nz*0.5*(e.scale||1);
   burst(x,y,z,6,[1.0,0.92,0.62],{up:3,spread:3.5,size:0.07,life:0.3});
@@ -519,6 +538,16 @@ function landShot(e,ground){
   var vx=e.vx, vy=e.vy, vz=e.vz;
   if(e.proj==='axe'){ var hl=Math.hypot(vx,vz)||1; vx=vx/hl; vz=vz/hl; vy=-0.6; }   // axes bite in blade-first
   G.ents.push({kind:'stuck',x:e.x,y:e.y,z:e.z,vx:vx,vy:vy,vz:vz,proj:e.proj||'arrow',enemy:e.kind==='eshot',life:7,spin:0});
+}
+/* a fireball or a boulder bursts where it lands: whoever is close gets caught */
+function bigLand(e,already){
+  var p=G.player, gy=H(e.x,e.z);
+  if(!already&&Math.hypot(p.x-e.x,p.z-e.z)<e.aoe&&p.y<gy+2.5) hurtPlayer(e.dmg,e.src);
+  for(var i=0;i<G.ents.length;i++){ var a=G.ents[i]; if(a.kind==='ally'&&Math.hypot(a.x-e.x,a.z-e.z)<e.aoe) a.hp-=e.dmg*0.5*DF().dmg; }
+  sfx('boom',e.x,e.z); shake(0.2);
+  if(e.proj==='fire'){ burst(e.x,gy+0.3,e.z,22,[1.0,0.62,0.20],{up:4,spread:4,size:0.22,life:0.7,grav:-1});
+    burst(e.x,gy+0.2,e.z,10,[0.25,0.22,0.20],{up:2,spread:3,size:0.3,life:1.2,grav:-1.5}); }
+  else burst(e.x,gy+0.2,e.z,20,[0.46,0.42,0.38],{up:4,spread:5,size:0.3,life:0.8});
 }
 function breakCocoon(c,d){
   c.hp-=d; c.hurtT=0.18;
@@ -548,7 +577,7 @@ function hurtPlayer(d,src){
   var p=G.player;
   if(p.inv>0||p.dead) return;
   if(p.buff===2) d*=0.5;
-  d*=G.S.armor;
+  d*=G.S.armor*DF().dmg;
   p.hp-=d; p.inv=0.95; p.hurtT=0.3; G.hitFlash=0.5; buzz([30,40,30]);
   sfx('hurt'); shake(0.3);
   TELE.hurt(src||'unknown',d);
@@ -577,11 +606,15 @@ function update(dt){
   var inMag=Math.hypot(IN.mx,IN.mz);
   if(inMag>0.01){
     if(!MREFset){ MREF=G.cam.yaw; MREFset=true; }
-    // when you are pushing roughly forward there is no feedback risk, so let the
-    // frame ease back to the live camera and stay intuitive
-    if(Math.abs(IN.mx)<0.35){
-      var dd=((G.cam.yaw-MREF+Math.PI*3)%(Math.PI*2))-Math.PI;
-      MREF+=dd*Math.min(1,dt*2.2);
+    // pushing (nearly) straight ahead: run exactly ahead, and let the frame ease back
+    // to the live camera so "up" stays "into the screen". The snap matters: easing
+    // while the stick leaned even slightly sideways fed the heading back into the
+    // camera, which fed the frame, and the hunter slowly spun on the spot. (It also
+    // used to ease while you pulled backwards, which turned you right round.)
+    var sa=Math.atan2(IN.mx,-IN.mz);
+    if(!(DESKTOP&&LOCKED)&&Math.abs(sa)<0.26){
+      IN.mx=0; IN.mz=-inMag;
+      MREF+=wrapA(G.cam.yaw-MREF)*Math.min(1,dt*2.2);
     }
   } else MREFset=false;
   var cy=(DESKTOP&&LOCKED)?G.cam.yaw:MREF;
@@ -599,7 +632,7 @@ function update(dt){
   if(L>0.01){
     wx/=L; wz/=L;
     var tgt=aimLock?cy:Math.atan2(wx,wz);
-    var dy=((tgt-p.yaw+Math.PI*3)%(Math.PI*2))-Math.PI;
+    var dy=wrapA(tgt-p.yaw);
     p.yaw+=dy*Math.min(1,dt*13);
     var fwd=wx*Math.sin(p.yaw)+wz*Math.cos(p.yaw);
     var mvs=spd*Math.min(1,L)*(aimLock&&fwd<-0.3?0.72:1);      // backpedalling is slower
@@ -611,7 +644,7 @@ function update(dt){
   p.slowT=Math.max(0,(p.slowT||0)-dt);
   // bounds
   var bd=Math.hypot(p.x,p.z), lim=WHALF*0.95;
-  if(bd>lim){ p.x*=lim/bd; p.z*=lim/bd; }
+  if(bd>lim&&!inCave(p.x,p.z)){ p.x*=lim/bd; p.z*=lim/bd; }
   collide(p,0.42*(p.scale||1));   // trunks, rocks and walls are solid
   // gravity / jump
   var gh=H(p.x,p.z);
@@ -631,7 +664,7 @@ function update(dt){
   if(p.y<WATER+0.3){ p.slowT=0.2; }
   // actions — a tap during cooldown is remembered briefly so it never feels dropped
   IN.atkBuf=Math.max(0,IN.atkBuf-dt); IN.shotBuf=Math.max(0,IN.shotBuf-dt); IN.jumpBuf=Math.max(0,IN.jumpBuf-dt);
-  if((IN.attack||IN.atkBuf>0)&&G.talk){ IN.attack=false; IN.atkBuf=0; G.talk.open(); return; }
+  if((IN.attack||IN.atkBuf>0)&&G.talk){ IN.attack=false; IN.atkBuf=0; var tk=G.talk; G.talk=null; tk.open(); return; }
   if(IN.attack||IN.atkBuf>0){ if(p.cdT<=0){ doAttack(); IN.atkBuf=0; } }
   else if(!DESKTOP&&p.cdT<=0&&!p.dead&&!p.safe){
     // auto-swing (touch only): if something hostile is already in reach, the hunter
@@ -646,7 +679,7 @@ function update(dt){
   if(IN.dash){ IN.dash=false; if(S.dash&&p.dashCd<=0){ p.dashCd=1.6; p.dashT=0.19; msg('Shadowstep','#bff0ff',p.x,p.y+2.4,p.z);
     // dash the way you are pushing (or straight ahead), and roll to match
     p.dashDir=L>0.01?Math.atan2(wx,wz):p.yaw;
-    var dl=((p.dashDir-p.yaw+Math.PI*3)%(Math.PI*2))-Math.PI;
+    var dl=wrapA(p.dashDir-p.yaw);
     p.dodge=Math.abs(dl)<0.8?'Dodge_Forward':(Math.abs(dl)>2.35?'Dodge_Backward':(dl>0?'Dodge_Left':'Dodge_Right'));
     p.dodgeT=0.42; p.dodgeN=(p.dodgeN||0)+1;
     sfx('dash'); burst(p.x,p.y+1,p.z,12,[0.70,0.85,1.0],{up:1,spread:2.5,size:0.14,life:0.5}); } }
@@ -658,21 +691,25 @@ function update(dt){
   p.atTavern=false;
   // what you can talk to or use: Bram, or the cottage door, when nothing hostile is close
   G.talk=null;
-  var kp=keeper(), hd=HT(0,4.4);
-  var cand=kp&&Math.hypot(kp.x-p.x,kp.z-p.z)<3.8?{x:kp.x,y:kp.y,z:kp.z,lift:2.55,label:'talk to Bram',tap:'TALK',open:function(){ keeperScreen(); }}:
-    (Math.hypot(hd.x-p.x,hd.z-p.z)<3.4?{x:hd.x,y:H(hd.x,hd.z),z:hd.z,lift:2.3,label:HOME.owned?'your cottage':'read the notice',tap:HOME.owned?'HOME':'LOOK',open:function(){ cottageScreen(); }}:null);
+  var kp=keeper(), hd=HT(0,4.4), cands=[];
+  if(kp&&Math.hypot(kp.x-p.x,kp.z-p.z)<3.8) cands.push({x:kp.x,y:kp.y,z:kp.z,lift:2.55,label:'talk to Bram',tap:'TALK',open:function(){ keeperScreen(); }});
+  if(Math.hypot(hd.x-p.x,hd.z-p.z)<3.4) cands.push({x:hd.x,y:H(hd.x,hd.z),z:hd.z,lift:2.3,label:HOME.owned?'your cottage':'read the notice',tap:HOME.owned?'HOME':'LOOK',open:function(){ cottageScreen(); }});
+  wildTalk(p,cands);
+  var cand=null, cd0=1e9;
+  for(var ci=0;ci<cands.length;ci++){ var cc=cands[ci], cdd=Math.hypot(cc.x-p.x,cc.z-p.z); if(cdd<cd0){ cd0=cdd; cand=cc; } }
   if(cand){
     var threat=false;
     for(var ti=0;ti<G.ents.length;ti++){ var te=G.ents[ti];
-      if(FOE[te.kind]&&Math.hypot(te.x-p.x,te.z-p.z)<7){ threat=true; break; } }
+      if(FOE[te.kind]&&te.state!=='sleep'&&Math.hypot(te.x-p.x,te.z-p.z)<7){ threat=true; break; } }
     if(!threat) G.talk=cand;
   }
+  wildUpdate(dt);
   homeUpdate(dt);
   p.safe=p.atTavern||p.atHome;
   G.saveT=(G.saveT||0)+dt; if(G.saveT>15){ G.saveT=0; saveGame(); }
   for(var i=0;i<LANDMARKS.length;i++){
     var lm=LANDMARKS[i], ld=Math.hypot(p.x-lm.x,p.z-lm.z);
-    if(!G.found[lm.name]&&ld<lm.r+4){
+    if(!G.found[lm.name]&&ld<lm.r+4&&!WILD.inCave){
       G.found[lm.name]=1; tip('Discovered: '+lm.name); sfx('discover');
       gainXp(60,p.x,p.y+3,p.z,'+60 XP — discovery');
     }
@@ -685,15 +722,23 @@ function update(dt){
     }
   }
   // respawn pressure
+  // more keep coming: how often, and how many at once, depends on the difficulty
   G.spawnT-=dt;
   if(G.spawnT<=0){
-    G.spawnT=7;
-    var alive=0; for(var k=0;k<G.ents.length;k++){var e=G.ents[k]; if(FOE[e.kind]) alive++;}
-    if(alive<46){
+    var DD=DF(); G.spawnT=DD.spawn;
+    var alive=0, caveN=0; for(var k=0;k<G.ents.length;k++){var e=G.ents[k]; if(FOE[e.kind]){ if(e.cave) caveN++; else alive++; }}
+    if(WILD.inCave){
+      if(caveN<Math.round(16*DD.pop)){ var cs=caveSpawnSpot(16); if(cs) caveFoe(cs.x,cs.z); }
+    } else if(alive<DD.cap){
       var a=Math.random()*6.28, d=46+Math.random()*26;
       var sx=p.x+Math.cos(a)*d, sz=p.z+Math.sin(a)*d, sd2=Math.hypot(sx,sz);
-      if(sd2>34&&sd2<WHALF*0.9&&H(sx,sz)>WATER+0.5&&!nearTavern(sx,sz,32)){
-        if(Math.random()<0.6) spawnSpider(sx,sz,sd2>70&&Math.random()<0.08); else spawnBeast(sx,sz,Math.random()<0.35);
+      if(sd2>34&&sd2<WHALF*0.9&&H(sx,sz)>WATER+0.5&&!nearTavern(sx,sz,32)&&cragZone(sx,sz)>2){
+        // a pack, not a straggler: two to four together
+        var pack=2+((Math.random()*(DD===DIFFS.easy?1.6:3))|0), rk=Math.random();
+        for(var pk=0;pk<pack;pk++){ var px2=sx+(Math.random()-0.5)*5, pz2=sz+(Math.random()-0.5)*5;
+          if(rk<0.48) spawnSpider(px2,pz2,sd2>70&&Math.random()<0.08);
+          else if(rk<0.8) spawnBeast(px2,pz2,Math.random()<0.35);
+          else spawnShroom(px2,pz2); }
       }
     }
   }
@@ -704,11 +749,11 @@ function moveCreature(e,dt,tx,tz,spd){
   var dx=tx-e.x, dz=tz-e.z, d=Math.hypot(dx,dz);
   if(d>0.05){
     var tgt=Math.atan2(dx,dz);
-    var dy=((tgt-e.yaw+Math.PI*3)%(Math.PI*2))-Math.PI;
+    var dy=wrapA(tgt-e.yaw);
     e.yaw+=dy*Math.min(1,dt*7);
     var m=Math.min(spd,d/Math.max(dt,0.001));
     e.x+=(dx/d)*m*dt; e.z+=(dz/d)*m*dt; e.speed=m;
-    e.walkPhase+=dt*m*(e.kind==='spider'?2.4:1.5);
+    e.walkPhase+=dt*m*(e.kind==='spider'?2.4:(e.kind==='shroom'?2.0:1.5));
   } else e.speed=0;
   collide(e,bodyR(e));
   var gh=H(e.x,e.z);
@@ -716,6 +761,7 @@ function moveCreature(e,dt,tx,tz,spd){
   else e.y+=(gh-e.y)*Math.min(1,dt*10);
 }
 function bodyR(e){
+  if(e.boss) return e.rad*0.8;
   if(e.kind==='spider') return 0.75*(e.scale||1);
   return 0.42*(e.scale||1);
 }
@@ -734,6 +780,7 @@ function separate(){
       var push=(R-d), nx=dx/d, nz=dz/d;
       // the hunter is heavy: creatures give way, she barely moves
       var wa=(A===p)?0.15:0.5, wb=(A===p)?0.85:0.5;
+      if(B.boss){ wa=1; wb=0; } else if(A.boss){ wa=0; wb=1; }    // nothing shoves a boss about
       A.x-=nx*push*wa; A.z-=nz*push*wa; B.x+=nx*push*wb; B.z+=nz*push*wb;
     }
   }
@@ -747,8 +794,8 @@ function updateEnts(dt){
     if(e.hurtT>0) e.hurtT-=dt;
     if(e.kind==='corpse'){
       e.t+=dt; e.deadT=e.t;
-      if(e.t>1.6) e.y-=dt*0.9;                 // sink into the leaf litter
-      if(e.t>2.8) G.ents.splice(i,1);
+      if(e.t>(e.boss?5:1.6)) e.y-=dt*0.9;      // sink into the leaf litter
+      if(e.t>(e.boss?8:2.8)) G.ents.splice(i,1);
       continue;
     }
 
@@ -765,8 +812,9 @@ function updateEnts(dt){
           var o=G.ents[k];
           if(!FOE[o.kind]&&o.kind!=='cocoon') continue;
           if(e.hits.indexOf(o)>=0) continue;
-          var rr=(o.scale||1)*1.1+0.6;
-          if(Math.hypot(o.x-e.x,o.z-e.z)<rr && e.y>o.y-0.7 && e.y<o.y+2.7*(o.scale||1)){
+          if(o.riseT>0) continue;
+          var rr=o.rad||((o.scale||1)*1.1+0.6), tall=o.tall||2.7*(o.scale||1);
+          if(Math.hypot(o.x-e.x,o.z-e.z)<rr && e.y>o.y-0.7 && e.y<o.y+tall){
             if(o.kind==='cocoon') breakCocoon(o,e.dmg);
             else {
               if(!e.ally){ sfx('ehit',o.x,o.z); var sl=Math.hypot(e.vx,e.vz)||1; impact(o,e.vx/sl,e.vz/sl,e.y); }
@@ -799,28 +847,33 @@ function updateEnts(dt){
       if(pd<3.4&&G.tipT<=0) tip('Strike the cocoon to free them');
       continue;
     }
+    if(e.kind==='critter'){ updateCritter(e,dt,pd); continue; }
+    if(e.kind==='gnome'){ e.yaw+=wrapA(Math.atan2(p.x-e.x,p.z-e.z)-e.yaw)*Math.min(1,dt*(pd<8?3:0));
+      if(pd<2.2&&!p.dead) findGnome(e); continue; }
+    if(e.boss){ if(pd<130) updateBoss(e,dt); continue; }
     if(pd>96&&e.kind!=='ally'){ continue; }   // sleep distant creatures
 
     if(FOE[e.kind]){
       e.slowT=Math.max(0,(e.slowT||0)-dt);
-      var spd=(e.kind==='spider'?(e.big?3.4:4.2):(e.kind==='wasp'?4.4:3.8))*(e.slowT>0?0.5:1);
+      var DD=DF();
+      var spd=(e.kind==='spider'?(e.big?3.4:4.2):(e.kind==='wasp'?4.4:(e.kind==='shroom'?3.5:3.8)))*(e.slowT>0?0.5:1)*DD.spd;
       if(e.kind==='wasp') e.hover=1.25+Math.sin(G.t*2.2+e.walkPhase)*0.18;
       // pick target: taunting ally, else player
       var tgt=p, tdist=pd;
       for(var a=0;a<G.ents.length;a++){ var al=G.ents[a];
         if(al.kind==='ally'&&ALLYKIND[al.ak].taunt){
           var ad=Math.hypot(al.x-e.x,al.z-e.z);
-          if(ad<e.aggro){ tgt=al; tdist=ad; break; }
+          if(ad<e.aggro*DD.aggro){ tgt=al; tdist=ad; break; }
         }
       }
       e.atkCd-=dt;
-      if(tdist<e.aggro&&!p.dead&&!(tgt===p&&p.safe)){
+      if(tdist<e.aggro*DD.aggro&&!p.dead&&!(tgt===p&&p.safe)){
         if(e.kind==='wasp'){
           if(tdist>11) moveCreature(e,dt,tgt.x,tgt.z,spd);
           else if(tdist<7) moveCreature(e,dt,e.x-(tgt.x-e.x),e.z-(tgt.z-e.z),spd*0.7);
-          else { e.speed*=0.7; var ty=Math.atan2(tgt.x-e.x,tgt.z-e.z); e.yaw+=(((ty-e.yaw+9.42)%6.28)-3.14)*Math.min(1,dt*6); }
+          else { e.speed*=0.7; var ty=Math.atan2(tgt.x-e.x,tgt.z-e.z); e.yaw+=wrapA(ty-e.yaw)*Math.min(1,dt*6); }
           if(e.atkCd<=0&&tdist<22){
-            e.atkCd=2.2; e.atkT=0.4; e.atkDur=0.4; sfx('sting',e.x,e.z);
+            e.atkCd=2.2*DD.cd; e.atkT=0.4; e.atkDur=0.4; sfx('sting',e.x,e.z);
             var wy=e.y+aimH(e)-0.25, gx=tgt.x-e.x, gz=tgt.z-e.z, gy=(tgt.y+1.1)-wy;
             var gL=Math.hypot(gx,gy,gz)||1;
             G.ents.push({kind:'eshot',x:e.x+gx/gL,y:wy,z:e.z+gz/gL,proj:'sting',
@@ -833,17 +886,17 @@ function updateEnts(dt){
               e.atkT=0.3; e.atkDur=0.3;
               if(tdist<2.4+(e.scale||1)){
                 if(tgt===p) hurtPlayer(e.dmg,e.kind==='spider'?(e.big?'giant spider':'spider'):e.kind);
-                else tgt.hp-=e.dmg;
+                else tgt.hp-=e.dmg*DD.dmg;
               }
             }
           } else {
             var stopD=bodyR(e)+bodyR(tgt)+0.25;
             if(tdist>stopD) moveCreature(e,dt,tgt.x,tgt.z,spd);
             else { e.speed*=0.6; var fy=Math.atan2(tgt.x-e.x,tgt.z-e.z);
-              e.yaw+=(((fy-e.yaw+9.42)%6.28)-3.14)*Math.min(1,dt*8); }
+              e.yaw+=wrapA(fy-e.yaw)*Math.min(1,dt*8); }
             if(tdist<1.6+(e.scale||1)&&e.atkCd<=0){
-              e.atkCd=e.big?1.9:1.35; e.wind=e.big?0.55:0.38;
-              sfx(e.kind==='snake'?'rattle':'hissup',e.x,e.z);
+              e.atkCd=(e.big?1.9:1.35)*DD.cd; e.wind=e.big?0.55:0.38;
+              sfx(e.kind==='snake'?'rattle':(e.kind==='shroom'?'growl':'hissup'),e.x,e.z);
             }
           }
         }
@@ -861,9 +914,9 @@ function updateEnts(dt){
       var st2=Math.max(1,Math.ceil(Math.hypot(e.vx,e.vy,e.vz)*dt/0.55)), sd2=dt/st2, hit=false;
       for(var q2=0;q2<st2;q2++){
         e.x+=e.vx*sd2; e.y+=e.vy*sd2; e.z+=e.vz*sd2; if(!e.aimed) e.vy-=11*sd2;
-        if(Math.hypot(e.x-p.x,e.z-p.z)<1.2 && e.y>p.y-0.2 && e.y<p.y+2.4){ hurtPlayer(e.dmg,e.src||'arrow'); hit=true; break; }
+        if(Math.hypot(e.x-p.x,e.z-p.z)<(e.aoe?1.5:1.2) && e.y>p.y-0.2 && e.y<p.y+2.4){ hurtPlayer(e.dmg,e.src||'arrow'); if(e.aoe) bigLand(e,true); hit=true; break; }
         var gy2=H(e.x,e.z);
-        if(e.y<gy2-0.05||solidAt(e.x,e.z,e.y-gy2)){ landShot(e,e.y<gy2-0.05); hit=true; break; }
+        if(e.y<gy2-0.05||solidAt(e.x,e.z,e.y-gy2)){ if(e.aoe) bigLand(e); else landShot(e,e.y<gy2-0.05); hit=true; break; }
       }
       if(hit||e.life<=0) G.ents.splice(i,1);
       continue;
@@ -871,7 +924,7 @@ function updateEnts(dt){
     if(e.kind==='npc'){
       // Bram turns to watch you come up the path, and raises a mug when you arrive
       var want=pd<10?Math.atan2(p.x-e.x,p.z-e.z):e.home;
-      e.yaw+=(((want-e.yaw+Math.PI*3)%(Math.PI*2))-Math.PI)*Math.min(1,dt*4);
+      e.yaw+=(wrapA(want-e.yaw))*Math.min(1,dt*4);
       if(pd<10&&!e.greeted){ e.greeted=true; e.cheer=1.6; msg(G.bounty&&G.bounty.got>=G.bounty.n?'Back already? Come, collect!':'Welcome to the Greenleaf!','#ffe08a',e.x,e.y+2.6,e.z); }
       if(pd>18) e.greeted=false;
       if(e.cheer>0) e.cheer-=dt;
@@ -893,7 +946,7 @@ function updateEnts(dt){
       var home=Math.hypot(e.x-p.x,e.z-p.z);
       if(foe&&home<26){
         if(K.range>6){ if(bd2>K.range*0.7) moveCreature(e,dt,foe.x,foe.z,5.2); else {e.speed*=0.7;
-            var ty2=Math.atan2(foe.x-e.x,foe.z-e.z); e.yaw+=(((ty2-e.yaw+9.42)%6.28)-3.14)*Math.min(1,dt*7);} }
+            var ty2=Math.atan2(foe.x-e.x,foe.z-e.z); e.yaw+=wrapA(ty2-e.yaw)*Math.min(1,dt*7);} }
         else moveCreature(e,dt,foe.x,foe.z,5.6);
       } else {
         var ang=(e.ak*1.7), fxp=p.x-Math.sin(p.yaw)*3.2+Math.cos(ang)*2.2, fzp=p.z-Math.cos(p.yaw)*3.2+Math.sin(ang)*2.2;
@@ -923,9 +976,10 @@ function followCam(dt){
   // swing in behind the direction of travel once you stop steering by hand
   if(c.manual<=0 && p.speed>1.2 && !p.dead && !(DESKTOP&&LOCKED)){
     var want=p.yaw;
-    var d=((want-c.yaw+Math.PI*3)%(Math.PI*2))-Math.PI;
+    var d=wrapA(want-c.yaw);
     c.yaw+=d*Math.min(1,dt*1.3);
   }
+  c.yaw=wrapA(c.yaw);                       // keep it small, so no fold can ever go the wrong way
   var px=p.x, py=p.y+1.9, pz=p.z;
   var asp=W/Math.max(1,H2);
   var crowd=0;
@@ -933,8 +987,9 @@ function followCam(dt){
     if(!FOE[ce.kind]) continue;
     var cd2=Math.hypot(ce.x-p.x,ce.z-p.z);
     if(cd2<9) crowd=Math.max(crowd,(ce.scale||1)*(1-cd2/9));
+    if(ce.boss&&ce.state!=='sleep'&&cd2<30) crowd=Math.max(crowd,1.3*(1-cd2/40));
   }
-  var want0=c.dist*(asp<1?0.74:1)*(1+crowd*0.55);
+  var want0=c.dist*(asp<1?0.74:1)*(1+crowd*0.55)*(WILD.inCave?0.8:1);
   var cp=Math.cos(c.pitch);
   var dx=-Math.sin(c.yaw)*cp, dz=-Math.cos(c.yaw)*cp, dy=Math.sin(c.pitch);
   // march out from the player and stop before the camera enters a hill
@@ -955,6 +1010,8 @@ var DRAW=[], SHAD=[], VIS=[], LOD=0;
 function addShadow(e){
   var sc=(e.kind==='spider')?3.0*(e.scale||1):1.5*(e.scale||1);
   if(e.kind==='cocoon') sc=1.6;
+  if(e.boss||(e.kind==='corpse'&&e.boss)) sc=(e.rad||3)*2.4;
+  if(e.kind==='critter'||e.kind==='gnome') sc=0.6;
   var air=Math.max(0,e.y-H(e.x,e.z));
   var f=Math.max(0.35,1-air*0.22);
   var m=mat(); m4trs(m,e.x,H(e.x,e.z)+0.06,e.z,0,e.yaw||0,0,sc*f,1,sc*f);
@@ -972,7 +1029,9 @@ function initScene(){
   SCENE.fog=new THREE.Fog(new THREE.Color(SKYCOL[0],SKYCOL[1],SKYCOL[2]),38,133);
   CAM3=new THREE.PerspectiveCamera(59,1,0.35,260);
   var hemi=new THREE.HemisphereLight(new THREE.Color(0.42,0.48,0.40),new THREE.Color(0.20,0.24,0.20),Math.PI);
-  SCENE.add(hemi);
+  SCENE.add(hemi); HEMI=hemi;
+  // the torch for the cave: always in the scene (dark outside) so no shader recompiles when it lights
+  TORCH=new THREE.PointLight(new THREE.Color(1.0,0.72,0.42),0,30,1.1); SCENE.add(TORCH);
   var sl=0.42, sx=Math.cos(sl)*0.55, sy=0.78, sz=Math.sin(sl)*0.3, sL=Math.hypot(sx,sy,sz);
   var sun=new THREE.DirectionalLight(new THREE.Color(1.0,0.95,0.80),0.72*sL*Math.PI);
   SUNDIR=[sx/sL,sy/sL,sz/sL];
@@ -984,7 +1043,7 @@ function initScene(){
   var sc=sun.shadow.camera; sc.left=-SHADOWR; sc.right=SHADOWR; sc.top=SHADOWR; sc.bottom=-SHADOWR;
   sc.near=10; sc.far=180; sc.updateProjectionMatrix();
   sun.shadow.bias=-0.0006; sun.shadow.normalBias=0.05;
-  SUN=sun;
+  SUN=sun; sun.userData.base=sun.intensity;
   WORLDMAT=worldMaterial();
   CHARMAT=new THREE.MeshLambertMaterial({vertexColors:true});
   SHADMAT=new THREE.MeshBasicMaterial({color:new THREE.Color(0.03,0.04,0.025),transparent:true,opacity:0.30,depthWrite:false});
@@ -1061,7 +1120,7 @@ function draw(){
     var e=G.ents[i];
     if(actors.has(e)) continue;
     var ed=Math.hypot(e.x-c.x,e.z-c.z);
-    if(ed>62) continue;
+    if(ed>(e.boss?130:(e.kind==='critter'?45:62))) continue;
     VIS.push([ed,e]);
   }
   VIS.sort(function(a,b){return a[0]-b[0];});
@@ -1071,6 +1130,7 @@ function draw(){
   }
   LOD=0;
   drawFarm();
+  drawStones();
   drawFX();
   for(var k=0;k<DRAW.length;k++){ var d=DRAW[k]; batchAdd(partBatch(d[0]),d[1],d[2]); }
   batchesEnd();
@@ -1113,6 +1173,13 @@ function pushShot(e){
     DRAW.push(['box',axisMat(x+ax*0.32,y+ay*0.32,z+az*0.32,bx,by,bz,vx,0,vz,-0.06,0.05,0.34,0.24),[0.74,0.76,0.80]]);
     return;
   }
+  if(e.proj==='fire'||e.proj==='rock'){  // a dragon's fireball, a Warden's boulder
+    var fire=e.proj==='fire', rs=fire?0.55+Math.sin(G.t*25)*0.06:0.85;
+    var mf=mat(); m4trs(mf,x,y-rs*0.5,z,G.t*3,G.t*4,0,rs,rs,rs); DRAW.push([fire?'blob':'blobR',mf,fire?[1.0,0.62,0.18]:[0.44,0.42,0.40]]);
+    if(fire){ var mg=mat(); m4trs(mg,x,y-rs*0.3,z,0,0,0,rs*0.6,rs*0.6,rs*0.6); DRAW.push(['blob',mg,[1.0,0.95,0.55]]);
+      if(Math.random()<0.6) burst(x,y,z,1,[1.0,0.5,0.15],{up:0.5,spread:0.5,size:0.18,life:0.4,grav:-1}); }
+    return;
+  }
   if(e.proj==='sting'){                 // a wasp's stinger: short, dark, gold-tipped
     DRAW.push(['box',axisMat(x,y,z,ux,uy,uz,vx,0,vz,-0.42,0.06,0.42,0.06),[0.14,0.11,0.08]]);
     DRAW.push(['cone',axisMat(x,y,z,ux,uy,uz,vx,0,vz,0,0.10,0.18,0.10),[0.95,0.78,0.25]]);
@@ -1139,6 +1206,11 @@ function pushEnt(e){
   if(rk==='spider') spiderRig(RIG,e,G.t);
   else if(rk==='snake') snakeRig(RIG,e,G.t);
   else if(rk==='wasp') waspRig(RIG,e,G.t);
+  else if(rk==='shroom') shroomRig(RIG,e,G.t);
+  else if(rk==='golem') golemRig(RIG,e,G.t);
+  else if(rk==='dragon') dragonRig(RIG,e,G.t);
+  else if(e.kind==='gnome') gnomeRig(RIG,e,G.t);
+  else if(e.kind==='critter'){ if(e.sub==='fly') flyRig(RIG,e,G.t); else bunnyRig(RIG,e,G.t); }
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
   else if(e.kind==='shot'||e.kind==='eshot'||e.kind==='stuck'){ pushShot(e); return; }
   else if(e.kind==='fairy'){
@@ -1156,6 +1228,8 @@ function pushEnt(e){
   if(e.kind==='corpse'&&e.of==='spider'){
     var tf=Math.min(1,e.t/0.35), sc0=e.scale||1;
     m4trs(root,e.x,e.y+tf*1.15*sc0,e.z,0,e.yaw||0,tf*3.14,1,1,1);
+  } else if(e.kind==='corpse'&&e.of==='dragon'){
+    var td=Math.min(1,e.t/0.9); m4trs(root,e.x,e.y+td*0.6,e.z,0,e.yaw||0,td*1.35,1,1,1);   // keels over on his side
   } else if(e.deadT!==undefined&&e.deadT>0){
     var t2=Math.min(1,e.deadT/0.6);
     m4trs(root,e.x,e.y+t2*0.1,e.z,t2*1.45,e.yaw||0,0,1,1,1);
@@ -1237,6 +1311,20 @@ function mapIcon(kind,x,y,s,unknown){
       hx.strokeStyle='#c9a0e8'; hx.lineWidth=1.2; hx.beginPath(); hx.arc(0,0,4.6,0,6.3); hx.arc(0,0,2.2,0,6.3);
       for(var w=0;w<4;w++){ var wa=w/4*3.1416; hx.moveTo(Math.cos(wa)*5,Math.sin(wa)*5); hx.lineTo(-Math.cos(wa)*5,-Math.sin(wa)*5); }
       hx.stroke(); break;
+    case 'shroom':                       // a little red cap
+      hx.fillStyle='#e86a5a'; hx.beginPath(); hx.arc(0,0.5,3.2,3.14,6.29); hx.fill();
+      hx.fillStyle='#f3e7c9'; hx.fillRect(-1,0.5,2,2.6); break;
+    case 'golem':                        // a big cyan-eyed stone
+      hx.fillStyle='#8a8a90'; hx.beginPath(); hx.arc(0,0,5.5,0,6.3); hx.fill();
+      hx.fillStyle='#7ff0ff'; hx.fillRect(-2.6,-1.5,1.8,1.4); hx.fillRect(0.8,-1.5,1.8,1.4); break;
+    case 'dragon':                       // red wings
+      hx.fillStyle='#e0502e'; hx.beginPath(); hx.moveTo(0,-4); hx.lineTo(6,1.5); hx.lineTo(1.5,0.5); hx.lineTo(0,4.5); hx.lineTo(-1.5,0.5); hx.lineTo(-6,1.5); hx.closePath(); hx.fill(); break;
+    case 'crag':                         // a peak
+      hx.fillStyle='#a08a70'; hx.beginPath(); hx.moveTo(-5.5,4); hx.lineTo(-1,-5); hx.lineTo(1.5,-1.5); hx.lineTo(3,-3); hx.lineTo(5.5,4); hx.closePath(); hx.fill();
+      hx.fillStyle='#e0502e'; hx.beginPath(); hx.arc(-1,-2.2,1.3,0,6.3); hx.fill(); break;
+    case 'cave':                         // a dark arch
+      hx.fillStyle='#8a7a60'; hx.beginPath(); hx.arc(0,1.5,5,3.14,6.29); hx.lineTo(5,4); hx.lineTo(-5,4); hx.closePath(); hx.fill();
+      hx.fillStyle='#0a0806'; hx.beginPath(); hx.arc(0,2.5,2.8,3.14,6.29); hx.lineTo(2.8,4); hx.lineTo(-2.8,4); hx.closePath(); hx.fill(); break;
     case 'stones':                       // ring of stones
       hx.fillStyle='#b8b8c0';
       for(var q=0;q<6;q++){ var qa=q/6*6.283; hx.fillRect(Math.cos(qa)*4-1.2,Math.sin(qa)*4-1.2,2.4,2.4); } break;
@@ -1272,7 +1360,7 @@ function drawHUD(){
   // enemy health bars
   for(var k=0;k<G.ents.length;k++){
     var e=G.ents[k];
-    if((!FOE[e.kind]&&e.kind!=='cocoon'&&e.kind!=='ally')||e.hp>=e.maxHp) continue;
+    if((!FOE[e.kind]&&e.kind!=='cocoon'&&e.kind!=='ally')||e.hp>=e.maxHp||e.boss) continue;
     var sp=project(e.x,e.y+(e.kind==='wasp'?2.7:2.3)*(e.scale||1),e.z); if(!sp) continue;
     var w=Math.max(22,40-sp.d*0.25);
     hx.fillStyle='rgba(0,0,0,.55)'; hx.fillRect(sp.x-w/2-1,sp.y-1,w+2,6);
@@ -1349,14 +1437,21 @@ function drawHUD(){
   var sc=mr/(DESKTOP?86:70), ms=DESKTOP?1:0.85;
   for(var e2=0;e2<G.ents.length;e2++){
     var en=G.ents[e2];
-    if(en.kind==='shot'||en.kind==='eshot'||en.kind==='stuck') continue;
+    if(en.kind==='shot'||en.kind==='eshot'||en.kind==='stuck'||en.kind==='critter'||en.kind==='gnome'||en.kind==='corpse') continue;
     var ddx=(en.x-p.x)*sc, ddz=(en.z-p.z)*sc;
     if(Math.hypot(ddx,ddz)>mr) continue;
     var rp=rotPt(ddx,ddz,G.cam.yaw);
     mapIcon(en.kind==='spider'&&en.big?'bigspider':(en.kind==='npc'?'keeper':en.kind),mx+rp.x,my+rp.y,ms);
   }
+  if(WILD.inCave){                        // below ground the map shows the chambers instead
+    hx.fillStyle='rgba(120,200,220,.16)';
+    for(var cr=0;cr<CAVE.rooms.length;cr++){ var RM=CAVE.rooms[cr], rq=rotPt((CAVE.x+RM[0]-p.x)*sc,(CAVE.z+RM[1]-p.z)*sc,G.cam.yaw);
+      hx.beginPath(); hx.arc(mx+rq.x,my+rq.y,RM[2]*sc,0,6.3); hx.fill(); }
+    var xq=rotPt((CAVE.exit.x-p.x)*sc,(CAVE.exit.z-p.z)*sc,G.cam.yaw);
+    hx.fillStyle='#f6e7a8'; hx.beginPath(); hx.arc(mx+xq.x,my+xq.y,3.2,0,6.3); hx.fill();
+  }
   hx.restore();
-  for(var L=0;L<LANDMARKS.length;L++){
+  for(var L=0;L<LANDMARKS.length&&!WILD.inCave;L++){
     var lm=LANDMARKS[L], dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
     var rot=rotPt(dx,dz,G.cam.yaw), rl=Math.hypot(rot.x,rot.y), edge=rl>mr-7;
     if(edge){ rot.x*=(mr-7)/rl; rot.y*=(mr-7)/rl; }
@@ -1370,9 +1465,9 @@ function drawHUD(){
   hx.fillStyle='#f3e7c9'; hx.beginPath(); hx.moveTo(mx,my-5); hx.lineTo(mx-3.6,my+4); hx.lineTo(mx+3.6,my+4); hx.closePath(); hx.fill();
   hx.strokeStyle='rgba(232,194,106,.55)'; hx.lineWidth=2; hx.beginPath(); hx.arc(mx,my,mr,0,6.3); hx.stroke();
   if(DESKTOP||SHOWKEY){
-    var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['cocoon','Captive — free them'],
+    var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['shroom','Mushroom grump'],['cocoon','Captive — free them'],
       ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
-      ['hollow',"Queen's Hollow"],['stones','Standing stones']];
+      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['crag',"Dragon's Crag"],['cave','Glimmer Cave — bring a torch']];
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
     hx.textAlign='left'; hx.font='600 '+(DESKTOP?11.5:10.5)+'px Georgia,serif';
@@ -1405,6 +1500,7 @@ function drawHUD(){
       hx.beginPath(); hx.arc(TELE.missPts[mi][0],TELE.missPts[mi][1],5,0,6.3); hx.fill();
     }
   }
+  drawBossBar();
   // tip
   if(G.tipT>0){
     hx.textAlign='center'; hx.globalAlpha=Math.min(1,G.tipT);
@@ -1461,8 +1557,8 @@ function drawHUD(){
   for(var wq=0;wq<G.ents.length;wq++){
     var we=G.ents[wq];
     if(!we.wind||we.wind<=0) continue;
-    var ws=project(we.x,we.y+2.1*(we.scale||1),we.z); if(!ws) continue;
-    var full=we.big?0.55:0.38, prog=1-we.wind/full;
+    var ws=project(we.x,we.y+(we.boss?4.5:2.1*(we.scale||1)),we.z); if(!ws) continue;
+    var full=we.windFull||(we.big?0.55:0.38), prog=1-we.wind/full;
     var rad=Math.max(10,(38-ws.d*0.2))*(1.6-prog*0.6);
     hx.strokeStyle='rgba(235,90,70,'+(0.45+prog*0.5)+')'; hx.lineWidth=3;
     hx.beginPath(); hx.arc(ws.x,ws.y,rad,0,6.3); hx.stroke();
@@ -1544,8 +1640,8 @@ function titleScreen(){
   if(G.player&&(G.state==='dead'||G.state==='play')) saveGame();
   G.state='title'; SAVED=loadSave();
   show('<h1>Elven Hunter</h1>'+
-    '<p class="sub">An open wood. Spiders in the canopy, snakes in the grass, wasps round their hive, and your kin strung up between the trees.</p>'+
-    '<p class="sub">Free them and they fight beside you.</p>'+
+    '<p class="sub">An open wood. Spiders in the canopy, snakes in the grass, wasps round their hive, cross little mushrooms in the meadows, and your kin strung up between the trees.</p>'+
+    '<p class="sub">Free them and they fight beside you. Wake the standing stones, find seven lost gnomes, and mind the dragon asleep on his crag.</p>'+
     (SAVED?'<button class="btn" id="cont">Continue — '+RACES[SAVED.build.race].name+' '+CLASSES[SAVED.build.cls].name+', level '+SAVED.p.level+'</button>':'')+
     '<button class="btn'+(SAVED?' alt':'')+'" id="make">'+(SAVED?'New hunter':'Make your hunter')+'</button>'+
     '<button class="btn alt" id="snd">'+sndLabel()+'</button>'+
@@ -1573,6 +1669,8 @@ function makeScreen(){
   show('<h1>Make your hunter</h1>'+
     '<h3>Race</h3><div class="picks">'+opts('race',RACES)+'</div>'+
     '<h3>Calling</h3><div class="picks">'+opts('cls',CLASSES)+'</div>'+
+    '<h3>Difficulty</h3><div class="picks">'+DIFF_ORDER.map(function(k){ var v=DIFFS[k];
+      return '<div class="pick'+((b.diff||'normal')===k?' on':'')+'" data-kind="diff" data-k="'+k+'"><b>'+v.n+'</b><small>'+v.d+'</small></div>'; }).join('')+'</div>'+
     '<div class="stat"><span>Health</span><b>'+G.S.maxHp+'</b></div>'+
     '<div class="stat"><span>Melee / ranged</span><b>'+Math.round(G.S.melee*100)+'% / '+Math.round(G.S.ranged*100)+'%</b></div>'+
     '<div class="stat"><span>Followers</span><b>'+G.S.allies+'</b></div>'+
@@ -1590,11 +1688,13 @@ function makeScreen(){
 }
 /* a new hunter (no argument), or the saved one carried on (sv from loadSave) */
 function startRun(sv){
-  if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0}}; }
-  else { G.build.skills={}; G.build.points=0; G.build.gear={w:0,a:0}; }
+  if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; }
+  else { G.build.skills={}; G.build.points=0; G.build.gear={w:0,a:0}; if(!G.build.diff) G.build.diff='normal'; }
+  wildLoad(sv&&sv.wild); CAVEENV=null;
   G.player=null; recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
   homeReset();
+  G.player.x=0; G.player.z=6;
   populate();
   if(sv){
     applySave(sv);
@@ -1637,10 +1737,15 @@ function skillScreen(flash){
     '<div class="stat"><span>Health</span><b>'+G.S.maxHp+'</b></div>'+
     '<div class="stat"><span>Melee / ranged</span><b>'+Math.round(G.S.melee*100)+'% / '+Math.round(G.S.ranged*100)+'%</b></div>'+
     '<div class="stat"><span>Prisoners freed / foes slain</span><b>'+G.freed+' / '+G.killed+'</b></div>'+
+    '<div class="stat"><span>Lost gnomes found</span><b>'+gnomeCount()+' / '+GNOMES.length+'</b></div>'+
     '<div class="skills">'+rows+'</div>'+
     '<button class="btn" id="close">Back to the wood</button>'+
+    '<button class="btn alt" id="diff">Difficulty: '+DF().n+' — tap to change</button>'+
     '<button class="btn alt" id="snd2">'+sndLabel()+'</button>');
   document.getElementById('snd2').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
+  document.getElementById('diff').onclick=function(){
+    var i=DIFF_ORDER.indexOf(G.build.diff||'normal'); G.build.diff=DIFF_ORDER[(i+1)%DIFF_ORDER.length];
+    this.textContent='Difficulty: '+DF().n+' — tap to change'; saveGame(); };
   var els=ui.querySelectorAll('.sk');
   for(var k=0;k<els.length;k++) els[k].onclick=function(){
     var s=tree()[+this.getAttribute('data-i')];
@@ -1662,6 +1767,8 @@ var BOUNTIES=[
    say:'Those wasps have been at my honey again. Swat {n} of them for me?'},
   {id:'freed', short:'Captives freed', t:'Free {n} captives', n:function(){ return 3; }, on:['freed'],
    say:'Folk have gone missing in the webs. Cut {n} of them down and send them home.'},
+  {id:'shrooms', short:'Grumps squashed', t:'Squash {n} mushroom grumps', n:function(l){ return 6+Math.min(6,(l/2)|0); }, on:['shroom'],
+   say:'The mushroom grumps have been bouncing on my roof again. All night. Squash {n} of them, would you?'},
   {id:'giant', short:'Giant spider', t:'Slay a giant spider', n:function(){ return 1; }, on:['giant'],
    say:'Something huge broods out past the Queen\'s Hollow. Kill it and I\'ll make it worth your while.'}
 ];
@@ -1689,7 +1796,9 @@ function keeperScreen(say){
     var names=NAMES.slice().sort(function(){ return Math.random()-0.5; });
     G.offers=pool.map(function(i,n){ return {ak:i,name:names[n]}; });
   }
-  var lines=['Mind the mud. What\'ll it be?','Sit, sit. The stew is mostly safe.','Back in one piece! Good.','The fire\'s warm and the ale is cold.'];
+  var lines=['Mind the mud. What\'ll it be?','Sit, sit. The stew is mostly safe.','Back in one piece! Good.','The fire\'s warm and the ale is cold.',
+    'If you see a gnome, don\'t believe a word it says.','The standing stones hum when they\'re hungry. Don\'t touch them unless you mean it.',
+    'There\'s a dragon up on the crag. He snores. You can hear it on still nights.','Those bouncy toadstools by the glade? My cousin went up one and came down a week later.'];
   var hpFull=p.hp>=p.maxHp-0.5;
   var opts=[];
   opts.push({id:'rest',  t:'Rest by the fire', d:hpFull?'You are already rested':'Mend you and your company — free', off:false});
@@ -1698,6 +1807,7 @@ function keeperScreen(say){
   opts.push({id:'gear', t:'Gear: better weapon and armour', d:gNext?'Weapon '+GEAR_NAMES[gr.w]+', armour '+GEAR_NAMES[gr.a]+' · next from '+Math.min(gr.w<5?GEAR_PRICE.w[gr.w]:1e9,gr.a<5?GEAR_PRICE.a[gr.a]:1e9)+' ◉':'The finest gear in the wood', off:false});
   var full=deployed()>=S.allies;
   opts.push({id:'hire',  t:'Hire a companion', d:full?'Your company is full ('+deployed()+' of '+S.allies+')':'Blades for coin ('+deployed()+' of '+S.allies+' in your company)', off:full});
+  if(!WILD.torch) opts.push({id:'torch', t:'Buy a torch — '+TORCH_PRICE+' ◉', d:p.coins<TORCH_PRICE?'Not enough coin':'For the Glimmer Cave under the Dragon\'s Crag', off:p.coins<TORCH_PRICE});
   if(!b) opts.push({id:'work', t:'Ask for work', d:'Bram always has a job going', off:false});
   else if(b.got>=b.n){ var rw=bountyReward(b); opts.push({id:'claim', t:'Collect your bounty', d:'+'+rw.coins+' ◉ and +'+rw.xp+' XP', off:false, gold:true}); }
   else opts.push({id:'none', t:'Bounty: '+b.def.t.replace('{n}',b.n), d:'Progress '+b.got+' of '+b.n, off:true});
@@ -1723,6 +1833,10 @@ function keeperDo(id){
   } else if(id==='potion'){
     if(p.coins<POTION_PRICE||p.potions>=6) return;
     p.coins-=POTION_PRICE; p.potions++; sfx('coin'); saveGame(); keeperScreen('Brewed it myself. Mostly herbs.');
+  } else if(id==='torch'){
+    if(WILD.torch||p.coins<TORCH_PRICE) return;
+    p.coins-=TORCH_PRICE; WILD.torch=true; sfx('pickup'); saveGame();
+    keeperScreen('There. Pitch-soaked, burns for days. The cave\'s in the west face of the crag — and whatever glitters in there, I want to hear about it.');
   } else if(id==='hire'){ hireScreen(); }
   else if(id==='gear'){ gearScreen(); }
   else if(id==='work'){
@@ -1810,8 +1924,12 @@ function wakeUp(){
   p.x=ws.x; p.z=ws.z; p.y=H(ws.x,ws.z); p.yaw=ws.yaw;
   for(var i=0;i<G.ents.length;i++){ var e=G.ents[i];
     if(e.kind==='ally'){ e.x=p.x+Math.cos(i)*2.5; e.z=p.z+Math.sin(i)*2.5; e.y=H(e.x,e.z); e.hp=e.maxHp; }
-    if(FOE[e.kind]&&Math.hypot(e.x-p.x,e.z-p.z)<25){ e.x=e.home.x; e.z=e.home.z; e.y=H(e.x,e.z); } }
+    if(FOE[e.kind]&&!e.boss&&Math.hypot(e.x-p.x,e.z-p.z)<25){ e.x=e.home.x; e.z=e.home.z; e.y=H(e.x,e.z); }
+    if(e.kind==='dragon'){ e.x=e.home.x; e.z=e.home.z; e.state='sleep'; e.fly=0; e.flyK=0; e.hp=e.maxHp; e.wind=0; e.breathT=0; e.yaw=2.2; }
+  }
+  for(var gi=G.ents.length-1;gi>=0;gi--) if(G.ents[gi].kind==='golem'){ G.ents.splice(gi,1); WILD.stone.c=1; WILD.stone.full=true; }
   G.cam.yaw=p.yaw; G.cam.x=p.x-Math.sin(p.yaw)*8; G.cam.z=p.z-Math.cos(p.yaw)*8; G.cam.y=p.y+5;
+  setCaveEnv(false);
   hide(); G.state='play'; wantLock(); saveGame();
 }
 

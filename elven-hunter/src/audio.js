@@ -187,6 +187,35 @@ function sfx(name,x,z,v){
     case 'death':
       b=sndBus(0.9,0,1.8);
       [392,330,262,196].forEach(function(f,i){ tone(b,'triangle',f,f*0.98,t+i*0.22,0.6,0.25); }); break;
+    case 'shroomdie':                     // a squeaky pop
+      b=sndBus(0.8*P.g,P.pan,0.5); tone(b,'sine',900*r,220,t,0.16,0.4); hiss(b,'bandpass',2600,900,2,t,0.08,0.4); tone(b,'triangle',1400*r,600,t+0.1,0.18,0.15); break;
+    case 'golemdie': case 'rumble':       // stone grinding on stone
+      b=sndBus((name==='rumble'?0.8:1.1)*P.g,P.pan,1.4);
+      hiss(b,'lowpass',380,120,0.9,t,name==='rumble'?0.9:1.4,0.9,0.1); tone(b,'sawtooth',55,38,t,name==='rumble'?0.8:1.3,0.25); break;
+    case 'slam':                          // a huge blow into the ground
+      b=sndBus(1.1*P.g,P.pan,0.9); tone(b,'sine',90,30,t,0.5,1.0); hiss(b,'lowpass',1400,150,0.8,t,0.4,0.9); break;
+    case 'stomp':
+      b=sndBus(0.6*P.g,P.pan,0.4); tone(b,'sine',70,40,t,0.2,0.8); break;
+    case 'roar': case 'dragondie':        // a dragon: a long ragged roar
+      b=sndBus(1.1*P.g,P.pan,2.0);
+      tone(b,'sawtooth',name==='roar'?140:120,name==='roar'?70:40,t,name==='roar'?1.3:1.8,0.35,0.15);
+      tone(b,'square',148,74,t+0.05,1.2,0.12,0.2); hiss(b,'bandpass',900,300,1.2,t,1.3,0.6,0.2); break;
+    case 'growl':
+      b=sndBus(0.8*P.g,P.pan,0.8); tone(b,'sawtooth',95*r,70,t,0.5,0.25,0.1); hiss(b,'lowpass',600,200,1,t,0.5,0.4,0.1); break;
+    case 'bite':
+      b=sndBus(0.9*P.g,P.pan,0.3); hiss(b,'bandpass',1200,400,2,t,0.1,0.8); tone(b,'square',110,60,t,0.08,0.3); break;
+    case 'fire':                          // the breath: a roaring hiss
+      b=sndBus(0.9*P.g,P.pan,1.8); hiss(b,'bandpass',700,1600,0.7,t,1.4,0.9,0.15); hiss(b,'lowpass',400,250,0.7,t,1.4,0.6,0.15); break;
+    case 'fireball':
+      b=sndBus(0.7*P.g,P.pan,0.7); hiss(b,'bandpass',500,1800,0.9,t,0.45,0.7,0.05); tone(b,'sine',180,90,t,0.3,0.3); break;
+    case 'wings':                         // great slow wingbeats
+      b=sndBus(0.8*P.g,P.pan,1.2); for(var wi=0;wi<3;wi++) hiss(b,'lowpass',500,150,0.8,t+wi*0.32,0.24,0.8,0.06); break;
+    case 'boing':                         // a toadstool springs you skywards
+      b=sndBus(0.7,0,0.6); tone(b,'sine',180,720,t,0.32,0.5,0.005); tone(b,'triangle',360,1100,t,0.25,0.15); break;
+    case 'gnome':                         // a tiny, indignant voice
+      b=sndBus(0.6,0,0.7); [1046,1318,988,1568].forEach(function(f,i){ tone(b,'square',f,f*1.05,t+i*0.07,0.06,0.10); }); break;
+    case 'boom':                          // a fireball or boulder lands
+      b=sndBus(0.9*P.g,P.pan,0.8); tone(b,'sine',110,40,t,0.35,0.8); hiss(b,'lowpass',2000,200,0.7,t,0.3,0.7); break;
     case 'click':
       b=sndBus(0.35,0,0.1); tone(b,'square',1200,900,t,0.03,0.15); break;
   }

@@ -7,17 +7,20 @@ No CDN and no network calls at runtime. Rendering is done by
 JavaScript. The hunter, followers and the innkeeper are rigged, animated models from Kay
 Lousberg's CC0 [KayKit Adventurers](https://kaylousberg.itch.io/kaykit-adventurers) pack.
 Everything you fight is a monster, never a person: Quaternius's animated spider, snake and
-wasp. The forest is planted from his Ultimate Nature Pack (all CC0). Every sound effect is synthesised in code; the music is "Peaceful Forest" by Samza
+wasp, plus hand-built mushroom grumps, a stone golem and a dragon. The forest is planted from his Ultimate Nature Pack (all CC0). Every sound effect is synthesised in code; the music is "Peaceful Forest" by Samza
 (CC0). The build bundles the slice of three.js the game uses, the models, the forest, the
 music and the game into a single ~3.0 MB file. Open it from a USB stick on a plane and it
 plays.
 
-The wood is 300 × 300 units of procedurally generated hills, a winding river and about
-2,700 oaks, birches, pines, bushes, ferns, mossy rocks, stumps and logs, with five
+The wood is 300 × 300 units of procedurally generated hills, a winding river, open meadows
+and about 1,850 trees, bushes, ferns, flowers, mossy rocks, stumps and logs, with seven
 landmarks to find. Spiders hunt the undergrowth, snakes lie in the grass, wasps swarm
-their hive, and your kin hang in cocoons waiting to be cut down. Free them and they follow
-you and fight. Bram keeps the tavern, and from level 15 an abandoned cottage can be
-bought, fixed up and farmed. Progress is saved in the browser.
+their hive, cross little mushrooms hop about the meadows, and your kin hang in cocoons
+waiting to be cut down. Free them and they follow you and fight. Bram keeps the tavern;
+from level 10 an abandoned cottage can be bought, fixed up and farmed. The standing stones
+wake while you hunt and can call up a boss; a dragon sleeps on the Dragon's Crag; and the
+Glimmer Cave under it opens to anyone with a torch. Pick Easy, Normal or Hard. Progress is
+saved in the browser.
 
 ---
 
@@ -73,6 +76,8 @@ src/
               humanoids use these only far away or while models load
   models.js   animated models (heroes, monsters): loading, actors, layering
   home.js     the cottage, its farm, and saving / continuing
+  wild.js     difficulty, mushroom grumps, the Stone Warden, the dragon, the Glimmer
+              Cave and its torch, butterflies, rabbits, toadstools and gnomes
   audio.js    synthesised sound effects and the music loop (Web Audio)
   game.js     state, input, camera, combat, AI, allies, skills, HUD, particles, telemetry
 assets/       compressed models (*.glb), the forest (nature.json), music.mp3 — all CC0,
@@ -113,8 +118,9 @@ strike button, which reads **TALK** beside him). He offers:
   mage, druid or dwarf), 45–70 coins, up to your company size.
 - **Gear**: five tiers of weapon (+15% damage each) and armour (+20 health and 6% less
   damage each), 35–360 coins a tier.
-- **Bounties**: slay spiders, drive off snakes, swat wasps, free captives or, from
-  level 3, slay a giant spider. Progress shows in the status panel; come back for coins and XP.
+- **A torch**: 60 coins, once. You need it to go into the Glimmer Cave.
+- **Bounties**: slay spiders, drive off snakes, swat wasps, squash mushroom grumps, free
+  captives or, from level 3, slay a giant spider. Progress shows in the status panel; come back for coins and XP.
 - **Training**: a shortcut to spend skill points.
 
 Menus pause the wood and, on a laptop, free the mouse so you can click; closing one
@@ -136,7 +142,7 @@ captures it again.
 
 Out past the tavern, at the end of a second path, an abandoned cottage stands with half
 a roof, a door off its hinges and a notice nailed to a post. Walk up to the door (`E`, or
-tap **LOOK**). From **level 15**, with 600 coins, it's yours, and then a job at a time:
+tap **LOOK**). From **level 10**, with 600 coins, it's yours, and then a job at a time:
 
 | Job | Coins | What it does |
 |---|---|---|
@@ -152,6 +158,45 @@ tap **LOOK**). From **level 15**, with 600 coins, it's yours, and then a job at 
 (15, 4 min, 58) in empty plots. Crops grow while you play and are drawn growing in the
 patch; ripe plots glint gold. Harvest from the cottage menu. `HOUSE_LEVEL` and the prices
 live at the top of `src/home.js`.
+
+### The wilder wood (`src/wild.js`)
+
+- **Difficulty.** Chosen when you make a hunter, and changeable any time from the skills
+  screen. Easy is the wood as it was. Normal and Hard bring more monsters, in packs, more
+  often, tougher, quicker to notice you and quicker to strike, and they pay better:
+
+  | | Foe health | Foe damage | New pack every | Foes at once | Pay |
+  |---|---|---|---|---|---|
+  | Easy | ×1 | ×1 | 7 s | 46 | ×1 |
+  | Normal | ×1.35 | ×1.55 | 4 s | 64 | ×1.2 |
+  | Hard | ×1.8 | ×2.2 | 2.6 s | 84 | ×1.5 |
+
+- **Mushroom grumps.** Cross toadstools that live in clans in the meadows and hop after you.
+  Weak alone, annoying in a crowd.
+- **The standing stones.** Six old stones with runes that light up one by one while you
+  play (full in five minutes, sooner the more you kill). When all six glow, walk to the
+  altar stone in the middle (`E` / **SUMMON**) and call up **Mossback, the Stone Warden**:
+  a moss-grown golem who slams the ground in front of him (watch the ring) and lobs
+  boulders at you from range. At half health he calls mushroom grumps to help. Break him
+  for coins, potions and a lot of XP; the stones then sleep again, and the next Warden is
+  stronger. Run off and he plods home and sinks back down.
+- **The Dragon's Crag.** A sheer-sided plateau north of the tavern. Boulders ring its foot,
+  so the only way up is the ramp on its south side. **Cinderwing** sleeps by his gold.
+  Climb up and he wakes: on the ground he bites and breathes a cone of fire; then he takes
+  off, circles above you dropping fireballs, and lands again. Leave the crag and he flies
+  home to sulk and heal. Slaying him pays a fortune, and ten minutes later he's back,
+  tougher.
+- **The Glimmer Cave.** A black crack in the crag's western face. Without a torch it's too
+  dark to go in; Bram sells one. Inside: six chambers of glowing crystals and glow-caps,
+  lit only by your torch, with pale cave spiders, snakes and blue grumps. A hoard at the
+  far end pays out, then refills after eight minutes. Walk back into the shaft of daylight
+  to leave. The cave sits far off the map, so going in carries you (and your company)
+  there; the sky, sun, fog and a torch light switch over.
+- **Whimsy.** Butterflies and rabbits all over the wood (rabbits bolt if you get close),
+  giant bouncy toadstools (a fairy ring by the glade, and strays in the meadows) that fling
+  you sky-high, more flowers, and **seven lost garden gnomes** hidden about the wood. Each
+  pays a little and has something to say; find all seven for a bonus from Bram. Your
+  count is on the skills screen.
 
 ### Characters
 
@@ -268,7 +313,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-69 assertions run the actual game in headless Chromium with software WebGL and check
+121 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames
@@ -278,6 +323,10 @@ live state. Most of them are regression tests for bugs that shipped at least onc
 - arrows tumbling end over end instead of flying point-first
 - holding the stick sideways walking the player in a circle (a feedback loop between
   camera-relative input and an auto-following camera)
+- on a phone, running forward after turning the view round about a turn and a half: the
+  camera's angle grew without limit, the "shortest way round" fold used JavaScript's `%`
+  (which keeps the sign), so the auto-follow camera turned the long way and spun the
+  hunter round, 1,263° in 4 seconds. A stick held a hair off straight also slowly circled.
 - terrain normals facing downward, so the ground received no sunlight at all
 - walking straight through tree trunks, and enemies piling onto one spot
 

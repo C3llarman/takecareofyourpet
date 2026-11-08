@@ -14,7 +14,7 @@ The home of Elk Leaf Arcade at [elkleafarcade.com](https://elkleafarcade.com): a
 
 **Take Care of Your Pet** is a 3D pet care game. Feed, pet and train your pets, explore a big city, walk into shops, visit the vet, go down forest trails, and make friends with woodland animals.
 
-**Elven Hunter** is an open-world forest adventure: fight spiders and goblins and free your kin from their cocoons. It has its own README in `elven-hunter/`. Edit its files in `elven-hunter/src/`, then run `node tools/build.mjs` inside `elven-hunter/` to rebuild its `index.html`.
+**Elven Hunter** is an open-world forest adventure: fight spiders, snakes, wasps and mushroom grumps, free your kin from their cocoons, call up the Stone Warden and face the dragon on his crag. It has its own README in `elven-hunter/`. Edit its files in `elven-hunter/src/`, then run `node tools/build.mjs` inside `elven-hunter/` to rebuild its `index.html`.
 
 **Cluck Patrol** is a 2D platformer: hop across a tropical island as a chicken and stomp all 22 raccoons and foxes within two and a half minutes. Everything, including its pictures, is inside `cluck-patrol/index.html`.
 

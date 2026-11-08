@@ -6,7 +6,7 @@ export {
   LinearSRGBColorSpace, NoToneMapping,
   BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Uint32BufferAttribute, InstancedBufferAttribute, DynamicDrawUsage,
   Mesh, InstancedMesh, MeshLambertMaterial, MeshBasicMaterial, DoubleSide,
-  HemisphereLight, DirectionalLight, Vector3, REVISION,
+  HemisphereLight, DirectionalLight, PointLight, Vector3, REVISION,
   Group, Box3, AnimationMixer, AnimationClip, LoopOnce, LoopRepeat, NoColorSpace,
   PCFShadowMap,
 } from 'three';

@@ -9,6 +9,7 @@
  *   - the attack button sat under the iOS home-indicator strip
  *   - holding the stick sideways walked the player in circles
  *   - terrain normals faced down, so the ground was never lit
+ *   - on a phone, running forward after turning the view round spun the hunter
  *
  * Usage:  npm test
  */
@@ -60,7 +61,7 @@ section('World');
     })(),
   }));
   ok('world mesh builds', w.tris > 50000, `${w.tris} triangles in one draw call`);
-  ok('five landmarks placed', w.landmarks.length === 5, w.landmarks.join(', '));
+  ok('seven landmarks placed', w.landmarks.length === 7, w.landmarks.join(', '));
   ok('spawn is above water', w.spawnAboveWater);
   ok('terrain normals face up', w.upward === 1, `${Math.round(w.upward * 100)}% of sampled faces`);
   await page.close();
@@ -280,6 +281,32 @@ section('Touch controls (phone)');
   });
   ok('holding sideways walks straight', spiral.right < 70, `${spiral.right.toFixed(0)}° of drift over 2.6s`);
 
+  // the spin regression: after the view had been turned round a turn and a half, running
+  // forward made the auto-camera fold the wrong way and whirl (1,263° in 4 s); and a stick
+  // held a hair off straight slowly circled
+  const spin = await page.evaluate(() => {
+    G.ents = G.ents.filter((e) => !FOE[e.kind]);
+    const trial = (camYaw, dx) => new Promise((res) => {
+      const p = G.player; p.x = -40; p.z = 10; p.yaw = Math.atan2(Math.sin(camYaw), Math.cos(camYaw));
+      G.cam.yaw = camYaw; G.cam.manual = 0; MREFset = false;
+      PT('pointerdown', 9, 110, 600); PT('pointermove', 9, 110 + dx, 538);
+      const s = []; const t0 = G.t;
+      const tick = () => {
+        s.push([G.cam.yaw, G.player.yaw]);
+        if (G.t - t0 > 3) {
+          PT('pointerup', 9, 110 + dx, 538);
+          const turn = (k) => { let t = 0; for (let i = 1; i < s.length; i++) { let d = s[i][k] - s[i - 1][k];
+            while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; t += d; } return Math.abs(t * 57.3); };
+          res(Math.max(turn(0), turn(1)));
+        } else requestAnimationFrame(tick);
+      };
+      tick();
+    });
+    return trial(12, 0).then((a) => trial(12, 10).then((b) => trial(0, 10).then((c) => ({ wound: a, both: b, off: c }))));
+  });
+  ok('running forward never spins you round', spin.wound < 10 && spin.both < 10, `${spin.wound.toFixed(0)}° / ${spin.both.toFixed(0)}° over 3s with the view turned 1.9 times`);
+  ok('a stick a hair off straight runs straight', spin.off < 10, `${spin.off.toFixed(0)}° over 3s`);
+
   ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
   await page.close();
 }
@@ -493,13 +520,13 @@ section('Home and progress');
 
   const locked = await page.evaluate(() => { const p = G.player; p.coins = 5000; G.state = 'play'; cottageScreen(); cottageDo('buy');
     const r = { owned: HOME.owned, btnOff: document.querySelector('.opt[data-o="buy"]').disabled }; menuClose(); return r; });
-  ok('the cottage needs level 15', !locked.owned && locked.btnOff);
-  const home = await page.evaluate(() => { const p = G.player; p.level = 15; recalc(); G.state = 'play'; cottageScreen(); cottageDo('buy');
+  ok('the cottage needs level 10', !locked.owned && locked.btnOff);
+  const home = await page.evaluate(() => { const p = G.player; p.level = 10; recalc(); G.state = 'play'; cottageScreen(); cottageDo('buy');
     ['roof', 'door', 'yard', 'patch', 'well', 'patch2', 'hearth'].forEach((u) => cottageDo('up:' + u));
     cottageDo('plant:wheat'); const planted = HOME.plots.filter((q) => q.c === 'wheat').length;
     HOME.playT += 200; const before = p.coins; cottageDo('harvest'); const r = { owned: HOME.owned, ups: Object.keys(HOME.up).length, planted, earned: p.coins - before,
       tris: HOUSE3.geometry.attributes.position.count / 3, sell: CROPS.wheat.sell }; menuClose(); return r; });
-  ok('at level 15 you can buy the cottage and fix it up', home.owned && home.ups === 7, `${home.ups} jobs done`);
+  ok('at level 10 you can buy the cottage and fix it up', home.owned && home.ups === 7, `${home.ups} jobs done`);
   ok('crops grow and sell', home.planted === 8 && home.earned === 8 * home.sell, `8 plots of wheat: +${home.earned}`);
 
   // everything you own survives a reload
@@ -589,10 +616,138 @@ section('Forest');
       nearHi: near.length > 0 && near.every((c) => c.hi.visible && !c.lo.visible),
       farLo: far.length > 0 && far.every((c) => c.lo.visible && !c.hi.visible) };
   });
-  ok('the wood is planted with the nature pack', f.kinds >= 15 && f.props > 2000, `${f.props} props of ${f.kinds} kinds in ${f.chunks} chunks`);
+  ok('the wood is planted with the nature pack', f.kinds >= 15 && f.props > 1500, `${f.props} props of ${f.kinds} kinds in ${f.chunks} chunks`);
   ok('near chunks draw full detail, far ones the stand-ins', f.nearHi && f.farLo);
+  const trees = await page.evaluate(() => ['pine1', 'pine2', 'pine3', 'oak1', 'oak2', 'oak3', 'birch1', 'birch2', 'dead1'].reduce((a, k) => a + (PROPN[k] || 0), 0));
+  ok('the wood is open, not a thicket', trees < 650, `${trees} trees, with meadows between the stands`);
   const size = (await import('node:fs')).statSync(PAGE.replace('file://', '')).size / 1024 / 1024;
   ok('the whole game stays small', size < 3.2, `${size.toFixed(2)} MB with models, forest and music`);
+  await page.close();
+}
+
+/* ---------------- the wilder wood ---------------- */
+section('Difficulty, bosses, the cave and the gnomes');
+{
+  const page = await open(browser, LAPTOP);
+  await page.click('#make');
+  ok('difficulty is chosen when you make a hunter', (await page.$$('.pick[data-kind="diff"]')).length === 3);
+  await page.click('.pick[data-kind="diff"][data-k="hard"]');
+  await page.click('#go'); await page.waitForTimeout(300);
+  const diff = await page.evaluate(() => {
+    const p = G.player; G.ents = G.ents.filter((e) => !FOE[e.kind]);
+    const hard = G.build.diff;
+    spawnSpider(p.x + 30, p.z, false); const hHard = G.ents[G.ents.length - 1].maxHp;
+    p.inv = 0; const h0 = p.hp; hurtPlayer(10, 'test'); const dHard = h0 - p.hp;
+    G.build.diff = 'easy'; spawnSpider(p.x + 30, p.z, false); const hEasy = G.ents[G.ents.length - 1].maxHp;
+    p.inv = 0; p.hp = p.maxHp; const h1 = p.hp; hurtPlayer(10, 'test'); const dEasy = h1 - p.hp;
+    p.hp = p.maxHp; G.build.diff = 'normal';
+    return { hard, hp: hHard / hEasy, dmg: dHard / dEasy, cap: [DIFFS.easy.cap, DIFFS.normal.cap, DIFFS.hard.cap] };
+  });
+  ok('harder settings make foes tougher and harder-hitting', diff.hard === 'hard' && diff.hp > 1.5 && diff.dmg > 2, `hard: ×${diff.hp.toFixed(2)} health, ×${diff.dmg.toFixed(2)} damage`);
+  ok('and there are more of them', diff.cap[0] < diff.cap[1] && diff.cap[1] < diff.cap[2], diff.cap.join(' / ') + ' at once');
+  const pop = await page.evaluate(() => { startRun(); const k = {}; G.ents.forEach((e) => { if (FOE[e.kind]) k[e.cave ? 'in the cave' : e.kind] = (k[e.cave ? 'in the cave' : e.kind] || 0) + 1; }); return k; });
+  ok('the wood is busy: spiders, snakes, wasps, grumps and a dragon', pop.spider > 40 && pop.shroom > 8 && pop.dragon === 1, JSON.stringify(pop));
+  await page.evaluate(() => { G.state = 'skills'; skillScreen(); });
+  await page.click('#diff');
+  ok('difficulty can be changed mid-hunt', (await page.evaluate(() => G.build.diff)) === 'hard');
+  await page.evaluate(() => { G.build.diff = 'normal'; menuClose(); });
+
+  // the standing stones wake with time and kills, then call up the Warden
+  const stones = await page.evaluate(() => new Promise((res) => {
+    const p = G.player; G.ents = G.ents.filter((e) => !FOE[e.kind] || e.kind === 'dragon');
+    WILD.stone.c = 0.98; for (let i = 0; i < 2; i++) stonesKill();
+    p.x = STONES.x + 1.5; p.z = STONES.z + 1.5; p.y = H(p.x, p.z);
+    const t0 = G.t; const tick = () => { if (G.t - t0 > 0.3) res({ full: WILD.stone.c >= 1, talk: G.talk && G.talk.tap }); else requestAnimationFrame(tick); }; tick();
+  }));
+  ok('the stones wake, and offer a summoning', stones.full && stones.talk === 'SUMMON', stones.talk || 'nothing to use');
+  await page.evaluate(() => { G.talk.open(); });
+  await page.click('.opt[data-o="summon"]');
+  const warden = await page.evaluate(() => { const g = findKind('golem'); return g && { hp: g.hp, rising: g.riseT > 0, state: G.state }; });
+  ok('laying a hand on the altar calls up the Stone Warden', warden && warden.rising && warden.state === 'play');
+  const wdown = await page.evaluate(() => new Promise((res) => {
+    const g = findKind('golem'), p = G.player, c0 = p.coins, t0 = G.t; p.inv = 99;
+    const tick = () => { if (G.t - t0 < 2.6) { requestAnimationFrame(tick); return; }
+      hurtEnemy(g, 1e7); res({ gone: !findKind('golem'), paid: p.coins - c0, tier: WILD.stone.tier, c: WILD.stone.c }); };
+    tick();
+  }));
+  ok('the Warden pays well and the stones go back to sleep', wdown.gone && wdown.paid > 100 && wdown.tier === 1 && wdown.c === 0, `+${wdown.paid} coins`);
+
+  // the crag: solid at its foot, a ramp to the top, a sleeping dragon who wakes when you climb up
+  const crag = await page.evaluate(() => {
+    let solid = 0, n = 0;
+    for (let a = 0; a < 6.28; a += 0.05) { const ux = Math.cos(a), uz = Math.sin(a);
+      if (ux * CRAG.rd[0] + uz * CRAG.rd[1] > 0.9) continue; n++;
+      if (solidAt(CRAG.x + ux * (CRAG.r + 1.6), CRAG.z + uz * (CRAG.r + 1.6), 1)) solid++; }
+    let step = 0, prev = null;
+    for (let t = 0; t <= 1.0001; t += 0.02) { const al = CRAG.r - 2 + (CRAG.rl + 2) * t;
+      const h = H(CRAG.x + CRAG.rd[0] * al, CRAG.z + CRAG.rd[1] * al); if (prev !== null) step = Math.max(step, Math.abs(h - prev)); prev = h; }
+    const d = findKind('dragon');
+    return { ring: solid / n, step, rise: CRAG.top - H(CRAG.x + CRAG.rd[0] * (CRAG.r + CRAG.rl), CRAG.z + CRAG.rd[1] * (CRAG.r + CRAG.rl)), asleep: d && d.state === 'sleep' };
+  });
+  ok('the crag is a cliff you cannot just walk up', crag.ring > 0.97, `${Math.round(crag.ring * 100)}% of its foot is solid`);
+  ok('a ramp climbs to the top', crag.rise > 8 && crag.step < 1.0, `${crag.rise.toFixed(1)} units up, steepest step ${crag.step.toFixed(2)}`);
+  ok('the dragon sleeps on his crag', crag.asleep);
+  const dragon = await page.evaluate(() => new Promise((res) => {
+    const p = G.player, d = findKind('dragon'); G.ents = G.ents.filter((e) => !FOE[e.kind] || e === d);
+    p.x = CRAG.x + 2; p.z = CRAG.z + 7; p.y = H(p.x, p.z); p.inv = 999; p.hp = p.maxHp;
+    const seen = new Set(), t0 = G.t;
+    const tick = () => { seen.add(d.state);
+      if (d.state === 'ground' && !seen.has('forced')) { seen.add('forced'); d.stT = 20; }
+      if (G.t - t0 < 9) { requestAnimationFrame(tick); return; }
+      const c0 = p.coins; hurtEnemy(d, 1e7);
+      res({ states: [...seen], paid: p.coins - c0, cd: WILD.dragon.t, kills: WILD.dragon.kills, fire: G.ents.some((e) => e.proj === 'fire') || seen.has('fly') }); };
+    tick();
+  }));
+  ok('climbing up wakes him; he fights on foot, then takes to the air', dragon.states.includes('wake') && dragon.states.includes('ground') && dragon.states.includes('fly'), dragon.states.join(' → '));
+  ok('slaying the dragon pays a fortune, and he returns in time', dragon.paid > 400 && dragon.kills === 1 && dragon.cd > 0, `+${dragon.paid} coins`);
+
+  // the cave: dark without a torch; Bram sells one; inside the light changes
+  const mouth = await page.evaluate(() => new Promise((res) => {
+    const p = G.player; WILD.torch = false; p.x = CRAG.mouth.x - 2; p.z = CRAG.mouth.z; p.y = H(p.x, p.z);
+    const t0 = G.t; const tick = () => { if (G.t - t0 > 0.3) res(G.talk && G.talk.tap); else requestAnimationFrame(tick); }; tick();
+  }));
+  ok('without a torch the cave is too dark to enter', mouth === 'LOOK', mouth || 'nothing');
+  await page.evaluate(() => { const p = G.player; p.coins = 100; G.state = 'play'; keeperScreen(); });
+  await page.click('.opt[data-o="torch"]');
+  ok('Bram sells a torch', await page.evaluate(() => WILD.torch && G.player.coins === 100 - TORCH_PRICE));
+  await page.evaluate(() => { menuClose(); enterCave(); });
+  await page.waitForTimeout(400);
+  const cave = await page.evaluate(() => ({ inCave: WILD.inCave, dark: SCENE.fog.far < 50 && !SKY.visible, torch: TORCH.intensity > 1,
+    foes: G.ents.filter((e) => e.cave).length, floor: caveSD(G.player.x, G.player.z) < 0 }));
+  ok('with a torch you go in: dark, lit by your flame', cave.inCave && cave.dark && cave.torch && cave.floor);
+  ok('things live down there', pop['in the cave'] > 8, `${pop['in the cave']} cave dwellers`);
+  const walls = await page.evaluate(() => { const p = G.player; p.x = CAVE.x; p.z = CAVE.z - 40;
+    for (let i = 0; i < 200; i++) { p.x += 0.3; collide(p, 0.42); } return caveSD(p.x, p.z); });
+  ok('cave walls are solid', walls < 0, `stopped ${(-walls).toFixed(2)} inside the wall line`);
+  const hoard = await page.evaluate(() => { const p = G.player, c0 = p.coins; G.state = 'play'; chestScreen(); const got = p.coins - c0; menuClose();
+    G.state = 'play'; chestScreen(); const again = p.coins - c0 - got; menuClose(); return { got, again }; });
+  ok('the hoard pays once, then refills slowly', hoard.got > 150 && hoard.again === 0, `+${hoard.got} coins`);
+  await page.evaluate(() => { leaveCave(); });
+  await page.waitForTimeout(200);
+  ok('leaving brings back the daylight', await page.evaluate(() => !WILD.inCave && SKY.visible && TORCH.intensity === 0));
+
+  // whimsy: gnomes, toadstools, butterflies and rabbits
+  const whim = await page.evaluate(() => new Promise((res) => {
+    const p = G.player, g = G.ents.find((e) => e.kind === 'gnome'), c0 = p.coins, n0 = gnomeCount();
+    p.x = g.x + 1; p.z = g.z; p.y = H(p.x, p.z);
+    const t0 = G.t; const tick = () => { if (G.t - t0 < 0.3) { requestAnimationFrame(tick); return; }
+      const gn = { found: gnomeCount() - n0, paid: p.coins - c0 };
+      const b = BOUNCE[0]; p.x = b.x; p.z = b.z; p.y = H(p.x, p.z); p.onGround = true; p.vy = 0; p.bounceCd = 0;
+      const t1 = G.t; let top = 0;
+      const tick2 = () => { top = Math.max(top, p.y - H(p.x, p.z)); if (G.t - t1 < 1.2) { requestAnimationFrame(tick2); return; }
+        res({ gn, top, critters: G.ents.filter((e) => e.kind === 'critter').length }); }; tick2(); }; tick();
+  }));
+  ok('a lost gnome is found and pays', whim.gn.found === 1 && whim.gn.paid > 20, `+${whim.gn.paid} coins`);
+  ok('toadstools bounce you sky-high', whim.top > 4, `${whim.top.toFixed(1)} units up`);
+  ok('butterflies and rabbits about the wood', whim.critters > 40, `${whim.critters}`);
+
+  // all of it is saved
+  await page.evaluate(() => saveGame());
+  await page.reload(); await page.waitForFunction('window.__ready===true', { timeout: 60000 });
+  await page.click('#cont'); await page.waitForTimeout(300);
+  const kept = await page.evaluate(() => ({ torch: WILD.torch, gnomes: gnomeCount(), tier: WILD.stone.tier, dragon: WILD.dragon.kills, gnomeEnts: G.ents.filter((e) => e.kind === 'gnome').length, dEnt: !!findKind('dragon') }));
+  ok('torch, gnomes, wardens and dragon are saved', kept.torch && kept.gnomes === 1 && kept.gnomeEnts === 6 && kept.tier === 1 && kept.dragon === 1 && !kept.dEnt, JSON.stringify(kept));
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
   await page.close();
 }
 
