@@ -71,6 +71,16 @@ section('World');
     G.ents.forEach((e) => { if (e.z > CAVE.z0 || e.kind === 'critter' || e.kind === 'eagle') return;
       if (Math.hypot(e.x, e.z) > lim - 2 || Hn(e.x, e.z) > 0.9) bad.push(e.kind); });
     return { bad, n: G.ents.length, size: WSIZE }; });
+  const marks = await page.evaluate(() => { const p = G.player; p.x = 0; p.z = 6; WILD.inCave = false;
+    const outside = questTargets(); const offOut = outside.filter((t) => !inBounds(t.x, t.z, -4));
+    const satchel = outside.find((t) => /Glimmer Cave/.test(t.l));     // the satchel (and the glowcaps) are in the cave
+    p.x = CAVE.exit.x; p.z = CAVE.exit.z + 5; WILD.inCave = true;
+    const inside = questTargets(); const offIn = inside.filter((t) => !inCave(t.x, t.z));
+    WILD.inCave = false; p.x = 0; p.z = 6;
+    return { n: outside.length, offOut: offOut.map((t) => t.l), offIn: offIn.map((t) => t.l), satchel: satchel && Math.hypot(satchel.x - CRAG.mouth.x, satchel.z - CRAG.mouth.z) };
+  });
+  ok('quest markers never point off the map (a target in the cave points at its mouth)', marks.offOut.length === 0 && marks.offIn.length === 0 && marks.satchel < 1,
+    marks.offOut.concat(marks.offIn).join(', ') || `${marks.n} markers, satchel → cave mouth`);
   ok('everything you can find or fight is somewhere you can reach', reach.bad.length === 0, reach.bad.length ? reach.bad.join(', ') : `${reach.n} things, on a ${reach.size}-unit map`);
   ok('terrain normals face up', w.upward === 1, `${Math.round(w.upward * 100)}% of sampled faces`);
   await page.close();

@@ -314,7 +314,14 @@ function bramParcelDo(){
 /* ---------- where the quests point: minimap marks, and Tobin's compass ---------- */
 function questTargets(){
   var out=[], p=G.player, inCv=WILD.inCave;
-  function add(x,z,label){ if(inCave(x,z)===inCv||!inCv) out.push({x:x,z:z,l:label}); }
+  // the cave lies off the map: from outside, a target in it is reached through the
+  // mouth; from inside, a target outside is reached through the way out
+  function add(x,z,label){
+    var tc=inCave(x,z);
+    if(tc&&!inCv){ x=CRAG.mouth.x; z=CRAG.mouth.z; label='Glimmer Cave'+(WILD.torch?'':' (bring a torch)')+' — '+label; }
+    else if(!tc&&inCv){ x=CAVE.exit.x; z=CAVE.exit.z; label='Way out — '+label; }
+    for(var i=0;i<out.length;i++) if(Math.abs(out[i].x-x)<0.5&&Math.abs(out[i].z-z)<0.5) return;
+    out.push({x:x,z:z,l:label}); }
   QUESTS.forEach(function(q){
     if(!qActive(q.id)) return;
     var F=FOLK[q.giver];
@@ -325,7 +332,7 @@ function questTargets(){
     var want=g.type==='gather'?[g.item]:(g.type==='bring'?Object.keys(g.cost).filter(function(r){ return inv(r)<g.cost[r]; }):[]);
     if(want.length){ var best=null,bd=1e9;
       for(var j=0;j<G.ents.length;j++){ var n=G.ents[j]; if(n.kind!=='node'||n.t>0||want.indexOf(n.res)<0) continue;
-        var d=Math.hypot(n.x-p.x,n.z-p.z); if(d<bd&&inCave(n.x,n.z)===inCv){ bd=d; best=n; } }
+        var d=Math.hypot(n.x-p.x,n.z-p.z)+(inCave(n.x,n.z)===inCv?0:1e5); if(d<bd){ bd=d; best=n; } }
       if(best) add(best.x,best.z,RES[best.res].n); }
   });
   return out;
