@@ -180,8 +180,8 @@ section('Gameplay');
     gainXp(5000, 0, 0, 0);
     const pts = G.build.points;
     skillScreen();
-    const cards = document.querySelectorAll('.sk').length;
-    document.querySelectorAll('.sk')[0].click();
+    const cards = document.querySelectorAll('.sk:not(.ab)').length;
+    document.querySelectorAll('.sk:not(.ab)')[0].click();
     const spent = { pts: G.build.points, vigor: SK('vigor'), hp: G.S.maxHp };
     document.getElementById('close').click();
     return { pts, cards, spent, state: G.state };
@@ -940,10 +940,10 @@ section('Laptop HUD: frames, action bar, targets');
   await page.evaluate(() => { startRun(); G.ents = G.ents.filter((e) => !FOE[e.kind] || e.boss); });
   await page.waitForTimeout(300);
   const bar = await page.evaluate(() => { const p = G.player; p.potions = 2; p.hp = p.maxHp * 0.5; WILD.inv.cake = 1;
-    const h0 = p.hp; uiKey('4'); const potion = p.hp > h0 && p.potions === 1; uiKey('5'); const cake = inv('cake') === 0 && p.buff === 3;
+    const h0 = p.hp; uiKey('6'); const potion = p.hp > h0 && p.potions === 1; uiKey('7'); const cake = inv('cake') === 0 && p.buff === 3;
     return { potion, cake, slots: deskSlots().length, keys: deskSlots().map((s) => s.k).join('') }; });
-  ok('the action bar has six slots on keys 1–6', bar.slots === 6 && bar.keys === '123456');
-  ok('4 drinks a potion, 5 eats a honey cake', bar.potion && bar.cake);
+  ok('the action bar has eight slots on keys 1–8', bar.slots === 8 && bar.keys === '12345678');
+  ok('6 drinks a potion, 7 eats a honey cake', bar.potion && bar.cake);
   const tgt = await page.evaluate(() => new Promise((res) => { const p = G.player; p.yaw = 0; G.cam.yaw = 0;
     spawnSpider(p.x + 0.5, p.z + 8, false); spawnSnake(p.x - 4, p.z + 12);
     const t0 = G.t; const tick = () => { if (G.t - t0 < 0.3) { requestAnimationFrame(tick); return; }
@@ -952,11 +952,63 @@ section('Laptop HUD: frames, action bar, targets');
   ok('the target frame shows what you face, with no clicking needed', tgt.auto === 'spider');
   ok('T picks the next foe, for those who want to', tgt.first && tgt.second && tgt.first !== tgt.second, `${tgt.first} → ${tgt.second}`);
   const click = await page.evaluate(() => { document.exitPointerLock && document.exitPointerLock(); LOCKED = false; drawHUD();
-    const a = UIBAR.slots[3]; const p = G.player; p.potions = 1; p.hp = p.maxHp * 0.5; const used = uiClick(a.x + a.s / 2, a.y + a.s / 2); return used && p.potions === 0; });
+    const a = UIBAR.slots[5]; const p = G.player; p.potions = 1; p.hp = p.maxHp * 0.5; const used = uiClick(a.x + a.s / 2, a.y + a.s / 2); return used && p.potions === 0; });
   ok('with the cursor free, slots can be clicked', click);
   const log = await page.evaluate(() => { tip('hello log'); return LOG.length > 0 && LOG[LOG.length - 1].t === 'hello log'; });
   ok('tips and pickups go to the event log', log);
   ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
+  await page.close();
+}
+
+/* ---------------- abilities ---------------- */
+section('Abilities');
+{
+  const page = await open(browser, LAPTOP);
+  const res = await page.evaluate(() => new Promise((done) => {
+    const out = {}; const classes = ['warrior', 'rogue', 'wizard']; let ci = 0;
+    const nextClass = () => {
+      if (ci >= classes.length) { done(out); return; }
+      const cls = classes[ci++]; G.build.cls = cls; startRun(); G.ents = G.ents.filter((e) => !FOE[e.kind]);
+      const p = G.player; p.inv = 1e9; p.x = 0; p.z = 8; p.y = H(0, 8); p.yaw = 0; G.cam.yaw = 0;
+      const locked = abList().every((a, i) => !useAbility(i));
+      p.level = 7; recalc();
+      const r = { locked, hit: [], again: [] }; out[cls] = r; let i = 0;
+      const nextAb = () => {
+        if (i >= 3) { nextClass(); return; }
+        G.ents = G.ents.filter((e) => !FOE[e.kind] && e.kind !== 'corpse');
+        for (let k = 0; k < 5; k++) spawnSpider(p.x + (k - 2) * 1.4, p.z + 3.2, false);
+        p.x = 0; p.z = 8; p.y = H(0, 8); p.yaw = 0; p.hp = p.maxHp * 0.5;
+        const foes = G.ents.filter((e) => FOE[e.kind]), hp0 = foes.reduce((a, e) => a + e.hp, 0), php = p.hp;
+        const used = useAbility(i); r.again.push(!useAbility(i));
+        const t0 = G.t; const w = () => { if (G.t - t0 < 1.5) { requestAnimationFrame(w); return; }
+          const hurt = foes.reduce((a, e) => a + Math.min(e.hp, e.maxHp) - Math.max(0, e.hp), 0) + (hp0 - foes.reduce((a, e) => a + Math.max(0, e.hp), 0));
+          r.hit.push(used && (hp0 - foes.reduce((a, e) => a + Math.max(0, e.hp), 0) > 0 || foes.some((e) => e.stunT > 0 || e.slowT > 0) || p.hp > php || p.ward > 0));
+          i++; nextAb(); }; w();
+      };
+      nextAb();
+    };
+    nextClass();
+  }));
+  for (const cls of ['warrior', 'rogue', 'wizard']) {
+    const r = res[cls];
+    ok(`${cls}: abilities wait for their level`, r.locked);
+    ok(`${cls}: all three abilities work`, r.hit.every(Boolean), r.hit.map((h) => (h ? '✓' : '✗')).join(' '));
+    ok(`${cls}: and then recharge`, r.again.every(Boolean));
+  }
+  const easy = await page.evaluate(() => { G.build.diff = 'easy'; const e = abCdFull(abList()[0]); G.build.diff = 'normal'; return e / abCdFull(abList()[0]); });
+  ok('Easy recharges abilities faster', easy < 1, `×${easy.toFixed(2)}`);
+  const unlock = await page.evaluate(() => { G.build.cls = 'rogue'; startRun(); const p = G.player; abTick(0.01); p.level = 2; abTick(0.01); return G.tip; });
+  ok('a new ability announces itself', /Volley/.test(unlock || ''), unlock || '');
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
+  await page.close();
+}
+{
+  const page = await open(browser, PHONE);
+  const ph = await page.evaluate(() => { startRun(); const a = btns.filter((b) => b.ab).length; G.player.level = 7; recalc(); layoutButtons(); const b = btns.filter((x) => x.ab).length;
+    let ov = null; for (let i = 0; i < btns.length; i++) for (let j = i + 1; j < btns.length; j++) { const x = btns[i], y = btns[j]; if (Math.hypot(x.x - y.x, x.y - y.y) < (x.r + y.r) * 0.75) ov = x.id + '/' + y.id; }
+    const low = Math.max(...btns.map((q) => q.y + q.r)); return { a, b, ov, clear: low < H2 - SAFEB }; });
+  ok('on a phone each ability gets a button as it unlocks', ph.a === 0 && ph.b === 3);
+  ok('ability buttons overlap nothing and clear the gesture strip', !ph.ov && ph.clear, ph.ov || '');
   await page.close();
 }
 

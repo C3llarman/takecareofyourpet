@@ -6874,11 +6874,11 @@ addEventListener('pagehide',function(){ if(G.state==='play'||G.state==='talk'||G
    Easy is the wood as it used to be. Normal and Hard bring more monsters, hitting
    harder and more often, and pay a little better for the trouble. */
 var DIFFS={
-  easy:  {n:'Easy',  hp:1.0, dmg:1.0, spawn:7.0, cap:46, aggro:1.0,  spd:1.0,  cd:1.0,  pop:0.8, pay:1.0, elites:0, champ:0,
+  easy:  {n:'Easy',  hp:1.0, dmg:1.0, spawn:7.0, cap:46, aggro:1.0,  spd:1.0,  cd:1.0,  pop:0.8, pay:1.0, elites:0, champ:0, abCd:0.75,
           d:'The gentle wood. Fewer foes, and they forgive mistakes.'},
-  normal:{n:'Normal',hp:1.35,dmg:1.55,spawn:4.0, cap:64, aggro:1.18, spd:1.08, cd:0.82, pop:1.15,pay:1.2, elites:5, champ:0.12,
+  normal:{n:'Normal',hp:1.35,dmg:1.55,spawn:4.0, cap:64, aggro:1.18, spd:1.08, cd:0.82, pop:1.15,pay:1.2, elites:5, champ:0.12, abCd:1,
           d:'A proper hunt. Foes come in numbers and bite hard.'},
-  hard:  {n:'Hard',  hp:1.8, dmg:2.2, spawn:2.6, cap:84, aggro:1.35, spd:1.16, cd:0.68, pop:1.5, pay:1.5, elites:10, champ:0.24,
+  hard:  {n:'Hard',  hp:1.8, dmg:2.2, spawn:2.6, cap:84, aggro:1.35, spd:1.16, cd:0.68, pop:1.5, pay:1.5, elites:10, champ:0.24, abCd:1,
           d:'The wood wants you dead. Half again the pay, if you live.'}
 };
 var DIFF_ORDER=['easy','normal','hard'];
@@ -8195,6 +8195,155 @@ function questLogHtml(){
 
 </script>
 <script>
+/* ================= abilities: three per calling, for the action bar =================
+   Built for young players: no mana or rage to manage, only short cooldowns; every
+   ability aims itself (at the target frame's foe, else the best thing ahead) and
+   still does something useful with nothing in range, so a press is never wasted;
+   and they arrive one at a time, at levels 2, 4 and 7, each with a "press 3!" cue.
+   On a laptop they sit on keys 3-5; on a phone each gets its own round button. */
+
+var ABIL={
+  warrior:[
+    {id:'charge',n:'Charge',lvl:2,cd:8,icon:'charge',d:'Rush at a foe and knock it silly',fn:abCharge},
+    {id:'spin',  n:'Whirlwind',lvl:4,cd:10,icon:'spin',d:'Spin your axe through everything around you',fn:abSpin},
+    {id:'shout', n:'Battle Shout',lvl:7,cd:20,icon:'shout',d:'Heal a quarter of your health and hit harder for 8 s',fn:abShout}],
+  rogue:[
+    {id:'volley',n:'Volley',lvl:2,cd:8,icon:'volley',d:'A fan of seven bolts',fn:abVolley},
+    {id:'smoke', n:'Smoke Step',lvl:4,cd:9,icon:'smoke',d:'Leap back in a puff of smoke that slows foes',fn:abSmoke},
+    {id:'rain',  n:'Rain of Arrows',lvl:7,cd:16,icon:'rain',d:'Arrows fall on a whole crowd',fn:abRain}],
+  wizard:[
+    {id:'nova',  n:'Frost Nova',lvl:2,cd:9,icon:'nova',d:'Freeze everything close to you',fn:abNova},
+    {id:'fireball',n:'Fireball',lvl:4,cd:7,icon:'fireball',d:'A big bolt of fire that bursts',fn:abFireball},
+    {id:'ward',  n:'Arcane Ward',lvl:7,cd:18,icon:'ward',d:'A shield that soaks up harm for 10 s',fn:abWard}]
+};
+function abList(){ return ABIL[G.build.cls]||[]; }
+function abUnlocked(a){ return G.player&&G.player.level>=a.lvl; }
+function abLeft(a){ return Math.max(0,((G.player&&G.player.abCd)||{})[a.id]||0); }
+function abCdFull(a){ return a.cd*(DF().abCd||1); }
+function useAbility(i){
+  var p=G.player, a=abList()[i];
+  if(!a||!p||p.dead||G.state!=='play'||G.flight) return false;
+  if(!abUnlocked(a)){ tip(a.n+' unlocks at level '+a.lvl); return false; }
+  if(abLeft(a)>0) return false;
+  p.abCd=p.abCd||{}; p.abCd[a.id]=abCdFull(a);
+  a.fn(p); buzz(15);
+  return true;
+}
+function abTick(dt){
+  var p=G.player; if(!p.abCd) p.abCd={};
+  for(var k in p.abCd) if(p.abCd[k]>0) p.abCd[k]-=dt;
+  if(p.shoutT>0) p.shoutT-=dt;
+  if(p.wardT>0){ p.wardT-=dt; if(p.wardT<=0) p.ward=0; }
+  // a new ability arrives with your level
+  var L=p.level;
+  if(p.abSeen===undefined) p.abSeen=L;
+  if(L>p.abSeen){ abList().forEach(function(a,i){ if(a.lvl>p.abSeen&&a.lvl<=L){
+      tip('New ability: '+a.n+'! '+(DESKTOP?'Press '+(i+3):'Tap its new button'));
+      msg(a.n+'!','#ffe6a0',p.x,p.y+3.2,p.z,20); sfx('discover'); layoutButtons(); } });
+    p.abSeen=L; }
+}
+/* the foe an ability goes for: your picked or framed target, else the best ahead */
+function abTarget(maxD){
+  var p=G.player, t=(typeof pickedIn==='function'&&pickedIn(maxD))||null;
+  if(!t&&G.target&&FOE[G.target.kind]&&Math.hypot(G.target.x-p.x,G.target.z-p.z)<maxD) t=G.target;
+  if(!t){ t=aimTarget(p,maxD); if(t&&t.kind==='cocoon') t=null; }
+  return t;
+}
+function foesNear(x,z,r){ var out=[]; for(var i=0;i<G.ents.length;i++){ var e=G.ents[i];
+  if(FOE[e.kind]&&e.hp>0&&!(e.riseT>0)&&e.state!=='sleep'&&Math.hypot(e.x-x,e.z-z)<r+(e.rad||0)) out.push(e); } return out; }
+function meleeDmg(k){ var p=G.player; return (10+p.level*2.6)*G.S.melee*k*(p.shoutT>0?1.3:1); }
+function rangedDmg(k){ var p=G.player; return (9+p.level*2.4)*G.S.ranged*k*(p.shoutT>0?1.3:1); }
+function abHit(e,dmg,fx,fz){ impact(e,fx||0,fz||0); hurtEnemy(e,dmg); }
+
+/* ---------- warrior ---------- */
+function abCharge(p){
+  var t=abTarget(18), ang=t?Math.atan2(t.x-p.x,t.z-p.z):p.yaw;
+  var dist=t?Math.max(0,Math.hypot(t.x-p.x,t.z-p.z)-1.6-(t.rad||0.5)):8;
+  p.yaw=ang; p.dashDir=ang; p.dashT=Math.min(0.5,dist/26); p.dodge='Dodge_Forward'; p.dodgeT=0.4; p.dodgeN=(p.dodgeN||0)+1;
+  p.chargeHit=t; sfx('dash'); burst(p.x,p.y+0.4,p.z,14,[0.55,0.50,0.40],{up:1.2,spread:3,size:0.2,life:0.5,flat:1});
+  setTimeout(function(){ if(!G.player||G.player.dead) return; var q=G.player;
+    var hit=foesNear(q.x+Math.sin(ang)*1.5,q.z+Math.cos(ang)*1.5,3.2);
+    hit.forEach(function(e){ abHit(e,meleeDmg(2.0),Math.sin(ang),Math.cos(ang)); e.stunT=Math.max(e.stunT||0,1.4); });
+    q.atkT=q.atkDur=0.42; q.atkKind='melee'; shake(hit.length?0.35:0.15); sfx(hit.length?'slam':'land',q.x,q.z); },Math.max(120,p.dashT*1000));
+}
+function abSpin(p){
+  p.atkT=p.atkDur=0.5; p.atkKind='melee'; sfx('swing',p.x,p.z); sfx('dash');
+  var hit=foesNear(p.x,p.z,4.8);
+  hit.forEach(function(e){ var dx=e.x-p.x, dz=e.z-p.z, d=Math.hypot(dx,dz)||1; abHit(e,meleeDmg(1.6),dx/d,dz/d);
+    if(!e.boss&&!e.mini&&e.hp>0){ e.x+=dx/d*1.6; e.z+=dz/d*1.6; collide(e,bodyR(e)); } });
+  for(var i=0;i<20;i++){ var a=i/20*6.283; burst(p.x+Math.cos(a)*3,p.y+0.9,p.z+Math.sin(a)*3,1,[0.85,0.88,0.95],{up:1,spread:2,size:0.12,life:0.4}); }
+  if(hit.length) shake(0.25);
+}
+function abShout(p){
+  p.hp=Math.min(p.maxHp,p.hp+p.maxHp*0.25); p.shoutT=8;
+  for(var i=0;i<G.ents.length;i++){ var a=G.ents[i]; if(a.kind==='ally') a.hp=Math.min(a.maxHp,a.hp+a.maxHp*0.25); }
+  foesNear(p.x,p.z,8).forEach(function(e){ if(!e.boss) e.stunT=Math.max(e.stunT||0,0.8); });
+  msg('FOR THE WOOD!','#ffd76a',p.x,p.y+3,p.z,20); sfx('roar',p.x,p.z); shake(0.3);
+  burst(p.x,p.y+1,p.z,30,[1.0,0.80,0.35],{up:4,spread:4,size:0.14,life:0.9,grav:-1});
+}
+/* ---------- rogue ---------- */
+function abVolley(p){
+  var t=abTarget(30), yaw=t?Math.atan2(t.x-p.x,t.z-p.z):p.yaw; p.yaw=yaw;
+  p.atkT=p.atkDur=0.34; p.atkKind='bow'; sfx('bow',p.x,p.z);
+  var sy=p.y+1.35*p.scale, aimY=t?((t.y+aimH(t))-sy)/Math.max(1,Math.hypot(t.x-p.x,t.z-p.z)):0;
+  for(var q=-3;q<=3;q++){ var y2=yaw+q*0.09, dx=Math.sin(y2), dz=Math.cos(y2), L=Math.hypot(dx,aimY,dz);
+    G.ents.push({kind:'shot',x:p.x+dx*0.7,y:sy,z:p.z+dz*0.7,vx:dx/L*38,vy:aimY/L*38,vz:dz/L*38,life:1.6,aimed:1,
+      dmg:rangedDmg(0.8),pierce:G.S.pierce,hits:[],proj:'arrow',burst:0,frost:0,spin:0}); }
+}
+function abSmoke(p){
+  var t=abTarget(12), away=t?Math.atan2(p.x-t.x,p.z-t.z):p.yaw+Math.PI;
+  burst(p.x,p.y+0.8,p.z,30,[0.62,0.62,0.66],{up:1.5,spread:3.5,size:0.35,life:1.4,grav:-0.5});
+  foesNear(p.x,p.z,6).forEach(function(e){ e.slowT=Math.max(e.slowT||0,3); e.stunT=Math.max(e.stunT||0,0.6); });
+  p.dashDir=away; p.dashT=0.26; p.inv=Math.max(p.inv,1.2); p.dodge='Dodge_Backward'; p.dodgeT=0.42; p.dodgeN=(p.dodgeN||0)+1;
+  sfx('dash'); msg('*poof*','#d8d8e0',p.x,p.y+2.6,p.z,16);
+}
+function abRain(p){
+  var t=abTarget(30), cx=t?t.x:p.x+Math.sin(p.yaw)*10, cz=t?t.z:p.z+Math.cos(p.yaw)*10;
+  p.atkT=p.atkDur=0.34; p.atkKind='bow'; sfx('bow',p.x,p.z);
+  for(var w=0;w<3;w++) (function(w){ setTimeout(function(){ if(!G.player||G.state!=='play') return;
+    for(var i=0;i<10;i++){ var a=Math.random()*6.283, r=Math.sqrt(Math.random())*6, ax=cx+Math.cos(a)*r, az=cz+Math.sin(a)*r;
+      G.ents.push({kind:'stuck',x:ax,y:H(ax,az)+0.3,z:az,vx:0.1,vy:-1,vz:0.1,proj:'arrow',life:2.5,spin:0});
+      burst(ax,H(ax,az)+0.2,az,2,[0.55,0.45,0.30],{up:1,spread:1,size:0.08,life:0.3}); }
+    foesNear(cx,cz,6).forEach(function(e){ abHit(e,rangedDmg(1.1),0,0); });
+    sfx('thunk',cx,cz); },250+w*380); })(w);
+}
+/* ---------- wizard ---------- */
+function abNova(p){
+  sfx('zap',p.x,p.z); shake(0.2);
+  foesNear(p.x,p.z,7).forEach(function(e){ abHit(e,rangedDmg(0.7),0,0); e.stunT=Math.max(e.stunT||0,e.boss?0.8:2.5); e.slowT=Math.max(e.slowT||0,4); e.frozen=e.stunT; });
+  for(var i=0;i<36;i++){ var a=i/36*6.283; burst(p.x+Math.cos(a)*1.2,p.y+0.3,p.z+Math.sin(a)*1.2,1,[0.70,0.92,1.0],{up:0.6,spread:7,size:0.16,life:0.6,flat:1}); }
+}
+function abFireball(p){
+  var t=abTarget(34), yaw=t?Math.atan2(t.x-p.x,t.z-p.z):p.yaw; p.yaw=yaw;
+  p.atkT=p.atkDur=0.34; p.atkKind='cast'; sfx('fireball',p.x,p.z);
+  var sy=p.y+1.35*p.scale, aimY=t?((t.y+aimH(t))-sy)/Math.max(1,Math.hypot(t.x-p.x,t.z-p.z)):0, dx=Math.sin(yaw), dz=Math.cos(yaw), L=Math.hypot(dx,aimY,dz);
+  G.ents.push({kind:'shot',x:p.x+dx,y:sy,z:p.z+dz,vx:dx/L*26,vy:aimY/L*26,vz:dz/L*26,life:2,aimed:1,
+    dmg:rangedDmg(2.6),pierce:0,hits:[],proj:'bolt',burst:4.5,frost:0,spin:0,fire:1});
+}
+function abWard(p){
+  p.ward=Math.round(p.maxHp*0.45); p.wardT=10; sfx('fairy');
+  msg('Arcane Ward','#bfe0ff',p.x,p.y+3,p.z,18);
+  burst(p.x,p.y+1,p.z,28,[0.55,0.75,1.0],{up:2,spread:2.5,size:0.13,life:1,grav:-1});
+}
+/* the ward drinks harm before your health does */
+function wardSoak(d){ var p=G.player; if(!(p.ward>0)) return d; var s=Math.min(p.ward,d); p.ward-=s;
+  if(p.ward<=0){ p.ward=0; p.wardT=0; msg('ward breaks','#bfe0ff',p.x,p.y+2.6,p.z,13); } return d-s; }
+/* stunned or frozen foes stand still; a frozen one sparkles blue */
+function stunTick(e,dt){
+  if(!(e.stunT>0)) return false;
+  e.stunT-=dt; e.wind=0; e.speed=0; if(e.puffT) e.puffT=0; if(e.lungeT) e.lungeT=0;
+  if(Math.random()<dt*6) burst(e.x,e.y+(e.frozen>0?0.8:2)*(e.scale||1),e.z,1,e.frozen>0?[0.7,0.92,1.0]:[1.0,0.95,0.5],{up:0.8,spread:0.6,size:0.09,life:0.5,grav:-1});
+  if(e.stunT<=0) e.frozen=0;
+  return true;
+}
+/* ---------- phone buttons, one per unlocked ability ---------- */
+function abButtons(btns,r,right,bot){
+  var spots=[[right-r*2.05,bot-r*3.95],[right,bot-r*4.35],[right-r*3.75,bot-r*2.85]];
+  abList().forEach(function(a,i){ if(abUnlocked(a)) btns.push({id:'ab'+i,x:spots[i][0],y:spots[i][1],r:r*0.66,label:a.n.split(' ')[0].toUpperCase().slice(0,6),ab:a}); });
+}
+
+</script>
+<script>
 /* ================= ui: the laptop HUD =================
    Framed panels in the spirit of the big online fantasy games, kept simple for
    young players: your portrait and health top-left, the thing you're fighting
@@ -8246,6 +8395,17 @@ function uiIcon(id,x,y,s){
     case 'skills': for(var k=0;k<10;k++){ var a=k/10*6.283-1.57, r=(k&1)?4.5:10; hx.lineTo(Math.cos(a)*r,Math.sin(a)*r); } hx.closePath(); fl('#ffd76a'); break;
     case 'journal': hx.rect(-8,-10,16,20); fl('#7a4a2a'); hx.beginPath(); hx.rect(-5,-10,2,20); fl('#c9a070'); hx.beginPath(); hx.moveTo(-1,-4); hx.lineTo(6,-4); hx.moveTo(-1,0); hx.lineTo(6,0); st('#e8d6a8',1.2); break;
     case 'fly': hx.moveTo(0,-1); hx.lineTo(11,-7); hx.lineTo(5,1); hx.lineTo(0,7); hx.lineTo(-5,1); hx.lineTo(-11,-7); hx.closePath(); fl('#e8c88a'); break;
+    case 'charge': for(var c=0;c<3;c++){ hx.moveTo(-11,-5+c*5); hx.lineTo(-3,-5+c*5); } st('#e8c08a',2); hx.beginPath(); hx.moveTo(-1,-9); hx.lineTo(11,0); hx.lineTo(-1,9); hx.closePath(); fl('#d8dde4'); break;
+    case 'spin': hx.arc(0,0,9,0.3,5.6); st('#d8dde4',3); hx.beginPath(); hx.moveTo(9,-4); hx.lineTo(12,2); hx.lineTo(5,1); hx.closePath(); fl('#d8dde4'); hx.beginPath(); hx.arc(0,0,3,0,6.3); fl('#8a6034'); break;
+    case 'shout': hx.moveTo(-9,-4); hx.lineTo(-2,-4); hx.lineTo(5,-10); hx.lineTo(5,10); hx.lineTo(-2,4); hx.lineTo(-9,4); hx.closePath(); fl('#ffd76a');
+      hx.beginPath(); hx.arc(6,0,6,-0.8,0.8); st('#ffd76a',1.6); hx.beginPath(); hx.arc(6,0,10,-0.8,0.8); st('#ffd76a',1.6); break;
+    case 'volley': for(var v=-2;v<=2;v++){ hx.moveTo(-10,0); hx.lineTo(10,v*4); } st('#e8e2d0',1.6); break;
+    case 'smoke': hx.arc(-4,3,6,0,6.3); hx.arc(4,1,7,0,6.3); hx.arc(0,-5,6,0,6.3); fl('#b8b8c4'); break;
+    case 'rain': for(var a2=0;a2<5;a2++){ hx.moveTo(-9+a2*4.5,-10); hx.lineTo(-11+a2*4.5,6); } st('#e8e2d0',1.8); hx.beginPath(); hx.moveTo(-12,10); hx.lineTo(12,10); st('#8a7050',2); break;
+    case 'nova': for(var n2=0;n2<8;n2++){ var na=n2/8*6.283; hx.moveTo(Math.cos(na)*3,Math.sin(na)*3); hx.lineTo(Math.cos(na)*11,Math.sin(na)*11); } st('#bfe8ff',2.4); hx.beginPath(); hx.arc(0,0,3.5,0,6.3); fl('#ffffff'); break;
+    case 'fireball': hx.arc(2,2,7,0,6.3); fl('#ff8a30'); hx.beginPath(); hx.arc(3,3,3.5,0,6.3); fl('#ffe080'); hx.beginPath(); hx.moveTo(-3,-3); hx.lineTo(-11,-9); hx.moveTo(-1,-6); hx.lineTo(-7,-12); st('#ff8a30',2); break;
+    case 'ward': hx.moveTo(0,-11); hx.lineTo(9,-6); hx.lineTo(8,4); hx.quadraticCurveTo(5,9,0,11); hx.quadraticCurveTo(-5,9,-8,4); hx.lineTo(-9,-6); hx.closePath(); fl('#7fb0ff');
+      hx.beginPath(); hx.arc(0,0,3,0,6.3); fl('#e8f4ff'); break;
     case 'lock': hx.rect(-6,-2,12,10); fl('#6a6458'); hx.beginPath(); hx.arc(0,-3,4.5,3.14,6.29); st('#6a6458',2.4); break;
   }
   hx.restore();
@@ -8293,13 +8453,16 @@ function deskSlots(){
   var S=G.S, p=G.player, cls=G.build.cls;
   var main=cls==='warrior'?'axe':(cls==='wizard'?'staff':'sword'), ranged=S.proj==='arrow'?'bow':(S.proj==='bolt'?'bolt':'throw');
   var cd=Math.max(0,p.cdT);
+  var abs=abList().map(function(a,i){ var on=abUnlocked(a);
+    return {k:''+(i+3),icon:on?a.icon:'lock',n:on?a.n:a.n+' (level '+a.lvl+')',d:on?a.d:'Unlocks at level '+a.lvl,cd:on?abLeft(a)/abCdFull(a):0,off:!on,lockLvl:on?0:a.lvl,
+      act:function(){ useAbility(i); }}; });
   return [
     {k:'1',alt:'E',icon:main,n:'Strike',d:'Swing at what\'s in front of you',cd:cd/0.45,act:function(){ press('attack'); IN.attack=false; }},
     {k:'2',alt:'F',icon:ranged,n:'Shoot',d:'Fire at the nearest foe ahead',cd:cd/Math.max(0.2,S.cd),act:function(){ press('shoot'); }},
-    {k:'3',alt:'⇧',icon:S.dash?'dash':'lock',n:S.dash?'Shadowstep':'Dash (locked)',d:S.dash?'Dash the way you are moving':'Learn Shadowstep in the rogue skills',cd:S.dash?Math.max(0,p.dashCd)/1.6:0,off:!S.dash,act:function(){ IN.dash=true; }},
-    {k:'4',alt:'Q',icon:'potion',n:'Healing potion',d:'Heals almost half your health',count:p.potions,off:p.potions<=0,act:function(){ usePotion(); }},
-    {k:'5',icon:'cake',n:'Honey cake',d:'Mend for 40 seconds',count:inv('cake'),off:inv('cake')<=0,act:function(){ useItem('cake'); }},
-    {k:'6',icon:'tonic',n:'Wardleaf tonic',d:'Half damage for 45 seconds',count:inv('tonic'),off:inv('tonic')<=0,act:function(){ useItem('tonic'); }}
+    abs[0],abs[1],abs[2],
+    {k:'6',alt:'Q',icon:'potion',n:'Healing potion',d:'Heals almost half your health',count:p.potions,off:p.potions<=0,act:function(){ usePotion(); }},
+    {k:'7',icon:'cake',n:'Honey cake',d:'Mend for 40 seconds',count:inv('cake'),off:inv('cake')<=0,act:function(){ useItem('cake'); }},
+    {k:'8',icon:'tonic',n:'Wardleaf tonic',d:'Half damage for 45 seconds',count:inv('tonic'),off:inv('tonic')<=0,act:function(){ useItem('tonic'); }}
   ];
 }
 function useItem(id){
@@ -8311,7 +8474,7 @@ function useItem(id){
 }
 var UIBAR=null;
 function barGeom(){
-  var n=6, s=clamp(W/24,44,58), gap=6, micro=WILD.eagle?3:2, mw=s*0.62;
+  var n=8, s=clamp(W/26,42,56), gap=6, micro=WILD.eagle?3:2, mw=s*0.62;
   var w=n*s+(n-1)*gap+14+micro*(mw+5)+12, x=W/2-w/2, y=H2-s-18;
   return {x:x,y:y,w:w,s:s,gap:gap,n:n,mw:mw,micro:micro};
 }
@@ -8334,6 +8497,7 @@ function drawActionBar(){
     uiText(sl.k,x+5,y+13,12,'#fff6de','left',700);
     if(sl.alt) uiText(sl.alt,x+s-5,y+13,10,UI_DIM,'right',600);
     if(sl.count!==undefined) uiText(''+sl.count,x+s-5,y+s-5,13,sl.count?'#fff6de':'#8a7a6a','right',700);
+    if(sl.lockLvl) uiText('Lv '+sl.lockLvl,x+s/2,y+s-6,10.5,'#c9b27a','center',700);
     UIBAR.slots.push({x:x,y:y,s:s,sl:sl});
   }
   // the little buttons: skills, journal, and Aelfrend once he's yours
@@ -8376,7 +8540,7 @@ function uiClick(x,y){
 }
 function uiKey(k){
   if(!DESKTOP||G.state!=='play') return false;
-  var i='123456'.indexOf(k); if(i<0) return false;
+  var i='12345678'.indexOf(k); if(i<0) return false;
   var sl=deskSlots()[i]; if(sl&&!sl.off) sl.act(); return true;
 }
 
@@ -8404,6 +8568,8 @@ function drawUnitFrames(){
     uiText(txt,ix+6,iy+12,11,col,'left',700); ix+=tw+5; }
   if(p.buff!==null&&p.buff!==undefined){ var bc=FAIRYCOL[p.buff]; chip(FAIRYNAME[p.buff].split(' ')[0]+' '+Math.ceil(p.buffT)+'s','rgb('+bc.map(function(v){return Math.round(v*255);}).join(',')+')'); }
   if(p.poisonT>0) chip('Poisoned','#8fe070');
+  if(p.ward>0) chip('Ward '+Math.ceil(p.ward),'#bfe0ff');
+  if(p.shoutT>0) chip('Battle cry '+Math.ceil(p.shoutT)+'s','#ffd76a');
   if(p.slowT>0.3) chip('Webbed','#e8e8f0');
   var bq=G.bounty;
   if(bq) chip(bq.got>=bq.n?'⚑ Bounty done':'⚑ '+bq.got+'/'+bq.n,bq.got>=bq.n?'#ffd76a':'#e8d6a8');
@@ -8780,6 +8946,7 @@ function layoutButtons(){
     {id:'skills',x:W-r*0.90,    y:SAFET+r*2.05, r:r*0.58,label:'SKILL'}
   ];
   if(G.S&&G.S.dash) btns.push({id:'dash',x:right-r*2.4,y:bot-r*2.0,r:r*0.70,label:'DASH'});
+  if(G.player) abButtons(btns,r,right,bot);
   if(typeof WILD!=='undefined'&&WILD&&WILD.eagle) btns.push({id:'fly',x:W-r*0.90,y:SAFET+r*3.5,r:r*0.58,label:'FLY'});
 }
 function hitBtn(x,y){
@@ -8798,6 +8965,7 @@ function press(id){
   else if(id==='potion') usePotion();
   else if(id==='skills') skillScreen();
   else if(id==='fly') flyScreen();
+  else if(id.indexOf('ab')===0) useAbility(+id.slice(2));
   buzz(8);
 }
 function ptrDown(id,x,y){
@@ -9079,6 +9247,7 @@ function hurtPlayer(d,src){
   if(p.inv>0||p.dead) return;
   if(p.buff===2) d*=0.5;
   d*=G.S.armor*DF().dmg;
+  d=wardSoak(d); if(d<=0){ p.inv=0.5; sfx('ehit'); return; }
   p.hp-=d; p.inv=0.95; p.hurtT=0.3; G.hitFlash=0.5; buzz([30,40,30]);
   sfx('hurt'); shake(0.3);
   TELE.hurt(src||'unknown',d);
@@ -9095,6 +9264,7 @@ function update(dt){
   if(G.tipT>0) G.tipT-=dt;
   p.cdT-=dt; p.inv=Math.max(0,p.inv-dt); p.hurtT=Math.max(0,p.hurtT-dt);
   p.dashCd-=dt; p.dashT-=dt;
+  abTick(dt);
   if(p.atkT>0) p.atkT-=dt;
   if(p.buffT>0){ p.buffT-=dt; if(p.buffT<=0) p.buff=null; }
   if(p.buff===3&&p.hp<p.maxHp) p.hp=Math.min(p.maxHp,p.hp+6*dt);
@@ -9370,6 +9540,7 @@ function updateEnts(dt){
     if(FOE[e.kind]){
       e.slowT=Math.max(0,(e.slowT||0)-dt);
       eliteGlow(e,dt);
+      if(stunTick(e,dt)){ if(e.atkT>0) e.atkT-=dt; continue; }    // stunned or frozen: it waits
       var DD=DF();
       var spd=(e.kind==='spider'?(e.big?3.4:4.2):(e.kind==='wasp'?4.4:(e.kind==='shroom'?3.5:3.8)))*(e.slowT>0?0.5:1)*DD.spd;
       if(e.kind==='wasp') e.hover=1.25+Math.sin(G.t*2.2+e.walkPhase)*0.18;
@@ -9678,7 +9849,8 @@ function pushShot(e){
   if(e.kind==='stuck'){ var sk=e.proj==='axe'?0.15:0.28; x+=ux*sk; y+=uy*sk; z+=uz*sk; }   // the head is buried
   if(e.proj==='bolt'&&e.kind==='shot'){
     var g=0.30+Math.sin(G.t*30+e.x)*0.04;
-    var m=mat(); m4trs(m,x,y,z,0,G.t*9,0,g,g,g); DRAW.push(['blob',m,[0.55,0.85,1.0]]);
+    if(e.fire) g*=1.7;
+    var m=mat(); m4trs(m,x,y,z,0,G.t*9,0,g,g,g); DRAW.push(['blob',m,e.fire?[1.0,0.55,0.15]:[0.55,0.85,1.0]]);
     var m2=mat(); m4trs(m2,x-ux*0.35,y-uy*0.35,z-uz*0.35,0,0,0,g*0.6,g*0.6,g*0.6); DRAW.push(['blob',m2,[0.80,0.95,1.0]]);
     var m3=mat(); m4trs(m3,x-ux*0.65,y-uy*0.65,z-uz*0.65,0,0,0,g*0.35,g*0.35,g*0.35); DRAW.push(['blob',m3,[0.45,0.70,1.0]]);
     return;
@@ -10066,7 +10238,7 @@ function drawHUD(){
   for(var tq in touches) if(touches[tq].btn) held[touches[tq].btn]=1;
   for(var b=0;b<btns.length;b++){
     var bt=btns[b], dn=!!held[bt.id];
-    var on=(bt.id!=='dash')||p.dashCd<=0;
+    var on=bt.ab?abLeft(bt.ab)<=0:((bt.id!=='dash')||p.dashCd<=0);
     hx.fillStyle=dn?'rgba(232,194,106,.42)':'rgba(10,14,10,.42)';
     hx.beginPath(); hx.arc(bt.x,bt.y,bt.r*(dn?1.06:1),0,6.3); hx.fill();
     hx.strokeStyle=on?(dn?'rgba(255,230,170,.95)':'rgba(232,194,106,.65)'):'rgba(120,130,120,.35)';
@@ -10076,6 +10248,9 @@ function drawHUD(){
     if(bt.id==='potion'){ hx.fillStyle='#ff9d9d'; hx.fillText('✚'+p.potions,bt.x,bt.y+bt.r*0.16); }
     else if(bt.id==='skills'){ hx.fillStyle=G.build.points>0?'#9ff07a':'#f3e7c9';
       hx.fillText(G.build.points>0?'★'+G.build.points:'SKILL',bt.x,bt.y+bt.r*0.16); }
+    else if(bt.ab){ hx.font='600 '+Math.round(bt.r*0.30)+'px Georgia,serif'; hx.fillText(bt.label,bt.x,bt.y+bt.r*0.12);
+      var lf=abLeft(bt.ab)/abCdFull(bt.ab); if(lf>0){ hx.fillStyle='rgba(0,0,0,.45)'; hx.beginPath(); hx.moveTo(bt.x,bt.y);
+        hx.arc(bt.x,bt.y,bt.r,-Math.PI/2,-Math.PI/2+Math.PI*2*lf); hx.closePath(); hx.fill(); } }
     else if(bt.id==='attack'&&G.talk){ hx.fillStyle='#ffd76a'; hx.fillText(G.talk.tap,bt.x,bt.y+bt.r*0.14); }
     else hx.fillText(bt.label,bt.x,bt.y+bt.r*0.14);
   }
@@ -10117,7 +10292,7 @@ function drawHUD(){
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
     var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot   ·   space jump';
-    var keys2='1–6 action bar   ·   T pick a target   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   K map key   ·   M sound';
+    var keys2='1–8 action bar   ·   T pick a target   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   K map key   ·   M sound';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
       hx.textAlign='center'; hx.font='600 12.5px Georgia,serif';
@@ -10288,7 +10463,9 @@ function skillScreen(flash){
     '<div class="stat"><span>Melee / ranged</span><b>'+Math.round(G.S.melee*100)+'% / '+Math.round(G.S.ranged*100)+'%</b></div>'+
     '<div class="stat"><span>Prisoners freed / foes slain</span><b>'+G.freed+' / '+G.killed+'</b></div>'+
     '<div class="stat"><span>Lost gnomes found</span><b>'+gnomeCount()+' / '+GNOMES.length+'</b></div>'+satchelHtml()+
-    '<div class="skills">'+rows+'</div>'+
+    '<h3>Abilities</h3><div class="skills">'+abList().map(function(a,i){ var on=G.player.level>=a.lvl;
+      return '<div class="sk ab'+(on?' has':' off')+'"><div class="skh"><b>'+a.n+'</b><span>'+(on?(DESKTOP?'key '+(i+3):'button'):'level '+a.lvl)+'</span></div><small>'+a.d+' · '+Math.round(abCdFull(a))+' s to recharge</small></div>'; }).join('')+'</div>'+
+    '<h3>Skills</h3><div class="skills">'+rows+'</div>'+
     '<button class="btn" id="close">Back to the wood</button>'+
     '<button class="btn alt" id="jrnl">Journal — '+loreCount()+' of '+LORE.length+' pages'+(G.loreNew?' (new!)':'')+'</button>'+
     '<button class="btn alt" id="diff">Difficulty: '+DF().n+' — tap to change</button>'+
@@ -10298,7 +10475,7 @@ function skillScreen(flash){
   document.getElementById('diff').onclick=function(){
     var i=DIFF_ORDER.indexOf(G.build.diff||'normal'); G.build.diff=DIFF_ORDER[(i+1)%DIFF_ORDER.length];
     this.textContent='Difficulty: '+DF().n+' — tap to change'; saveGame(); };
-  var els=ui.querySelectorAll('.sk');
+  var els=ui.querySelectorAll('.sk:not(.ab)');
   for(var k=0;k<els.length;k++) els[k].onclick=function(){
     var s=tree()[+this.getAttribute('data-i')];
     if(G.build.points<=0||SK(s.id)>=s.r) return;

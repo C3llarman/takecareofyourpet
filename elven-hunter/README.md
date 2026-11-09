@@ -52,7 +52,7 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 | Dash | `Shift` *(unlocked by a skill; rolls the way you are pushing)* |
 | Drink a potion | `Q` |
 | Skills | `Tab` |
-| Action bar | `1`–`6`: strike, shoot, dash, potion, honey cake, tonic |
+| Action bar | `1` strike, `2` shoot, `3`–`5` your calling's abilities, `6` potion, `7` honey cake, `8` tonic |
 | Pick a target | `T` (optional: attacks find the best target on their own) |
 | Map key | `K` |
 | Journal and quests | `L` (or the button on the skills screen) |
@@ -91,6 +91,7 @@ src/
               Cave and its torch, butterflies, rabbits, toadstools and gnomes
   legends.js  the journal (36 pages of lore), waystones, Bram's tales, the five
               mini-bosses and the golden champions
+  abilities.js three abilities per calling, unlocked at levels 2, 4 and 7
   ui.js       the laptop HUD: portrait and target frames, action bar, XP bar,
               quest tracker, zone name, event log
   folk.js     Wren, Tobin and Ærtheldor and their ten quests, gathering, the
@@ -261,6 +262,21 @@ they cool down, counts for potions, honey cakes and tonics (crafted ones now go 
 bag for later), and buttons for skills, the journal and Aelfrend. With the cursor free,
 hover a slot for a tooltip or click it. Phones keep their touch layout.
 
+### Abilities (`src/abilities.js`)
+
+Each calling has three abilities, arriving one at a time at levels **2, 4 and 7** with a
+"press 3!" cue. They're made for young players: no mana or rage, just short cooldowns
+(a quarter shorter on Easy); each aims itself at the target-frame foe, else the best thing
+ahead, and still does something useful with nothing in range, so a press is never wasted.
+Laptop: keys `3`–`5`. Phone: a round button appears for each as it unlocks. The skills
+screen lists them all, locked ones with their level.
+
+| | Level 2 | Level 4 | Level 7 |
+|---|---|---|---|
+| **Warrior** | **Charge**: rush at a foe, hit hard, stun it (8 s) | **Whirlwind**: hit everything around you and knock it back (10 s) | **Battle Shout**: heal a quarter, +30% damage for 8 s, stagger foes near you (20 s) |
+| **Rogue** | **Volley**: a fan of seven bolts (8 s) | **Smoke Step**: leap back through smoke that slows and dazes foes (9 s) | **Rain of Arrows**: three waves on a whole crowd (16 s) |
+| **Wizard** | **Frost Nova**: freeze everything near you (9 s) | **Fireball**: a big bolt that bursts (7 s) | **Arcane Ward**: a shield soaking 45% of your health for 10 s (18 s) |
+
 ### Folk, quests and crafting (`src/folk.js`)
 
 Walk up to a quest giver and `E` / **TALK**. A gold **!** floats over someone with work for
@@ -412,7 +428,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-163 assertions run the actual game in headless Chromium with software WebGL and check
+180 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames

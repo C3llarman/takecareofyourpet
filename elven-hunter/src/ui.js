@@ -49,6 +49,17 @@ function uiIcon(id,x,y,s){
     case 'skills': for(var k=0;k<10;k++){ var a=k/10*6.283-1.57, r=(k&1)?4.5:10; hx.lineTo(Math.cos(a)*r,Math.sin(a)*r); } hx.closePath(); fl('#ffd76a'); break;
     case 'journal': hx.rect(-8,-10,16,20); fl('#7a4a2a'); hx.beginPath(); hx.rect(-5,-10,2,20); fl('#c9a070'); hx.beginPath(); hx.moveTo(-1,-4); hx.lineTo(6,-4); hx.moveTo(-1,0); hx.lineTo(6,0); st('#e8d6a8',1.2); break;
     case 'fly': hx.moveTo(0,-1); hx.lineTo(11,-7); hx.lineTo(5,1); hx.lineTo(0,7); hx.lineTo(-5,1); hx.lineTo(-11,-7); hx.closePath(); fl('#e8c88a'); break;
+    case 'charge': for(var c=0;c<3;c++){ hx.moveTo(-11,-5+c*5); hx.lineTo(-3,-5+c*5); } st('#e8c08a',2); hx.beginPath(); hx.moveTo(-1,-9); hx.lineTo(11,0); hx.lineTo(-1,9); hx.closePath(); fl('#d8dde4'); break;
+    case 'spin': hx.arc(0,0,9,0.3,5.6); st('#d8dde4',3); hx.beginPath(); hx.moveTo(9,-4); hx.lineTo(12,2); hx.lineTo(5,1); hx.closePath(); fl('#d8dde4'); hx.beginPath(); hx.arc(0,0,3,0,6.3); fl('#8a6034'); break;
+    case 'shout': hx.moveTo(-9,-4); hx.lineTo(-2,-4); hx.lineTo(5,-10); hx.lineTo(5,10); hx.lineTo(-2,4); hx.lineTo(-9,4); hx.closePath(); fl('#ffd76a');
+      hx.beginPath(); hx.arc(6,0,6,-0.8,0.8); st('#ffd76a',1.6); hx.beginPath(); hx.arc(6,0,10,-0.8,0.8); st('#ffd76a',1.6); break;
+    case 'volley': for(var v=-2;v<=2;v++){ hx.moveTo(-10,0); hx.lineTo(10,v*4); } st('#e8e2d0',1.6); break;
+    case 'smoke': hx.arc(-4,3,6,0,6.3); hx.arc(4,1,7,0,6.3); hx.arc(0,-5,6,0,6.3); fl('#b8b8c4'); break;
+    case 'rain': for(var a2=0;a2<5;a2++){ hx.moveTo(-9+a2*4.5,-10); hx.lineTo(-11+a2*4.5,6); } st('#e8e2d0',1.8); hx.beginPath(); hx.moveTo(-12,10); hx.lineTo(12,10); st('#8a7050',2); break;
+    case 'nova': for(var n2=0;n2<8;n2++){ var na=n2/8*6.283; hx.moveTo(Math.cos(na)*3,Math.sin(na)*3); hx.lineTo(Math.cos(na)*11,Math.sin(na)*11); } st('#bfe8ff',2.4); hx.beginPath(); hx.arc(0,0,3.5,0,6.3); fl('#ffffff'); break;
+    case 'fireball': hx.arc(2,2,7,0,6.3); fl('#ff8a30'); hx.beginPath(); hx.arc(3,3,3.5,0,6.3); fl('#ffe080'); hx.beginPath(); hx.moveTo(-3,-3); hx.lineTo(-11,-9); hx.moveTo(-1,-6); hx.lineTo(-7,-12); st('#ff8a30',2); break;
+    case 'ward': hx.moveTo(0,-11); hx.lineTo(9,-6); hx.lineTo(8,4); hx.quadraticCurveTo(5,9,0,11); hx.quadraticCurveTo(-5,9,-8,4); hx.lineTo(-9,-6); hx.closePath(); fl('#7fb0ff');
+      hx.beginPath(); hx.arc(0,0,3,0,6.3); fl('#e8f4ff'); break;
     case 'lock': hx.rect(-6,-2,12,10); fl('#6a6458'); hx.beginPath(); hx.arc(0,-3,4.5,3.14,6.29); st('#6a6458',2.4); break;
   }
   hx.restore();
@@ -96,13 +107,16 @@ function deskSlots(){
   var S=G.S, p=G.player, cls=G.build.cls;
   var main=cls==='warrior'?'axe':(cls==='wizard'?'staff':'sword'), ranged=S.proj==='arrow'?'bow':(S.proj==='bolt'?'bolt':'throw');
   var cd=Math.max(0,p.cdT);
+  var abs=abList().map(function(a,i){ var on=abUnlocked(a);
+    return {k:''+(i+3),icon:on?a.icon:'lock',n:on?a.n:a.n+' (level '+a.lvl+')',d:on?a.d:'Unlocks at level '+a.lvl,cd:on?abLeft(a)/abCdFull(a):0,off:!on,lockLvl:on?0:a.lvl,
+      act:function(){ useAbility(i); }}; });
   return [
     {k:'1',alt:'E',icon:main,n:'Strike',d:'Swing at what\'s in front of you',cd:cd/0.45,act:function(){ press('attack'); IN.attack=false; }},
     {k:'2',alt:'F',icon:ranged,n:'Shoot',d:'Fire at the nearest foe ahead',cd:cd/Math.max(0.2,S.cd),act:function(){ press('shoot'); }},
-    {k:'3',alt:'⇧',icon:S.dash?'dash':'lock',n:S.dash?'Shadowstep':'Dash (locked)',d:S.dash?'Dash the way you are moving':'Learn Shadowstep in the rogue skills',cd:S.dash?Math.max(0,p.dashCd)/1.6:0,off:!S.dash,act:function(){ IN.dash=true; }},
-    {k:'4',alt:'Q',icon:'potion',n:'Healing potion',d:'Heals almost half your health',count:p.potions,off:p.potions<=0,act:function(){ usePotion(); }},
-    {k:'5',icon:'cake',n:'Honey cake',d:'Mend for 40 seconds',count:inv('cake'),off:inv('cake')<=0,act:function(){ useItem('cake'); }},
-    {k:'6',icon:'tonic',n:'Wardleaf tonic',d:'Half damage for 45 seconds',count:inv('tonic'),off:inv('tonic')<=0,act:function(){ useItem('tonic'); }}
+    abs[0],abs[1],abs[2],
+    {k:'6',alt:'Q',icon:'potion',n:'Healing potion',d:'Heals almost half your health',count:p.potions,off:p.potions<=0,act:function(){ usePotion(); }},
+    {k:'7',icon:'cake',n:'Honey cake',d:'Mend for 40 seconds',count:inv('cake'),off:inv('cake')<=0,act:function(){ useItem('cake'); }},
+    {k:'8',icon:'tonic',n:'Wardleaf tonic',d:'Half damage for 45 seconds',count:inv('tonic'),off:inv('tonic')<=0,act:function(){ useItem('tonic'); }}
   ];
 }
 function useItem(id){
@@ -114,7 +128,7 @@ function useItem(id){
 }
 var UIBAR=null;
 function barGeom(){
-  var n=6, s=clamp(W/24,44,58), gap=6, micro=WILD.eagle?3:2, mw=s*0.62;
+  var n=8, s=clamp(W/26,42,56), gap=6, micro=WILD.eagle?3:2, mw=s*0.62;
   var w=n*s+(n-1)*gap+14+micro*(mw+5)+12, x=W/2-w/2, y=H2-s-18;
   return {x:x,y:y,w:w,s:s,gap:gap,n:n,mw:mw,micro:micro};
 }
@@ -137,6 +151,7 @@ function drawActionBar(){
     uiText(sl.k,x+5,y+13,12,'#fff6de','left',700);
     if(sl.alt) uiText(sl.alt,x+s-5,y+13,10,UI_DIM,'right',600);
     if(sl.count!==undefined) uiText(''+sl.count,x+s-5,y+s-5,13,sl.count?'#fff6de':'#8a7a6a','right',700);
+    if(sl.lockLvl) uiText('Lv '+sl.lockLvl,x+s/2,y+s-6,10.5,'#c9b27a','center',700);
     UIBAR.slots.push({x:x,y:y,s:s,sl:sl});
   }
   // the little buttons: skills, journal, and Aelfrend once he's yours
@@ -179,7 +194,7 @@ function uiClick(x,y){
 }
 function uiKey(k){
   if(!DESKTOP||G.state!=='play') return false;
-  var i='123456'.indexOf(k); if(i<0) return false;
+  var i='12345678'.indexOf(k); if(i<0) return false;
   var sl=deskSlots()[i]; if(sl&&!sl.off) sl.act(); return true;
 }
 
@@ -207,6 +222,8 @@ function drawUnitFrames(){
     uiText(txt,ix+6,iy+12,11,col,'left',700); ix+=tw+5; }
   if(p.buff!==null&&p.buff!==undefined){ var bc=FAIRYCOL[p.buff]; chip(FAIRYNAME[p.buff].split(' ')[0]+' '+Math.ceil(p.buffT)+'s','rgb('+bc.map(function(v){return Math.round(v*255);}).join(',')+')'); }
   if(p.poisonT>0) chip('Poisoned','#8fe070');
+  if(p.ward>0) chip('Ward '+Math.ceil(p.ward),'#bfe0ff');
+  if(p.shoutT>0) chip('Battle cry '+Math.ceil(p.shoutT)+'s','#ffd76a');
   if(p.slowT>0.3) chip('Webbed','#e8e8f0');
   var bq=G.bounty;
   if(bq) chip(bq.got>=bq.n?'⚑ Bounty done':'⚑ '+bq.got+'/'+bq.n,bq.got>=bq.n?'#ffd76a':'#e8d6a8');

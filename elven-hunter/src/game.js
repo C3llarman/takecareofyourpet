@@ -290,6 +290,7 @@ function layoutButtons(){
     {id:'skills',x:W-r*0.90,    y:SAFET+r*2.05, r:r*0.58,label:'SKILL'}
   ];
   if(G.S&&G.S.dash) btns.push({id:'dash',x:right-r*2.4,y:bot-r*2.0,r:r*0.70,label:'DASH'});
+  if(G.player) abButtons(btns,r,right,bot);
   if(typeof WILD!=='undefined'&&WILD&&WILD.eagle) btns.push({id:'fly',x:W-r*0.90,y:SAFET+r*3.5,r:r*0.58,label:'FLY'});
 }
 function hitBtn(x,y){
@@ -308,6 +309,7 @@ function press(id){
   else if(id==='potion') usePotion();
   else if(id==='skills') skillScreen();
   else if(id==='fly') flyScreen();
+  else if(id.indexOf('ab')===0) useAbility(+id.slice(2));
   buzz(8);
 }
 function ptrDown(id,x,y){
@@ -589,6 +591,7 @@ function hurtPlayer(d,src){
   if(p.inv>0||p.dead) return;
   if(p.buff===2) d*=0.5;
   d*=G.S.armor*DF().dmg;
+  d=wardSoak(d); if(d<=0){ p.inv=0.5; sfx('ehit'); return; }
   p.hp-=d; p.inv=0.95; p.hurtT=0.3; G.hitFlash=0.5; buzz([30,40,30]);
   sfx('hurt'); shake(0.3);
   TELE.hurt(src||'unknown',d);
@@ -605,6 +608,7 @@ function update(dt){
   if(G.tipT>0) G.tipT-=dt;
   p.cdT-=dt; p.inv=Math.max(0,p.inv-dt); p.hurtT=Math.max(0,p.hurtT-dt);
   p.dashCd-=dt; p.dashT-=dt;
+  abTick(dt);
   if(p.atkT>0) p.atkT-=dt;
   if(p.buffT>0){ p.buffT-=dt; if(p.buffT<=0) p.buff=null; }
   if(p.buff===3&&p.hp<p.maxHp) p.hp=Math.min(p.maxHp,p.hp+6*dt);
@@ -880,6 +884,7 @@ function updateEnts(dt){
     if(FOE[e.kind]){
       e.slowT=Math.max(0,(e.slowT||0)-dt);
       eliteGlow(e,dt);
+      if(stunTick(e,dt)){ if(e.atkT>0) e.atkT-=dt; continue; }    // stunned or frozen: it waits
       var DD=DF();
       var spd=(e.kind==='spider'?(e.big?3.4:4.2):(e.kind==='wasp'?4.4:(e.kind==='shroom'?3.5:3.8)))*(e.slowT>0?0.5:1)*DD.spd;
       if(e.kind==='wasp') e.hover=1.25+Math.sin(G.t*2.2+e.walkPhase)*0.18;
@@ -1188,7 +1193,8 @@ function pushShot(e){
   if(e.kind==='stuck'){ var sk=e.proj==='axe'?0.15:0.28; x+=ux*sk; y+=uy*sk; z+=uz*sk; }   // the head is buried
   if(e.proj==='bolt'&&e.kind==='shot'){
     var g=0.30+Math.sin(G.t*30+e.x)*0.04;
-    var m=mat(); m4trs(m,x,y,z,0,G.t*9,0,g,g,g); DRAW.push(['blob',m,[0.55,0.85,1.0]]);
+    if(e.fire) g*=1.7;
+    var m=mat(); m4trs(m,x,y,z,0,G.t*9,0,g,g,g); DRAW.push(['blob',m,e.fire?[1.0,0.55,0.15]:[0.55,0.85,1.0]]);
     var m2=mat(); m4trs(m2,x-ux*0.35,y-uy*0.35,z-uz*0.35,0,0,0,g*0.6,g*0.6,g*0.6); DRAW.push(['blob',m2,[0.80,0.95,1.0]]);
     var m3=mat(); m4trs(m3,x-ux*0.65,y-uy*0.65,z-uz*0.65,0,0,0,g*0.35,g*0.35,g*0.35); DRAW.push(['blob',m3,[0.45,0.70,1.0]]);
     return;
@@ -1576,7 +1582,7 @@ function drawHUD(){
   for(var tq in touches) if(touches[tq].btn) held[touches[tq].btn]=1;
   for(var b=0;b<btns.length;b++){
     var bt=btns[b], dn=!!held[bt.id];
-    var on=(bt.id!=='dash')||p.dashCd<=0;
+    var on=bt.ab?abLeft(bt.ab)<=0:((bt.id!=='dash')||p.dashCd<=0);
     hx.fillStyle=dn?'rgba(232,194,106,.42)':'rgba(10,14,10,.42)';
     hx.beginPath(); hx.arc(bt.x,bt.y,bt.r*(dn?1.06:1),0,6.3); hx.fill();
     hx.strokeStyle=on?(dn?'rgba(255,230,170,.95)':'rgba(232,194,106,.65)'):'rgba(120,130,120,.35)';
@@ -1586,6 +1592,9 @@ function drawHUD(){
     if(bt.id==='potion'){ hx.fillStyle='#ff9d9d'; hx.fillText('✚'+p.potions,bt.x,bt.y+bt.r*0.16); }
     else if(bt.id==='skills'){ hx.fillStyle=G.build.points>0?'#9ff07a':'#f3e7c9';
       hx.fillText(G.build.points>0?'★'+G.build.points:'SKILL',bt.x,bt.y+bt.r*0.16); }
+    else if(bt.ab){ hx.font='600 '+Math.round(bt.r*0.30)+'px Georgia,serif'; hx.fillText(bt.label,bt.x,bt.y+bt.r*0.12);
+      var lf=abLeft(bt.ab)/abCdFull(bt.ab); if(lf>0){ hx.fillStyle='rgba(0,0,0,.45)'; hx.beginPath(); hx.moveTo(bt.x,bt.y);
+        hx.arc(bt.x,bt.y,bt.r,-Math.PI/2,-Math.PI/2+Math.PI*2*lf); hx.closePath(); hx.fill(); } }
     else if(bt.id==='attack'&&G.talk){ hx.fillStyle='#ffd76a'; hx.fillText(G.talk.tap,bt.x,bt.y+bt.r*0.14); }
     else hx.fillText(bt.label,bt.x,bt.y+bt.r*0.14);
   }
@@ -1627,7 +1636,7 @@ function drawHUD(){
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
     var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot   ·   space jump';
-    var keys2='1–6 action bar   ·   T pick a target   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   K map key   ·   M sound';
+    var keys2='1–8 action bar   ·   T pick a target   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   K map key   ·   M sound';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
       hx.textAlign='center'; hx.font='600 12.5px Georgia,serif';
@@ -1798,7 +1807,9 @@ function skillScreen(flash){
     '<div class="stat"><span>Melee / ranged</span><b>'+Math.round(G.S.melee*100)+'% / '+Math.round(G.S.ranged*100)+'%</b></div>'+
     '<div class="stat"><span>Prisoners freed / foes slain</span><b>'+G.freed+' / '+G.killed+'</b></div>'+
     '<div class="stat"><span>Lost gnomes found</span><b>'+gnomeCount()+' / '+GNOMES.length+'</b></div>'+satchelHtml()+
-    '<div class="skills">'+rows+'</div>'+
+    '<h3>Abilities</h3><div class="skills">'+abList().map(function(a,i){ var on=G.player.level>=a.lvl;
+      return '<div class="sk ab'+(on?' has':' off')+'"><div class="skh"><b>'+a.n+'</b><span>'+(on?(DESKTOP?'key '+(i+3):'button'):'level '+a.lvl)+'</span></div><small>'+a.d+' · '+Math.round(abCdFull(a))+' s to recharge</small></div>'; }).join('')+'</div>'+
+    '<h3>Skills</h3><div class="skills">'+rows+'</div>'+
     '<button class="btn" id="close">Back to the wood</button>'+
     '<button class="btn alt" id="jrnl">Journal — '+loreCount()+' of '+LORE.length+' pages'+(G.loreNew?' (new!)':'')+'</button>'+
     '<button class="btn alt" id="diff">Difficulty: '+DF().n+' — tap to change</button>'+
@@ -1808,7 +1819,7 @@ function skillScreen(flash){
   document.getElementById('diff').onclick=function(){
     var i=DIFF_ORDER.indexOf(G.build.diff||'normal'); G.build.diff=DIFF_ORDER[(i+1)%DIFF_ORDER.length];
     this.textContent='Difficulty: '+DF().n+' — tap to change'; saveGame(); };
-  var els=ui.querySelectorAll('.sk');
+  var els=ui.querySelectorAll('.sk:not(.ab)');
   for(var k=0;k<els.length;k++) els[k].onclick=function(){
     var s=tree()[+this.getAttribute('data-i')];
     if(G.build.points<=0||SK(s.id)>=s.r) return;
