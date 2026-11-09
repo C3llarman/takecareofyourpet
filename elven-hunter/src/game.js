@@ -200,6 +200,7 @@ function buildWorld(){
   buildBounce(m);
   buildWaystones(m);
   buildFolkSites(m);
+  buildShore(m);
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
   WORLD.castShadow=true; WORLD.receiveShadow=true;
   SCENE.add(WORLD);
@@ -642,7 +643,7 @@ function update(dt){
   if(p.dashT>0) spd=26;
   // with the mouse captured the hunter keeps facing where you look and strafes or
   // backs away; otherwise (touch, or a free cursor) she turns to run where you push
-  var aimLock=DESKTOP&&LOCKED;
+  var aimLock=DESKTOP&&LOCKED, ox0=p.x, oz0=p.z;
   p.strafe=aimLock;
   if(L>0.01){
     wx/=L; wz/=L;
@@ -664,6 +665,7 @@ function update(dt){
   var bd=Math.hypot(p.x,p.z), lim=WHALF*0.95;
   if(bd>lim&&!inCave(p.x,p.z)){ p.x*=lim/bd; p.z*=lim/bd; }
   collide(p,0.42*(p.scale||1));   // trunks, rocks and walls are solid
+  if(inSea(p.x,p.z)&&H(p.x,p.z)<WATER-0.9){ p.x=ox0; p.z=oz0; }   // wade in the shallows, no further
   // gravity / jump
   var gh=H(p.x,p.z);
   if((IN.jump||IN.jumpBuf>0)&&p.onGround){ p.vy=8.9; p.onGround=false; IN.jumpBuf=0; sfx('jump'); }
@@ -1246,7 +1248,7 @@ function pushEnt(e){
   else if(e.kind==='eagle') eagleRig(RIG,e,G.t);
   else if(e.kind==='node') nodeRig(RIG,e,G.t);
   else if(e.kind==='qitem') qitemRig(RIG,e,G.t);
-  else if(e.kind==='critter'){ if(e.sub==='fly') flyRig(RIG,e,G.t); else bunnyRig(RIG,e,G.t); }
+  else if(e.kind==='critter'){ if(e.sub==='fly') flyRig(RIG,e,G.t); else if(e.sub==='gull') eagleRig(RIG,e,G.t); else bunnyRig(RIG,e,G.t); }
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
   else if(e.kind==='shot'||e.kind==='eshot'||e.kind==='stuck'){ pushShot(e); return; }
   else if(e.kind==='fairy'){
@@ -1364,6 +1366,10 @@ function mapIcon(kind,x,y,s,unknown){
     case 'crag':                         // a peak
       hx.fillStyle='#a08a70'; hx.beginPath(); hx.moveTo(-5.5,4); hx.lineTo(-1,-5); hx.lineTo(1.5,-1.5); hx.lineTo(3,-3); hx.lineTo(5.5,4); hx.closePath(); hx.fill();
       hx.fillStyle='#e0502e'; hx.beginPath(); hx.arc(-1,-2.2,1.3,0,6.3); hx.fill(); break;
+    case 'shore':                        // waves
+      hx.strokeStyle='#8fd0e8'; hx.lineWidth=1.6; hx.beginPath();
+      for(var sw=0;sw<2;sw++){ hx.moveTo(-5,-1.5+sw*3.5); hx.quadraticCurveTo(-2.5,-4+sw*3.5,0,-1.5+sw*3.5); hx.quadraticCurveTo(2.5,1+sw*3.5,5,-1.5+sw*3.5); }
+      hx.stroke(); break;
     case 'cave':                         // a dark arch
       hx.fillStyle='#8a7a60'; hx.beginPath(); hx.arc(0,1.5,5,3.14,6.29); hx.lineTo(5,4); hx.lineTo(-5,4); hx.closePath(); hx.fill();
       hx.fillStyle='#0a0806'; hx.beginPath(); hx.arc(0,2.5,2.8,3.14,6.29); hx.lineTo(2.8,4); hx.lineTo(-2.8,4); hx.closePath(); hx.fill(); break;
@@ -1519,7 +1525,7 @@ function drawHUD(){
   if(SHOWKEY){
     var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['shroom','Mushroom grump'],['cocoon','Captive — free them'],
       ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
-      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['cave','Glimmer Cave — bring a torch']];
+      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['shore','The Sunlit Shore'],['cave','Glimmer Cave — bring a torch']];
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
     hx.textAlign='left'; hx.font='600 '+(DESKTOP?11.5:10.5)+'px Georgia,serif';

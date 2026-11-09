@@ -417,6 +417,8 @@ var FLYCOL=[[0.98,0.72,0.20],[0.55,0.75,1.0],[0.98,0.55,0.75],[0.95,0.95,0.98],[
 var BUNCOL=[[0.62,0.50,0.38],[0.78,0.72,0.64],[0.46,0.38,0.32],[0.90,0.88,0.84]];
 function spawnCritters(){
   var r=mulberry(919);
+  if(SHORE.at) for(var gl=0;gl<7;gl++) G.ents.push({kind:'critter',sub:'gull',x:SHORE.at.x,y:10,z:SHORE.at.z,home:{x:SHORE.at.x+10+r()*14,z:SHORE.at.z+(r()-0.5)*40},
+    yaw:0,seed:r()*9,t:r()*20,rr:6+r()*10,spd:(r()<0.5?-1:1)*(0.25+r()*0.2),scale:0.42,speed:0});
   for(var i=0;i<Math.round(48*WS*WS);i++){ var q0=randIn(r), x=q0.x, z=q0.z;
     if(H(x,z)<WATER+0.4) continue;
     var fly=r()<0.62;
@@ -426,8 +428,13 @@ function spawnCritters(){
   }
 }
 function updateCritter(e,dt,pd){
-  if(pd>70) return;
+  if(pd>90) return;
   e.t+=dt;
+  if(e.sub==='gull'){                     // wheeling over the shore
+    var ga=e.t*e.spd+e.seed, nx0=e.home.x+Math.cos(ga)*e.rr, nz0=e.home.z+Math.sin(ga)*e.rr;
+    e.yaw=Math.atan2(nx0-e.x,nz0-e.z); e.x=nx0; e.z=nz0; e.y=Math.max(WATER,H(e.x,e.z))+8+Math.sin(e.t*0.7+e.seed)*2;
+    return;
+  }
   if(e.sub==='fly'){
     var ox=Math.sin(e.t*0.45+e.seed)*3.2+Math.sin(e.t*1.3+e.seed*2)*0.8, oz=Math.cos(e.t*0.38+e.seed)*3.2+Math.cos(e.t*1.1)*0.8;
     // flutter away from you a little if you charge through

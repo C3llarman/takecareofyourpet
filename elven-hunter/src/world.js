@@ -145,8 +145,17 @@ function caveCollide(o,rad){
   var push=sd+rad; o.x-=gx/gl*push; o.z-=gz/gl*push;
   return true;
 }
+/* the east of the wood runs down to the sea instead of up into mountains.
+   coastK: how much a point lies on the seaward side (1 due east, 0 north and south);
+   shoreD: its distance out from the centre, with a wobble so the shoreline wanders */
+var SHORE={beach:0.71,sea:0.845};
+function coastK(x,z){ var d=Math.hypot(x,z)||1; return smooth01((x/d-0.2)/0.4); }
+function shoreD(x,z){ return Math.hypot(x,z)/WHALF+(vnoise(x*0.02+50,z*0.02-30)-0.5)*0.07; }
+/* how much of a beach a point is (0 inland, 1 on the sand) */
+function beachK(x,z){ return coastK(x,z)*smooth01((shoreD(x,z)-SHORE.beach-0.08)/0.05); }
+function inSea(x,z){ return coastK(x,z)>0.3&&shoreD(x,z)>SHORE.sea-0.01; }
 function Hraw(x,z){
-  var d=Math.hypot(x,z)/WHALF;
+  var d=Math.hypot(x,z)/WHALF, ck=coastK(x,z);
   x/=WS; z/=WS;                    // the hills and the river, stretched with the map
   var base=fbm(x,z,4,0.012)*2-1;
   var hills=fbm(x+120,z-80,3,0.03)*2-1;
@@ -154,8 +163,13 @@ function Hraw(x,z){
   // a winding river, kept well clear of the starting glade
   var rz=z-58+Math.sin(x*0.035)*16;
   h-=Math.exp(-Math.pow(rz/13,2))*8.5;
-  // mountain rim so the wood feels bounded
-  h+=Math.min(34,Math.pow(Math.max(0,d-0.70)/0.30,2)*30);
+  // mountains round the wood so it feels bounded — except to the east, where it meets the sea
+  h+=Math.min(34,Math.pow(Math.max(0,d-0.70)/0.30,2)*30)*(1-ck);
+  if(ck>0){
+    var sd=shoreD(x*WS,z*WS), beach=smooth01((sd-SHORE.beach)/0.12)*ck, sea=smooth01((sd-SHORE.sea)/0.06)*ck;
+    h=h*(1-beach)+0.3*beach;                       // the land settles into a long low beach
+    h=h*(1-sea)+(-7)*sea;                          // and the sea floor drops away
+  }
   // flatten the glade you wake up in
   var g=Math.exp(-Math.pow(Math.hypot(x,z)/19,2));
   h=h*(1-g)+1.4*g;
@@ -179,6 +193,7 @@ function groundCol(x,z,y){
   col=mix3(col,C_PATH,Math.max(1-smooth01((pd-1.0)/1.4),(1-smooth01((yd-5.5)/3.5))*0.8)*(0.85+g*0.3));
   col=mix3(col,C_DIRT,smooth01((sl-0.26)/0.16));
   col=mix3(col,C_ROCK,smooth01((sl-0.48)/0.14));
+  col=mix3(col,[0.74,0.66,0.46],beachK(x,z)*smooth01((2.2-y)/1.2));      // pale sand on the beach
   return mix3(col,C_SAND,smooth01((WATER+0.9-y)/0.6));
 }
 function terrainMesh(){
@@ -203,9 +218,9 @@ function terrainMesh(){
   }
   cragPatch(m,S);
   // water plane
-  var wc=C_WATER;
-  for(var i2=0;i2<22;i2++) for(var j2=0;j2<22;j2++){
-    var a=-WHALF+i2*(WSIZE/22), b=-WHALF+j2*(WSIZE/22), s2=WSIZE/22;
+  var wc=C_WATER, WE=WHALF*1.8;                     // reaching well past the land: the sea runs to the horizon
+  for(var i2=0;i2<30;i2++) for(var j2=0;j2<30;j2++){
+    var a=-WE+i2*(WE*2/30), b=-WE+j2*(WE*2/30), s2=WE*2/30;
     m.quad([a,WATER,b],[a,WATER,b+s2],[a+s2,WATER,b+s2],[a+s2,WATER,b],wc,1);
   }
   return m;
@@ -425,10 +440,21 @@ function addMeshTo(ch,src,tx,ty,tz,ry,sx,sy,sz,tint){
 }
 function pick(r,list){ return list[(r()*list.length)|0]; }
 
+var TREEPOS=[];
 function scatterWorld(m){
   var r=mulberry(7);
+  // trees keep their distance from each other, so stands stay open and nothing grows
+  // into a thicket; a coarse grid makes the neighbour check cheap
+  var TG={}, TCELL=6, TMIN=4.2;
+  function treeRoom(x,z){ var ix=Math.floor(x/TCELL), iz=Math.floor(z/TCELL);
+    for(var i=ix-1;i<=ix+1;i++) for(var j=iz-1;j<=iz+1;j++){ var L=TG[i+','+j]; if(!L) continue;
+      for(var n=0;n<L.length;n++) if(Math.hypot(L[n][0]-x,L[n][1]-z)<TMIN) return false; }
+    return true; }
+  function treeAt(x,z){ var k=Math.floor(x/TCELL)+','+Math.floor(z/TCELL); (TG[k]||(TG[k]=[])).push([x,z]); TREEPOS.push([x,z]); }
+  var UG={};                         // and undergrowth clumps keep a little room too
+  function bushRoom(x,z){ var k=Math.floor(x/5)+','+Math.floor(z/5); if(UG[k]) return false; UG[k]=1; return true; }
   // fewer trees than before, and open meadows between the stands, so there is room to fight
-  var tries=Math.round(2700*WS*WS*0.86), Q=!!NAT;
+  var tries=Math.round(2700*WS*WS*1.15), Q=!!NAT;
   for(var i=0;i<tries;i++){
     var x=(r()*2-1)*WHALF*0.94, z=(r()*2-1)*WHALF*0.94;
     var y=H(x,z), sl=Hn(x,z), d=Math.hypot(x,z);
@@ -438,6 +464,9 @@ function scatterWorld(m){
     var k=r();
     if(inClearing(x,z,k<0.48?1.5:0)) continue;     // landmark grounds and the tavern path stay open
     if(k<0.48&&fbm(x+500,z-300,2,0.022)>0.56&&r()<0.9) continue;   // a meadow: grass and flowers, few trees
+    if(k<0.48&&(beachK(x,z)>0.3||!treeRoom(x,z))) continue;          // no trees on the sand, none crowding
+    if(k<0.48) treeAt(x,z);
+    if(k>=0.68&&k<0.90&&!bushRoom(x,z)) continue;
     if(k<0.30){ // pine
       var hh=3.6+r()*4.2, rr=0.9+r()*0.5, ry=r()*6.28;
       collCircle(x,z,0.30*rr);
@@ -471,9 +500,9 @@ function scatterWorld(m){
              else addProp('log',x,y-0.08,z,r()*6.28,0.85+r()*0.3,1,null); continue; }
       addMeshCh(STUMP,x,y,z,r()*6.28,1.1,0.8+r()*0.6,1.1);
     } else if(k<0.90){ // undergrowth: ferns, bushes, flowers
-      var n=2+((r()*3)|0);
+      var n=1+((r()*2.4)|0);
       for(var q=0;q<n;q++){
-        var ax=x+(r()-0.5)*2.4, az=z+(r()-0.5)*2.4, ay=H(ax,az)-0.05;
+        var ax=x+(r()-0.5)*2.8, az=z+(r()-0.5)*2.8, ay=H(ax,az)-0.05;
         if(inClearing(ax,az)) continue;
         if(Q){ var u=r(), un=u<0.36?pick(r,['fern1','fern2']):(u<0.62?pick(r,['bush1','bush2']):(u<0.72?'berry':'flower'));
           addProp(un,ax,ay,az,r()*6.28,un==='flower'?0.5+r()*0.3:(un.indexOf('bush')===0||un==='berry'?0.9+r()*0.6:0.8+r()*0.5),1,null); continue; }
@@ -739,6 +768,27 @@ function buildFolkSites(m){
   for(var b=0;b<5;b++){ var ba=b*1.25+0.4, bx=E.x+Math.cos(ba)*5.5, bz=E.z+Math.sin(ba)*5.5;     // old bones and feathers at its foot
     addMesh(m,coneMesh([0.95,0.85,0.55],5),bx,H(bx,bz)+0.05,bz,ba,0.25,1.0,0.06); }
   LANDMARKS.push({x:E.x,z:E.z,r:9,name:'The Eyrie',kind:'eyrie'});
+}
+/* the beach: a jetty into the sea, driftwood, rocks in the surf, shells, an upturned boat */
+function buildShore(m){
+  var a=-0.05, ux=Math.cos(a), uz=Math.sin(a), d=WHALF*0.6;
+  while(d<WHALF*0.95&&H(ux*d,uz*d)>WATER+0.4) d+=0.5;              // walk out until the water starts
+  var sx=ux*d, sz=uz*d, tx=-uz, tz=ux;
+  SHORE.at={x:sx-ux*7,z:sz-uz*7};
+  var plank=[0.55,0.42,0.28], post=[0.32,0.24,0.16];
+  for(var i=0;i<9;i++){ var px=sx+ux*(i*1.6-4), pz=sz+uz*(i*1.6-4);                      // the jetty
+    addMesh(m,boxMesh(plank),px,WATER+0.9,pz,a+Math.PI/2,2.2,0.15,1.5);
+    for(var sd=-1;sd<=1;sd+=2) if(i%2===0){ addMesh(m,boxMesh(post),px+tx*sd*1.0,WATER-2.5,pz+tz*sd*1.0,0,0.22,3.6,0.22); } }
+  for(var w=0;w<6;w++){ var t=(w-2.5)*7+((w*37)%5), wx=sx-ux*(4+(w%3)*1.5)+tx*t, wz=sz-uz*(4+(w%3)*1.5)+tz*t;     // driftwood
+    if(H(wx,wz)<WATER+0.3) continue; addMesh(m,tubeLog(),wx,H(wx,wz)+0.2,wz,w*1.7,0.35,1.6+(w%2),0.35); }
+  for(var k=0;k<7;k++){ var t2=(k-3)*9, rx=sx+ux*(6+(k%3)*4)+tx*t2, rz=sz+uz*(6+(k%3)*4)+tz*t2;                       // rocks in the surf
+    addMesh(m,ROCK,rx,WATER-1.2,rz,k*1.3,1.8+(k%2),1.6+(k%3)*0.5,1.8+(k%2)); }
+  var shell=[[0.96,0.82,0.78],[0.98,0.94,0.86],[0.90,0.70,0.66]];
+  for(var q=0;q<16;q++){ var t3=(q-8)*2.7, qx=sx-ux*(1+(q%4))+tx*t3, qz=sz-uz*(1+(q%4))+tz*t3;
+    if(H(qx,qz)<WATER+0.1) continue; addMesh(m,blobMesh(shell[q%3],0,1),qx,H(qx,qz)-0.02,qz,q,0.22,0.1,0.18); }
+  var bx=sx-ux*8+tx*9, bz=sz-uz*8+tz*9, bh=H(bx,bz);                                     // an upturned boat
+  addMesh(m,blobMesh([0.36,0.26,0.18],0,2),bx,bh-0.4,bz,a,1.4,1.0,3.6); collCircle(bx,bz,1.2);
+  LANDMARKS.push({x:SHORE.at.x,z:SHORE.at.z,r:12,name:'The Sunlit Shore',kind:'shore'});
 }
 /* toadstools big enough to bounce on */
 function buildBounce(m){

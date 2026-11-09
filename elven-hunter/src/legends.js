@@ -41,6 +41,8 @@ var LORE=[
    x:"The cottage belonged to Hesper, the herb-wife, who made Bram's potions before he learned. One spring she walked toward the crag with a basket and a lantern and did not come back. The notice on the post is in Bram's hand."},
   {id:'crag',sec:'Places',t:"The Dragon's Crag",h:"The cliff north of the tavern. Climb the ramp, if you dare.",
    x:"Once it was Aelthir's Seat, where the elf-kings were crowned under open sky. Now it is Cinderwing's bed. The gold he sleeps on was Aelthir's treasury; the bones are the knights who came to take it back."},
+  {id:'shore',sec:'Places',t:"The Sunlit Shore",h:"Walk east until the trees give out.",
+   x:"Where the Elderwood ends, it ends in sand. The Sylvani launched their white boats from this beach to trade with the islands, back when there were islands to trade with. The jetty is newer — Bram's cousin fishes off it on his days off and swears the sea sings back if you hum at it. The gulls are very rude."},
   {id:'cave',sec:'Places',t:"The Glimmer Cave",h:"A crack in the crag's western face. Bring a light.",
    x:"Under the Seat the Sylvani cut glimmerstone — crystal that holds light like a cupped hand. The dragon came for its warmth. The spiders came for the dark. The mine has been quiet for a hundred years, except for the skittering."},
   {id:'hoard',sec:'Places',t:"The Glimmer Hoard",h:"Deep in the cave, something glitters.",
@@ -127,7 +129,7 @@ function waystoneScreen(w){
     (fresh?'<p class="sub">✎ Written in your journal.</p>':'')+'<button class="btn" id="leave">Walk on</button>');
   document.getElementById('leave').onclick=menuClose;
 }
-var LANDLORE={eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
+var LANDLORE={shore:'shore',eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
 
 /* ---------- mini-bosses ----------
    Named monsters with a home they guard and a trick of their own. Beaten, they

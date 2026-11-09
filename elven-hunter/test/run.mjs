@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = 'file://' + join(ROOT, 'index.html');
+const WATER_ = -1.6;
 
 const PHONE = { viewport: { width: 440, height: 786 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 const LAPTOP = { viewport: { width: 1440, height: 860 }, deviceScaleFactor: 1 };
@@ -61,7 +62,7 @@ section('World');
     })(),
   }));
   ok('world mesh builds', w.tris > 50000, `${w.tris} triangles in one draw call`);
-  ok('eight landmarks placed', w.landmarks.length === 8, w.landmarks.join(', '));
+  ok('nine landmarks placed', w.landmarks.length === 9, w.landmarks.join(', '));
   ok('spawn is above water', w.spawnAboveWater);
   // the "objectives outside the map" bug: things were scattered over a square, but the
   // walkable land is a circle inside the mountains, so the corners were unreachable
@@ -627,6 +628,20 @@ section('Forest');
   ok('the wood is planted with the nature pack', f.kinds >= 15 && f.props > 1500, `${f.props} props of ${f.kinds} kinds in ${f.chunks} chunks`);
   ok('near chunks draw full detail, far ones the stand-ins', f.nearHi && f.farLo);
   const trees = await page.evaluate(() => ({ n: ['pine1', 'pine2', 'pine3', 'oak1', 'oak2', 'oak3', 'birch1', 'birch2', 'dead1'].reduce((a, k) => a + (PROPN[k] || 0), 0), area: WS * WS }));
+  const spread = await page.evaluate(() => { let min = 1e9; const T = TREEPOS; const g = {};
+    T.forEach((t) => { const k = Math.floor(t[0] / 8) + ',' + Math.floor(t[1] / 8); (g[k] = g[k] || []).push(t); });
+    T.forEach((t) => { const ix = Math.floor(t[0] / 8), iz = Math.floor(t[1] / 8);
+      for (let i = ix - 1; i <= ix + 1; i++) for (let j = iz - 1; j <= iz + 1; j++) (g[i + ',' + j] || []).forEach((u) => { if (u !== t) min = Math.min(min, Math.hypot(u[0] - t[0], u[1] - t[1])); }); });
+    return min; });
+  ok('no thickets: every tree has room around it', spread >= 4, `closest two trees ${spread.toFixed(1)} apart`);
+  const coast = await page.evaluate(() => new Promise((res) => {
+    const east = H(WHALF * 0.93, 0), west = H(-WHALF * 0.93, 0), north = H(0, -WHALF * 0.93);
+    const p = G.player; p.x = SHORE.at.x; p.z = SHORE.at.z + 12; p.y = H(p.x, p.z); p.yaw = Math.PI / 2; G.cam.yaw = p.yaw; G.ents = G.ents.filter((e) => !FOE[e.kind]); p.inv = 1e9;
+    KEY.d = false; KEY.w = true; const t0 = G.t;
+    const tick = () => { if (G.t - t0 < 4) { requestAnimationFrame(tick); return; } KEY.w = false; res({ east, west, north, deep: H(p.x, p.z) }); }; tick(); }));
+  ok('the east of the wood runs down to the sea; mountains hold the rest', coast.east < WATER_ - 3 && coast.west > 15 && coast.north > 15,
+    `east ${coast.east.toFixed(1)}, west ${coast.west.toFixed(1)}, north ${coast.north.toFixed(1)}`);
+  ok('you can wade into the shallows, not out to sea', coast.deep >= WATER_ - 1.0, `stopped where the water is ${(WATER_ - coast.deep + 0).toFixed(1)} deep`);
   ok('the wood is open, not a thicket', trees.n / trees.area < 500, `${trees.n} trees, ${Math.round(trees.n / trees.area)} per original map's worth of ground`);
   const size = (await import('node:fs')).statSync(PAGE.replace('file://', '')).size / 1024 / 1024;
   ok('the whole game stays small', size < 3.2, `${size.toFixed(2)} MB with models, forest and music`);
