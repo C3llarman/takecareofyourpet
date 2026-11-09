@@ -53,6 +53,7 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 | Drink a potion | `Q` |
 | Skills | `Tab` |
 | Action bar | `1` strike, `2` shoot, `3`–`5` your calling's abilities, `6` potion, `7` honey cake, `8` tonic |
+| Gear and bag | `C` (phone: the skills screen) |
 | Pick a target | `T` (optional: attacks find the best target on their own) |
 | Map key | `K` |
 | Journal and quests | `L` (or the button on the skills screen) |
@@ -92,6 +93,8 @@ src/
   legends.js  the journal (36 pages of lore), waystones, Bram's tales, the five
               mini-bosses and the golden champions
   abilities.js three abilities per calling, unlocked at levels 2, 4 and 7
+  gear.js     five gear slots, five rarities, loot bags, the bag and character
+              sheet, Bram's cousin's forge
   ui.js       the laptop HUD: portrait and target frames, action bar, XP bar,
               quest tracker, zone name, event log
   folk.js     Wren, Tobin and Ærtheldor and their ten quests, gathering, the
@@ -134,8 +137,7 @@ strike button, which reads **TALK** beside him). He offers:
 - **Healing potions**: 25 coins each, up to six.
 - **Hire a companion**: three fighters at the bar each visit (ranger, blade, knight,
   mage, druid or dwarf), 45–70 coins, up to your company size.
-- **Gear**: five tiers of weapon (+15% damage each) and armour (+20 health and 6% less
-  damage each), 35–360 coins a tier.
+- **The forge** (Bram's cousin): weapon, head, shoulders and chest pieces up to rare.
 - **A story**: Bram has four tales of his own; each goes in your journal.
 - **A torch**: 60 coins, once. You need it to go into the Glimmer Cave.
 - **Bounties**: slay spiders, drive off snakes, swat wasps, squash mushroom grumps, free
@@ -261,6 +263,27 @@ the open quests under it, a short log of pickups, XP and discoveries bottom-left
 they cool down, counts for potions, honey cakes and tonics (crafted ones now go in your
 bag for later), and buttons for skills, the journal and Aelfrend. With the cursor free,
 hover a slot for a tooltip or click it. Phones keep their touch layout.
+
+### Gear and loot (`src/gear.js`)
+
+Five slots (**weapon, head, shoulders, chest, trinket**) and five rarities: common,
+uncommon (green), rare (blue), epic (purple), legendary (orange). No stats to compare:
+each rarity is simply a step up (weapon +15% damage a step; armour pieces +7 health and 2%
+less harm; trinkets +8 health and +3% damage).
+
+- **Loot** drops as a bag with a beam of its rarity's colour; walk over it. Anything better
+  than what you wear goes on at once (the old piece goes in your bag); anything else goes
+  in the bag, to equip or sell from the character sheet (`C`), which also has "sell
+  everything not better".
+- **Where it comes from**: mini-bosses always drop rare or epic; the Warden epic or
+  legendary; Cinderwing an epic-or-legendary plus a rare; champions 40% of the time; the
+  Glimmer Hoard often; ordinary monsters rarely. Bram's cousin sells up to rare.
+- **Legendaries** have names: Crown of Aelthir, Mossback's Mantle, Heartwood Plate,
+  Marigold's Locket, and a weapon for each calling (Cinderwing's Fang, Aelthir's Whisper,
+  Staff of the Last Light).
+- **Each slot shows on your hunter** in its own rarity's look: pauldrons for shoulders,
+  plate, bracers and knee guards for the chest, a steel band, leaf circlet or spiked crown
+  for the head. Old saves' two gear tiers become a matching set.
 
 ### Abilities (`src/abilities.js`)
 
@@ -428,7 +451,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-180 assertions run the actual game in headless Chromium with software WebGL and check
+190 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames

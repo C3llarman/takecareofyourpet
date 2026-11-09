@@ -120,8 +120,8 @@ function actorSpec(e){
     var w=cls==='warrior'?['1H_Axe']:(cls==='wizard'?['2H_Staff']:['1H_Crossbow','Knife_Offhand']);
     // the rogue carries a crossbow but draws the knife to strike
     var mw=cls==='rogue'?['Knife','Knife_Offhand']:null;
-    var gr=G.build.gear||{w:0,a:0};
-    return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null, armor:gr.a, wtier:gr.w};
+    var gr=G.build.gear||{w:0,a:0}, at={h:gr.h||0,s:gr.s||0,c:gr.c||0};
+    return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null, armor:(at.h||at.s||at.c)?at:0, akey:''+at.h+at.s+at.c, wtier:gr.w};
   }
   if(e.kind==='npc'&&e.npcId)        // the other folk: Wren the hedge-witch, Tobin the tinker
     return {model:e.model, weapons:e.npcId==='tobin'?['1H_Axe_Offhand']:[], beard:!!e.beard, tint:e.tint, key:e.npcId};
@@ -152,45 +152,52 @@ var ARMOR_LOOK=[null,
   {plate:[0.70,0.72,0.76],chest:1},
   {plate:[0.72,0.84,0.80],trim:[0.40,0.62,0.48],chest:1,circlet:[0.80,0.90,0.86],leaf:1},
   {plate:[0.96,0.76,0.30],trim:[0.98,0.95,0.86],chest:1,crown:1,gem:[0.55,0.85,1.0],gold:1}];
-function addArmor(root,tier,inv,mats,glow,model){
-  var A=ARMOR_LOOK[Math.min(5,tier)]; if(!A) return;
+/* each slot shows its own piece, in its own tier's look: T = {h, s, c} (head,
+   shoulders, chest tiers 0-5) */
+function addArmor(root,T,inv,mats,glow,model){
+  if(typeof T==='number') T={h:T,s:T,c:T};
   if(!ARMGEO) ARMGEO={blob:toGeom(blobMesh([1,1,1],0,2)),cone:toGeom(coneMesh([1,1,1],10)),box:toGeom(boxMesh([1,1,1])),
     ring:toGeom(coneMesh([1,1,1],18,0.5,0.5,true))};
-  function mat(c,em){ var m=new THREE.MeshLambertMaterial({color:new THREE.Color(c[0],c[1],c[2])});
-    if(em) glow.push({m:m,c:em}); else mats.push(m); return m; }
+  var cache={};
+  function mat(c,em){ var k=c.join()+(em?em.join():''); if(cache[k]) return cache[k];
+    var m=new THREE.MeshLambertMaterial({color:new THREE.Color(c[0],c[1],c[2])});
+    if(em) glow.push({m:m,c:em}); else mats.push(m); return (cache[k]=m); }
+  function look(t){ var A=ARMOR_LOOK[Math.min(5,t)]; if(!A) return null;
+    var plate=mat(A.plate,A.gold?[0.26,0.16,0.02]:null); return {A:A,plate:plate,trim:A.trim?mat(A.trim,A.gold?[0.20,0.18,0.12]:null):plate}; }
   function bone(n){ return root.getObjectByName(n); }
   var chest=bone('chest'), head=bone('head');
-  var plate=mat(A.plate,A.gold?[0.26,0.16,0.02]:null), trim=A.trim?mat(A.trim,A.gold?[0.20,0.18,0.12]:null):plate;
   function put(b,g,m,x,y,z,sx,sy,sz,rx,ry,rz){ if(!b) return null;
     var o=new THREE.Mesh(ARMGEO[g],m); o.position.set(x*inv,y*inv,z*inv); o.scale.set(sx*inv,sy*inv,sz*inv);
     o.rotation.set(rx||0,ry||0,rz||0); o.castShadow=true; b.add(o); return o; }
   // the hats differ: how high the top of the head sits, how wide a crown must be
   var top=model==='mage'?{y:0.50,r:0.80}:(model==='barbarian'?{y:0.84,r:0.62}:{y:0.72,r:0.60});
-  var big=tier>=3?1.2:1;
-  for(var sd=-1;sd<=1;sd+=2){
-    put(chest,'blob',plate,sd*0.30,0.02,0,0.40*big,0.27*big,0.44*big,0,0,sd*-0.4);              // pauldron
-    if(tier>=2) put(chest,'blob',trim,sd*0.31,0.10*big,0,0.30*big,0.09,0.34*big,0,0,sd*-0.4);   // its rim
-    if(A.leaf) put(chest,'cone',trim,sd*0.44,0.16,0,0.09,0.30,0.16,0,0,sd*-0.9);                 // elvensteel leaf
-    if(A.gold) for(var k=0;k<3;k++) put(chest,'cone',trim,sd*(0.34+k*0.07),0.18+k*0.02,(k-1)*0.14,0.07,0.28,0.07,0,0,sd*-0.7);
-    if(tier>=3){                                                                                // bracers and knee guards
-      put(bone(sd<0?'wristr':'wristl'),'blob',plate,0,-0.06,0,0.24,0.24,0.24);
-      put(bone(sd<0?'lowerlegr':'lowerlegl'),'blob',plate,0,0.02,0.07,0.20,0.20,0.16);
-    }
+  var S=look(T.s);
+  if(S){ var big=T.s>=3?1.2:1;
+    for(var sd=-1;sd<=1;sd+=2){
+      put(chest,'blob',S.plate,sd*0.30,0.02,0,0.40*big,0.27*big,0.44*big,0,0,sd*-0.4);             // pauldron
+      if(T.s>=2) put(chest,'blob',S.trim,sd*0.31,0.10*big,0,0.30*big,0.09,0.34*big,0,0,sd*-0.4);  // its rim
+      if(S.A.leaf) put(chest,'cone',S.trim,sd*0.44,0.16,0,0.09,0.30,0.16,0,0,sd*-0.9);            // elvensteel leaf
+      if(S.A.gold) for(var k=0;k<3;k++) put(chest,'cone',S.trim,sd*(0.34+k*0.07),0.18+k*0.02,(k-1)*0.14,0.07,0.28,0.07,0,0,sd*-0.7);
+    } }
+  var C=look(T.c);
+  if(C){
+    if(T.c>=2) put(chest,'box',C.plate,0,-0.10,0.19,0.40,0.30,0.06);                              // a plate on the jerkin
+    if(C.A.chest){ put(chest,'blob',C.plate,0,-0.16,0.17,0.52,0.42,0.30);                         // breastplate
+      put(chest,'box',C.A.gold?C.trim:mat([0.34,0.33,0.36]),0,-0.38,0.11,0.54,0.07,0.36);
+      for(var sd2=-1;sd2<=1;sd2+=2){                                                            // bracers and knee guards
+        put(bone(sd2<0?'wristr':'wristl'),'blob',C.plate,0,-0.06,0,0.24,0.24,0.24);
+        put(bone(sd2<0?'lowerlegr':'lowerlegl'),'blob',C.plate,0,0.02,0.07,0.20,0.20,0.16); } }
+    if(C.A.gem) put(chest,'blob',mat(C.A.gem,[0.30,0.62,0.85]),0,-0.12,0.32,0.13,0.15,0.08);
   }
-  if(A.chest){
-    put(chest,'blob',plate,0,-0.16,0.17,0.52,0.42,0.30);                                       // breastplate
-    put(chest,'box',A.gold?trim:mat([0.34,0.33,0.36]),0,-0.38,0.11,0.54,0.07,0.36);              // a belt of plate
-  }
-  if(A.gem) put(chest,'blob',mat(A.gem,[0.30,0.62,0.85]),0,-0.12,0.32,0.13,0.15,0.08);
-  if(A.circlet){
-    put(head,'ring',mat(A.circlet,[0.06,0.12,0.09]),0,top.y-0.04,0.02,top.r*1.02,0.08,top.r,-0.08,0,0);
-    put(head,'cone',trim,0,top.y+0.02,top.r*0.5,0.12,0.26,0.07,0.25,0,0);
-  }
-  if(A.crown){
-    put(head,'ring',plate,0,top.y,0.0,top.r,0.14,top.r*0.96,-0.08,0,0);
-    for(var c=0;c<8;c++){ var an=c/8*6.283;
-      put(head,'cone',plate,Math.sin(an)*top.r*0.48,top.y+0.12,Math.cos(an)*top.r*0.47,0.10,c===0?0.34:0.24,0.10); }
-    put(head,'blob',mat(A.gem,[0.30,0.62,0.85]),0,top.y+0.03,top.r*0.5,0.12,0.14,0.07);
+  var Hd=look(T.h);
+  if(Hd){
+    if(T.h>=2&&T.h<=3) put(head,'ring',Hd.plate,0,top.y-0.06,0.02,top.r*1.03,0.10,top.r*1.01,-0.08,0,0);   // a band of steel
+    if(Hd.A.circlet){ put(head,'ring',mat(Hd.A.circlet,[0.06,0.12,0.09]),0,top.y-0.04,0.02,top.r*1.02,0.08,top.r,-0.08,0,0);
+      put(head,'cone',Hd.trim,0,top.y+0.02,top.r*0.5,0.12,0.26,0.07,0.25,0,0); }
+    if(Hd.A.crown){ put(head,'ring',Hd.plate,0,top.y,0.0,top.r,0.14,top.r*0.96,-0.08,0,0);
+      for(var c=0;c<8;c++){ var an=c/8*6.283;
+        put(head,'cone',Hd.plate,Math.sin(an)*top.r*0.48,top.y+0.12,Math.cos(an)*top.r*0.47,0.10,c===0?0.34:0.24,0.10); }
+      put(head,'blob',mat(Hd.A.gem,[0.30,0.62,0.85]),0,top.y+0.03,top.r*0.5,0.12,0.14,0.07); }
   }
 }
 function makeActor(spec){
@@ -408,5 +415,5 @@ function assignActors(dt){
 }
 function specKey(e){
   var s=actorSpec(e);
-  return s.model+'|'+(s.key||'')+'|'+s.weapons.join(',')+'|'+(s.ears?1:0)+(s.beard?1:0)+'|'+(s.armor||0)+(s.wtier||0);
+  return s.model+'|'+(s.key||'')+'|'+s.weapons.join(',')+'|'+(s.ears?1:0)+(s.beard?1:0)+'|'+(s.akey||0)+(s.wtier||0);
 }

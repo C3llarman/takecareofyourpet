@@ -58,6 +58,11 @@ a.btn{text-align:center;text-decoration:none}
 .opt small{display:block;font-size:12px;color:#a89873;margin-top:2px}
 .opt.gold{border-color:#ffd76a;background:#2a1f08}
 .opt.off{opacity:.45;cursor:default}
+.opt.slot,.opt.bag{cursor:default}
+.opt.bag{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.opt.bag b,.opt.bag small{flex-basis:100%}
+.bagbtns{display:flex;gap:6px;margin-top:4px}
+.mini{font:inherit;font-size:12.5px;padding:5px 10px;border-radius:8px;border:1px solid #8a6a24;background:linear-gradient(#f0d089,#c99a3f);color:#22190a;cursor:pointer}
+.mini.alt{background:#211a0b;color:var(--ink);border-color:var(--edge)}
 .lore{display:grid;gap:7px;margin:6px 0 4px}
 .lp{background:#120d05;border:1px solid #4a3a1c;border-radius:10px;padding:9px 11px}
 .lp b{display:block;font-size:14.5px;color:var(--gold);font-weight:600;margin-bottom:3px}
@@ -6057,8 +6062,8 @@ function actorSpec(e){
     var w=cls==='warrior'?['1H_Axe']:(cls==='wizard'?['2H_Staff']:['1H_Crossbow','Knife_Offhand']);
     // the rogue carries a crossbow but draws the knife to strike
     var mw=cls==='rogue'?['Knife','Knife_Offhand']:null;
-    var gr=G.build.gear||{w:0,a:0};
-    return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null, armor:gr.a, wtier:gr.w};
+    var gr=G.build.gear||{w:0,a:0}, at={h:gr.h||0,s:gr.s||0,c:gr.c||0};
+    return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null, armor:(at.h||at.s||at.c)?at:0, akey:''+at.h+at.s+at.c, wtier:gr.w};
   }
   if(e.kind==='npc'&&e.npcId)        // the other folk: Wren the hedge-witch, Tobin the tinker
     return {model:e.model, weapons:e.npcId==='tobin'?['1H_Axe_Offhand']:[], beard:!!e.beard, tint:e.tint, key:e.npcId};
@@ -6089,45 +6094,52 @@ var ARMOR_LOOK=[null,
   {plate:[0.70,0.72,0.76],chest:1},
   {plate:[0.72,0.84,0.80],trim:[0.40,0.62,0.48],chest:1,circlet:[0.80,0.90,0.86],leaf:1},
   {plate:[0.96,0.76,0.30],trim:[0.98,0.95,0.86],chest:1,crown:1,gem:[0.55,0.85,1.0],gold:1}];
-function addArmor(root,tier,inv,mats,glow,model){
-  var A=ARMOR_LOOK[Math.min(5,tier)]; if(!A) return;
+/* each slot shows its own piece, in its own tier's look: T = {h, s, c} (head,
+   shoulders, chest tiers 0-5) */
+function addArmor(root,T,inv,mats,glow,model){
+  if(typeof T==='number') T={h:T,s:T,c:T};
   if(!ARMGEO) ARMGEO={blob:toGeom(blobMesh([1,1,1],0,2)),cone:toGeom(coneMesh([1,1,1],10)),box:toGeom(boxMesh([1,1,1])),
     ring:toGeom(coneMesh([1,1,1],18,0.5,0.5,true))};
-  function mat(c,em){ var m=new THREE.MeshLambertMaterial({color:new THREE.Color(c[0],c[1],c[2])});
-    if(em) glow.push({m:m,c:em}); else mats.push(m); return m; }
+  var cache={};
+  function mat(c,em){ var k=c.join()+(em?em.join():''); if(cache[k]) return cache[k];
+    var m=new THREE.MeshLambertMaterial({color:new THREE.Color(c[0],c[1],c[2])});
+    if(em) glow.push({m:m,c:em}); else mats.push(m); return (cache[k]=m); }
+  function look(t){ var A=ARMOR_LOOK[Math.min(5,t)]; if(!A) return null;
+    var plate=mat(A.plate,A.gold?[0.26,0.16,0.02]:null); return {A:A,plate:plate,trim:A.trim?mat(A.trim,A.gold?[0.20,0.18,0.12]:null):plate}; }
   function bone(n){ return root.getObjectByName(n); }
   var chest=bone('chest'), head=bone('head');
-  var plate=mat(A.plate,A.gold?[0.26,0.16,0.02]:null), trim=A.trim?mat(A.trim,A.gold?[0.20,0.18,0.12]:null):plate;
   function put(b,g,m,x,y,z,sx,sy,sz,rx,ry,rz){ if(!b) return null;
     var o=new THREE.Mesh(ARMGEO[g],m); o.position.set(x*inv,y*inv,z*inv); o.scale.set(sx*inv,sy*inv,sz*inv);
     o.rotation.set(rx||0,ry||0,rz||0); o.castShadow=true; b.add(o); return o; }
   // the hats differ: how high the top of the head sits, how wide a crown must be
   var top=model==='mage'?{y:0.50,r:0.80}:(model==='barbarian'?{y:0.84,r:0.62}:{y:0.72,r:0.60});
-  var big=tier>=3?1.2:1;
-  for(var sd=-1;sd<=1;sd+=2){
-    put(chest,'blob',plate,sd*0.30,0.02,0,0.40*big,0.27*big,0.44*big,0,0,sd*-0.4);              // pauldron
-    if(tier>=2) put(chest,'blob',trim,sd*0.31,0.10*big,0,0.30*big,0.09,0.34*big,0,0,sd*-0.4);   // its rim
-    if(A.leaf) put(chest,'cone',trim,sd*0.44,0.16,0,0.09,0.30,0.16,0,0,sd*-0.9);                 // elvensteel leaf
-    if(A.gold) for(var k=0;k<3;k++) put(chest,'cone',trim,sd*(0.34+k*0.07),0.18+k*0.02,(k-1)*0.14,0.07,0.28,0.07,0,0,sd*-0.7);
-    if(tier>=3){                                                                                // bracers and knee guards
-      put(bone(sd<0?'wristr':'wristl'),'blob',plate,0,-0.06,0,0.24,0.24,0.24);
-      put(bone(sd<0?'lowerlegr':'lowerlegl'),'blob',plate,0,0.02,0.07,0.20,0.20,0.16);
-    }
+  var S=look(T.s);
+  if(S){ var big=T.s>=3?1.2:1;
+    for(var sd=-1;sd<=1;sd+=2){
+      put(chest,'blob',S.plate,sd*0.30,0.02,0,0.40*big,0.27*big,0.44*big,0,0,sd*-0.4);             // pauldron
+      if(T.s>=2) put(chest,'blob',S.trim,sd*0.31,0.10*big,0,0.30*big,0.09,0.34*big,0,0,sd*-0.4);  // its rim
+      if(S.A.leaf) put(chest,'cone',S.trim,sd*0.44,0.16,0,0.09,0.30,0.16,0,0,sd*-0.9);            // elvensteel leaf
+      if(S.A.gold) for(var k=0;k<3;k++) put(chest,'cone',S.trim,sd*(0.34+k*0.07),0.18+k*0.02,(k-1)*0.14,0.07,0.28,0.07,0,0,sd*-0.7);
+    } }
+  var C=look(T.c);
+  if(C){
+    if(T.c>=2) put(chest,'box',C.plate,0,-0.10,0.19,0.40,0.30,0.06);                              // a plate on the jerkin
+    if(C.A.chest){ put(chest,'blob',C.plate,0,-0.16,0.17,0.52,0.42,0.30);                         // breastplate
+      put(chest,'box',C.A.gold?C.trim:mat([0.34,0.33,0.36]),0,-0.38,0.11,0.54,0.07,0.36);
+      for(var sd2=-1;sd2<=1;sd2+=2){                                                            // bracers and knee guards
+        put(bone(sd2<0?'wristr':'wristl'),'blob',C.plate,0,-0.06,0,0.24,0.24,0.24);
+        put(bone(sd2<0?'lowerlegr':'lowerlegl'),'blob',C.plate,0,0.02,0.07,0.20,0.20,0.16); } }
+    if(C.A.gem) put(chest,'blob',mat(C.A.gem,[0.30,0.62,0.85]),0,-0.12,0.32,0.13,0.15,0.08);
   }
-  if(A.chest){
-    put(chest,'blob',plate,0,-0.16,0.17,0.52,0.42,0.30);                                       // breastplate
-    put(chest,'box',A.gold?trim:mat([0.34,0.33,0.36]),0,-0.38,0.11,0.54,0.07,0.36);              // a belt of plate
-  }
-  if(A.gem) put(chest,'blob',mat(A.gem,[0.30,0.62,0.85]),0,-0.12,0.32,0.13,0.15,0.08);
-  if(A.circlet){
-    put(head,'ring',mat(A.circlet,[0.06,0.12,0.09]),0,top.y-0.04,0.02,top.r*1.02,0.08,top.r,-0.08,0,0);
-    put(head,'cone',trim,0,top.y+0.02,top.r*0.5,0.12,0.26,0.07,0.25,0,0);
-  }
-  if(A.crown){
-    put(head,'ring',plate,0,top.y,0.0,top.r,0.14,top.r*0.96,-0.08,0,0);
-    for(var c=0;c<8;c++){ var an=c/8*6.283;
-      put(head,'cone',plate,Math.sin(an)*top.r*0.48,top.y+0.12,Math.cos(an)*top.r*0.47,0.10,c===0?0.34:0.24,0.10); }
-    put(head,'blob',mat(A.gem,[0.30,0.62,0.85]),0,top.y+0.03,top.r*0.5,0.12,0.14,0.07);
+  var Hd=look(T.h);
+  if(Hd){
+    if(T.h>=2&&T.h<=3) put(head,'ring',Hd.plate,0,top.y-0.06,0.02,top.r*1.03,0.10,top.r*1.01,-0.08,0,0);   // a band of steel
+    if(Hd.A.circlet){ put(head,'ring',mat(Hd.A.circlet,[0.06,0.12,0.09]),0,top.y-0.04,0.02,top.r*1.02,0.08,top.r,-0.08,0,0);
+      put(head,'cone',Hd.trim,0,top.y+0.02,top.r*0.5,0.12,0.26,0.07,0.25,0,0); }
+    if(Hd.A.crown){ put(head,'ring',Hd.plate,0,top.y,0.0,top.r,0.14,top.r*0.96,-0.08,0,0);
+      for(var c=0;c<8;c++){ var an=c/8*6.283;
+        put(head,'cone',Hd.plate,Math.sin(an)*top.r*0.48,top.y+0.12,Math.cos(an)*top.r*0.47,0.10,c===0?0.34:0.24,0.10); }
+      put(head,'blob',mat(Hd.A.gem,[0.30,0.62,0.85]),0,top.y+0.03,top.r*0.5,0.12,0.14,0.07); }
   }
 }
 function makeActor(spec){
@@ -6345,7 +6357,7 @@ function assignActors(dt){
 }
 function specKey(e){
   var s=actorSpec(e);
-  return s.model+'|'+(s.key||'')+'|'+s.weapons.join(',')+'|'+(s.ears?1:0)+(s.beard?1:0)+'|'+(s.armor||0)+(s.wtier||0);
+  return s.model+'|'+(s.key||'')+'|'+s.weapons.join(',')+'|'+(s.ears?1:0)+(s.beard?1:0)+'|'+(s.akey||0)+(s.wtier||0);
 }
 
 </script>
@@ -6825,7 +6837,7 @@ function saveGame(){
   if(!G.player||G.player.dead&&G.state!=='dead') return;
   var p=G.player, b=G.build;
   var sv={v:1, t:Date.now(),
-    build:{race:b.race,cls:b.cls,skills:b.skills,points:b.points,gear:b.gear||{w:0,a:0},diff:b.diff||'normal'},
+    build:{race:b.race,cls:b.cls,skills:b.skills,points:b.points,gear:b.gear||{w:0,a:0},diff:b.diff||'normal',items:b.items||{},bag:b.bag||[]},
     wild:wildSave(),
     p:{level:p.level,xp:p.xp,hp:Math.max(1,Math.round(p.hp)),coins:p.coins,potions:p.potions},
     killed:G.killed, freed:G.freed, found:G.found, bounty:G.bounty?{id:G.bounty.def.id,n:G.bounty.n,got:G.bounty.got}:null,
@@ -7248,6 +7260,7 @@ function chestScreen(){
   var p=G.player, ready=WILD.chestT<=0;
   if(ready){
     var c=Math.round((180+p.level*12)*DF().pay); p.coins+=c; p.potions+=2; WILD.chestT=480; loreGet('hoard',true);
+    if(Math.random()<0.6) takeItem(makeItem(rollSlot(),rollTier(2,0.35)));
     sfx('coin'); sfx('freed');
     show('<h1>The Glimmer Hoard</h1><p class="say">Under a crust of crystal: coins, old and new, and two stoppered bottles that still smell of mint.</p>'+
       '<div class="stat"><span>You take</span><b>+'+c+' ◉ &nbsp; +2 ✚</b></div><p class="sub">The cave seems to fill it again, given time.</p><button class="btn" id="leave">Lovely</button>');
@@ -8344,6 +8357,175 @@ function abButtons(btns,r,right,bot){
 
 </script>
 <script>
+/* ================= gear: slots, loot, the bag and the character sheet =================
+   Five slots (weapon, head, shoulders, chest, trinket) and five rarities, each a
+   step up. Made for young players: there are no stats to compare, only tiers. Loot
+   drops as a glowing bag you walk over; anything better than what you wear goes on
+   at once (the old piece goes in your bag), anything else waits in the bag to equip
+   or sell. Bram's cousin sells up to rare; epic and legendary pieces only come off
+   the wood's fiercest beasts. Each slot shows on your hunter (see models.js). */
+
+var RARITY=[null,
+  {n:'Common',   c:'#e6e2d8', rgb:[0.90,0.88,0.84]},
+  {n:'Uncommon', c:'#62d862', rgb:[0.38,0.85,0.38]},
+  {n:'Rare',     c:'#5aa6ff', rgb:[0.35,0.62,1.0]},
+  {n:'Epic',     c:'#c07aff', rgb:[0.72,0.45,1.0]},
+  {n:'Legendary',c:'#ffa33a', rgb:[1.0,0.62,0.20]}];
+var SLOTS=['weapon','head','shoulders','chest','trinket'];
+var SLOTNAME={weapon:'Weapon',head:'Head',shoulders:'Shoulders',chest:'Chest',trinket:'Trinket'};
+var LEGEND={weapon:{warrior:"Cinderwing's Fang",rogue:"Aelthir's Whisper",wizard:'Staff of the Last Light'},
+  head:'Crown of Aelthir', shoulders:"Mossback's Mantle", chest:'Heartwood Plate', trinket:"Marigold's Locket"};
+var PREFIX=['','Sturdy','Honed','Masterwork','Elvensteel',''];
+function baseName(slot,tier){
+  var cls=G.build.cls;
+  if(slot==='weapon') return cls==='warrior'?'Axe':(cls==='wizard'?'Staff':'Blade');
+  if(slot==='head') return tier<2?'Cap':(tier<4?'Helm':'Circlet');
+  if(slot==='shoulders') return 'Pauldrons';
+  if(slot==='chest') return tier<2?'Jerkin':'Breastplate';
+  return ['Charm','Pendant','Lucky Acorn','Rune Stone'][(Math.random()*4)|0];
+}
+function makeItem(slot,tier){
+  tier=clamp(tier|0,1,5);
+  var nm=tier===5?(slot==='weapon'?LEGEND.weapon[G.build.cls]:LEGEND[slot]):(PREFIX[tier]+' '+baseName(slot,tier)).trim();
+  return {id:(Math.random()*1e9|0).toString(36),slot:slot,tier:tier,n:nm,cls:slot==='weapon'?G.build.cls:undefined};
+}
+function itemStat(it){
+  var t=it.tier;
+  if(it.slot==='weapon') return '+'+(t*15)+'% damage';
+  if(it.slot==='trinket') return '+'+(t*8)+' health, +'+(t*3)+'% damage';
+  return '+'+(t*7)+' health, '+(t*2)+'% less harm';
+}
+function equipped(slot){ return (G.build.items||{})[slot]||null; }
+function tierOf(slot){ var it=equipped(slot); return it?it.tier:0; }
+function isBetter(it){ return it.tier>tierOf(it.slot)&&(it.slot!=='weapon'||!it.cls||it.cls===G.build.cls); }
+/* the old two-number gear (and anything still reading it) is kept in step */
+function gearSync(){
+  var h=tierOf('head'), s=tierOf('shoulders'), c=tierOf('chest');
+  G.build.gear={w:tierOf('weapon'),a:Math.max(h,s,c,tierOf('trinket')),h:h,s:s,c:c};
+}
+/* what your gear adds, folded into the hunter by recalc */
+function gearStats(S){
+  var w=tierOf('weapon'), tr=tierOf('trinket'), arm=tierOf('head')+tierOf('shoulders')+tierOf('chest');
+  S.maxHp+=arm*7+tr*8;
+  S.melee*=(1+0.15*w)*(1+0.03*tr); S.ranged*=(1+0.15*w)*(1+0.03*tr);
+  S.armor*=Math.pow(0.98,arm);
+}
+function equip(it){
+  var old=equipped(it.slot);
+  G.build.items[it.slot]=it;
+  var i=G.build.bag.indexOf(it); if(i>=0) G.build.bag.splice(i,1);
+  if(old) G.build.bag.push(old);
+  gearSync(); recalc();
+}
+function sellPrice(it){ return it.tier*it.tier*6+4; }
+function sell(it){ var i=G.build.bag.indexOf(it); if(i<0) return 0; G.build.bag.splice(i,1); var c=sellPrice(it); G.player.coins+=c; return c; }
+/* for a new hunter, or one from before items existed */
+function gearInit(sv){
+  G.build.items={}; G.build.bag=[];
+  if(sv&&sv.items){ G.build.items=sv.items; G.build.bag=sv.bag||[]; }
+  else if(sv&&sv.gear){                     // an old save: its two gear tiers become pieces
+    if(sv.gear.w) G.build.items.weapon=makeItem('weapon',sv.gear.w);
+    if(sv.gear.a) ['head','shoulders','chest'].forEach(function(s){ G.build.items[s]=makeItem(s,sv.gear.a); });
+  }
+  gearSync();
+}
+/* for the tests and the shop: wear a whole set of one tier */
+function equipTiers(t){
+  G.build.items={}; if(t>0) SLOTS.forEach(function(s){ if(s!=='trinket') G.build.items[s]=makeItem(s,t); });
+  gearSync(); recalc();
+}
+
+/* ---------- loot ---------- */
+function rollTier(base,upChance){ return Math.min(5,base+(Math.random()<upChance?1:0)); }
+function rollSlot(){ var r=Math.random()*5.2; return r<1.2?'weapon':SLOTS[1+Math.min(3,((r-1.2)|0))]; }
+function lootFor(e){
+  if(e.kind==='dragon') return [makeItem(rollSlot(),rollTier(4,0.5)),makeItem(rollSlot(),3)];
+  if(e.kind==='golem') return [makeItem(rollSlot(),rollTier(4,0.3))];
+  if(e.mini) return [makeItem(rollSlot(),rollTier(3,0.35))];
+  if(e.elite) return Math.random()<0.4?[makeItem(rollSlot(),rollTier(2,0.3))]:[];
+  return Math.random()<0.025?[makeItem(rollSlot(),rollTier(1,0.25))]:[];
+}
+function dropLoot(e){
+  lootFor(e).forEach(function(it,i){ var a=Math.random()*6.28, x=e.x+Math.cos(a)*(1+i), z=e.z+Math.sin(a)*(1+i);
+    G.ents.push({kind:'loot',item:it,x:x,y:H(x,z),z:z,t:0,yaw:a,scale:1}); });
+}
+function takeItem(it){
+  var p=G.player, R=RARITY[it.tier];
+  if(isBetter(it)){ var old=equipped(it.slot); equip(it);
+    msg('▲ '+it.n,R.c,p.x,p.y+2.8,p.z,17); logLine('Equipped: '+it.n+' ('+R.n+') ▲',R.c); sfx('levelup');
+    if(it.tier>=4) tip(R.n+'! '+it.n);
+  } else { G.build.bag.push(it); msg('+ '+it.n,R.c,p.x,p.y+2.6,p.z,14); logLine('In your bag: '+it.n+' ('+R.n+')',R.c); sfx('pickup'); }
+  setTimeout(saveGame,40);
+}
+function updateLoot(e,dt,pd){
+  e.t+=dt;
+  if(pd<1.9&&!G.player.dead&&e.t>0.4){ takeItem(e.item); var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
+    burst(e.x,e.y+0.8,e.z,18,RARITY[e.item.tier].rgb,{up:3,spread:2,size:0.1,life:0.9,grav:-1}); }
+}
+function lootRig(out,e,t){
+  var c=RARITY[e.item.tier].rgb, b=Math.sin(t*3+e.yaw)*0.08;
+  out.push(['blobR',0,b,0,0,e.yaw+t*0.5,0,0.7,0.6,0.6,[0.55,0.40,0.24]]);
+  out.push(['tube',0,0.5+b,0,0,0,0,0.3,0.14,0.3,[0.40,0.28,0.16]]);
+  out.push(['blob',0,0.62+b,0,0,0,0,0.16,0.16,0.16,c]);
+  // a beam of its rarity's colour, taller the rarer
+  out.push(['box',0,0,0,0,t*0.8,0,0.08,1.2+e.item.tier*0.8,0.08,c]);
+  if(!(typeof LOD!=='undefined'&&LOD)) for(var i=0;i<3;i++){ var a=t*2+i*2.09;
+    out.push(['box',Math.cos(a)*0.6,0.7+Math.sin(t*3+i)*0.3,Math.sin(a)*0.6,a,a,0,0.07,0.07,0.07,c]); }
+}
+
+/* ---------- Bram's cousin's forge: up to rare ---------- */
+var SHOP_PRICE={weapon:[40,85,150],head:[20,45,80],shoulders:[20,45,80],chest:[25,55,95]};
+function shopScreen(say){
+  var p=G.player, html='<h1>The forge</h1><p class="sub">Bram\'s cousin works it out back · ◉ '+p.coins+'</p>'+
+    '<p class="say">'+(say||'“I can make you anything up to a good blue. The purple and the gold? Those you\'ll have to take off something that bites.”')+'</p><div class="opts">';
+  ['weapon','head','shoulders','chest'].forEach(function(s){
+    var t=tierOf(s), next=t+1, cur=equipped(s);
+    if(next>3){ html+='<button class="opt off" disabled><b>'+SLOTNAME[s]+': '+(cur?cur.n:'—')+'</b><small>Beyond the forge: hunt for better</small></button>'; return; }
+    var price=SHOP_PRICE[s][next-1], off=p.coins<price, R=RARITY[next];
+    html+='<button class="opt'+(off?' off':'')+'" data-g="'+s+'"'+(off?' disabled':'')+'><b>'+SLOTNAME[s]+': <span style="color:'+R.c+'">'+R.n+'</span> — '+price+' ◉</b><small>'+
+      (cur?'Now: '+cur.n+' · ':'')+itemStat({slot:s,tier:next})+(off?' · not enough coin':'')+'</small></button>';
+  });
+  html+='</div><button class="btn alt" id="gsheet">Your gear and bag</button><button class="btn alt" id="gback">Back to the counter</button>';
+  show(html);
+  var els=ui.querySelectorAll('.opt[data-g]');
+  for(var i=0;i<els.length;i++) els[i].onclick=function(){ var s=this.getAttribute('data-g'), next=tierOf(s)+1, price=SHOP_PRICE[s][next-1];
+    if(next>3||p.coins<price) return; p.coins-=price; equip(makeItem(s,next)); sfx('freed'); saveGame();
+    shopScreen(s==='weapon'?'“Feel the balance on that. Sharp as winter.”':'“That\'ll turn a fang or two.”'); };
+  document.getElementById('gsheet').onclick=function(){ gearSheet(function(){ shopScreen(); }); };
+  document.getElementById('gback').onclick=function(){ keeperScreen(); };
+}
+
+/* ---------- the character sheet ---------- */
+function itemHtml(it,extra){ var R=RARITY[it.tier]; return '<b style="color:'+R.c+'">'+it.n+'</b><small>'+R.n+' '+SLOTNAME[it.slot].toLowerCase()+' · '+itemStat(it)+(extra||'')+'</small>'; }
+function gearSheet(back,say){
+  if(G.state==='play') menuOpen('skills');
+  var p=G.player, html='<h1>Your gear</h1><p class="sub">'+RACES[G.build.race].name+' '+CLASSES[G.build.cls].name+', level '+p.level+' · ◉ '+p.coins+'</p>'+(say?'<p class="say">'+say+'</p>':'')+
+    '<div class="stat"><span>Health</span><b>'+G.S.maxHp+'</b></div>'+
+    '<div class="stat"><span>Melee / ranged</span><b>'+Math.round(G.S.melee*100)+'% / '+Math.round(G.S.ranged*100)+'%</b></div>'+
+    '<h3>Wearing</h3><div class="opts">';
+  SLOTS.forEach(function(s){ var it=equipped(s);
+    html+='<div class="opt slot">'+(it?itemHtml(it):'<b style="color:#8a7a5a">'+SLOTNAME[s]+': empty</b><small>'+(s==='trinket'?'Trinkets come off champions and bosses':'The forge sells these')+'</small>')+'</div>'; });
+  var charms=Object.keys(WILD.charms||{}).filter(function(k){ return WILD.charms[k]&&RECIPE_BY[k]; });
+  if(charms.length) html+='<div class="opt slot"><b style="color:#d8c9ff">Charms</b><small>'+charms.map(function(k){ return RECIPE_BY[k].n; }).join(' · ')+'</small></div>';
+  html+='</div><h3>Your bag ('+G.build.bag.length+')</h3><div class="opts">';
+  if(!G.build.bag.length) html+='<div class="opt off"><b>Empty</b><small>Loot you don\'t need goes here. Beat champions and bosses to find some.</small></div>';
+  G.build.bag.slice().sort(function(a,b){ return b.tier-a.tier; }).forEach(function(it){
+    var better=isBetter(it), k=G.build.bag.indexOf(it);
+    html+='<div class="opt bag">'+itemHtml(it,better?' · <span style="color:#9ff07a">▲ Better!</span>':' · not better')+
+      '<span class="bagbtns">'+(better?'<button class="mini" data-e="'+k+'">Equip</button>':'')+'<button class="mini alt" data-s="'+k+'">Sell '+sellPrice(it)+' ◉</button></span></div>'; });
+  html+='</div>';
+  var junk=G.build.bag.filter(function(it){ return !isBetter(it); });
+  if(junk.length) html+='<button class="btn alt" id="selljunk">Sell everything not better (+'+junk.reduce(function(a,it){ return a+sellPrice(it); },0)+' ◉)</button>';
+  html+='<button class="btn" id="gclose">'+(back?'Back':'Back to the wood')+'</button>';
+  show(html);
+  var e1=ui.querySelectorAll('[data-e]'); for(var i=0;i<e1.length;i++) e1[i].onclick=function(){ var it=G.build.bag[+this.getAttribute('data-e')]; if(it){ equip(it); sfx('freed'); saveGame(); gearSheet(back,'You put on the '+it.n+'.'); } };
+  var e2=ui.querySelectorAll('[data-s]'); for(var j=0;j<e2.length;j++) e2[j].onclick=function(){ var it=G.build.bag[+this.getAttribute('data-s')]; if(it){ var c=sell(it); sfx('coin'); saveGame(); gearSheet(back,'Sold for '+c+' coins.'); } };
+  var sj=document.getElementById('selljunk'); if(sj) sj.onclick=function(){ var c=0; junk.forEach(function(it){ c+=sell(it); }); sfx('coin'); saveGame(); gearSheet(back,'Sold for '+c+' coins.'); };
+  document.getElementById('gclose').onclick=function(){ if(back) back(); else menuClose(); };
+}
+
+</script>
+<script>
 /* ================= ui: the laptop HUD =================
    Framed panels in the spirit of the big online fantasy games, kept simple for
    young players: your portrait and health top-left, the thing you're fighting
@@ -8406,6 +8588,8 @@ function uiIcon(id,x,y,s){
     case 'fireball': hx.arc(2,2,7,0,6.3); fl('#ff8a30'); hx.beginPath(); hx.arc(3,3,3.5,0,6.3); fl('#ffe080'); hx.beginPath(); hx.moveTo(-3,-3); hx.lineTo(-11,-9); hx.moveTo(-1,-6); hx.lineTo(-7,-12); st('#ff8a30',2); break;
     case 'ward': hx.moveTo(0,-11); hx.lineTo(9,-6); hx.lineTo(8,4); hx.quadraticCurveTo(5,9,0,11); hx.quadraticCurveTo(-5,9,-8,4); hx.lineTo(-9,-6); hx.closePath(); fl('#7fb0ff');
       hx.beginPath(); hx.arc(0,0,3,0,6.3); fl('#e8f4ff'); break;
+    case 'gear': hx.moveTo(-9,4); hx.quadraticCurveTo(-9,-10,0,-10); hx.quadraticCurveTo(9,-10,9,4); hx.lineTo(4,4); hx.lineTo(4,-1); hx.lineTo(-4,-1); hx.lineTo(-4,4); hx.closePath(); fl('#c8ccd4');
+      hx.beginPath(); hx.rect(-9,4,18,3); fl('#e8c26a'); break;
     case 'lock': hx.rect(-6,-2,12,10); fl('#6a6458'); hx.beginPath(); hx.arc(0,-3,4.5,3.14,6.29); st('#6a6458',2.4); break;
   }
   hx.restore();
@@ -8474,7 +8658,7 @@ function useItem(id){
 }
 var UIBAR=null;
 function barGeom(){
-  var n=8, s=clamp(W/26,42,56), gap=6, micro=WILD.eagle?3:2, mw=s*0.62;
+  var n=8, s=clamp(W/26,42,56), gap=6, micro=WILD.eagle?4:3, mw=s*0.62;
   var w=n*s+(n-1)*gap+14+micro*(mw+5)+12, x=W/2-w/2, y=H2-s-18;
   return {x:x,y:y,w:w,s:s,gap:gap,n:n,mw:mw,micro:micro};
 }
@@ -8502,7 +8686,8 @@ function drawActionBar(){
   }
   // the little buttons: skills, journal, and Aelfrend once he's yours
   var mx=B.x+B.n*(B.s+B.gap)+8, my=B.y+B.s/2-B.mw/2;
-  var micro=[{icon:'skills',k:'Tab',n:'Skills',act:function(){ skillScreen(); },glow:G.build.points>0},
+  var micro=[{icon:'gear',k:'C',n:'Gear and bag',act:function(){ gearSheet(); },glow:(G.build.bag||[]).some(isBetter)},
+             {icon:'skills',k:'Tab',n:'Skills',act:function(){ skillScreen(); },glow:G.build.points>0},
              {icon:'journal',k:'L',n:'Journal and quests',act:function(){ journalScreen(); },glow:G.loreNew>0}];
   if(WILD.eagle) micro.push({icon:'fly',k:'G',n:'Fly with Aelfrend',act:function(){ flyScreen(); }});
   for(var m=0;m<micro.length;m++){ var mc=micro[m], ux=mx+m*(B.mw+5);
@@ -8760,17 +8945,18 @@ function tree(){return SKILLS.shared.concat(SKILLS[G.build.cls]);}
 function recalc(){
   var r=RACES[G.build.race], c=CLASSES[G.build.cls], S={};
   var gear=G.build.gear||{w:0,a:0};
-  S.maxHp=Math.round(c.hp+r.hp+SK('vigor')*15+SK('iron')*22+gear.a*20+(G.player?(G.player.level-1)*10:0));
+  S.maxHp=c.hp+r.hp+SK('vigor')*15+SK('iron')*22+(G.player?(G.player.level-1)*10:0);
   S.move=6.4*r.move*(1+0.06*SK('swift'));
-  S.melee=c.melee*r.melee*(1+0.16*SK('cleave'))*(1+0.15*gear.w);
-  S.ranged=c.ranged*r.ranged*(1+0.16*SK('fletch'))*(1+0.18*SK('arcane'))*(1+0.15*gear.w);
+  S.melee=c.melee*r.melee*(1+0.16*SK('cleave'));
+  S.ranged=c.ranged*r.ranged*(1+0.16*SK('fletch'))*(1+0.18*SK('arcane'));
   S.cd=c.cd*(1-0.12*SK('quick'));
-  S.armor=Math.pow(0.88,SK('wall'))*Math.pow(0.94,gear.a);
+  S.armor=Math.pow(0.88,SK('wall'));
   S.lifesteal=0.09*SK('blood'); S.whirl=SK('whirl')>0; S.dash=SK('dash')>0;
   S.extra=SK('twin')+SK('fork'); S.pierce=SK('pierce');
   S.burst=SK('burst')?3.0+1.4*SK('burst'):0; S.frost=SK('frost');
   S.allies=2+SK('comp'); S.xp=r.xp*(1+0.25*SK('ley'));
-  S.proj=c.proj; if(typeof charmStats==='function'&&WILD) charmStats(S); G.S=S;
+  S.proj=c.proj; if(G.build.items) gearStats(S); if(typeof charmStats==='function'&&WILD) charmStats(S);
+  S.maxHp=Math.round(S.maxHp); G.S=S;
   if(G.player){var d=S.maxHp-G.player.maxHp; G.player.maxHp=S.maxHp; if(d>0)G.player.hp=Math.min(S.maxHp,G.player.hp+d);}
 }
 function look(race,cls,extra){
@@ -9140,7 +9326,7 @@ function hurtEnemy(e,d,quiet){
     stonesKill();
     if(e.boss) bossDown(e);
     if(e.mini) miniDown(e);
-    monsterDrop(e);
+    monsterDrop(e); dropLoot(e);
     if(e.elite) championDown(e);
     sfx(e.kind+'die',e.x,e.z);
     // monsters burst in a puff of ichor and dust, no blood
@@ -9531,6 +9717,7 @@ function updateEnts(dt){
     if(e.kind==='critter'){ updateCritter(e,dt,pd); continue; }
     if(e.kind==='node'){ updateNode(e,dt,pd); continue; }
     if(e.kind==='qitem'){ updateQItem(e,dt,pd); continue; }
+    if(e.kind==='loot'){ updateLoot(e,dt,pd); continue; }
     if(e.kind==='eagle'){ updateEagle(e,dt); continue; }
     if(e.kind==='gnome'){ e.yaw+=wrapA(Math.atan2(p.x-e.x,p.z-e.z)-e.yaw)*Math.min(1,dt*(pd<8?3:0));
       if(pd<2.2&&!p.dead) findGnome(e); continue; }
@@ -9910,6 +10097,7 @@ function pushEnt(e){
   else if(e.kind==='eagle') eagleRig(RIG,e,G.t);
   else if(e.kind==='node') nodeRig(RIG,e,G.t);
   else if(e.kind==='qitem') qitemRig(RIG,e,G.t);
+  else if(e.kind==='loot') lootRig(RIG,e,G.t);
   else if(e.kind==='critter'){ if(e.sub==='fly') flyRig(RIG,e,G.t); else if(e.sub==='gull') eagleRig(RIG,e,G.t); else bunnyRig(RIG,e,G.t); }
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
   else if(e.kind==='shot'||e.kind==='eshot'||e.kind==='stuck'){ pushShot(e); return; }
@@ -10292,7 +10480,7 @@ function drawHUD(){
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
     var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot   ·   space jump';
-    var keys2='1–8 action bar   ·   T pick a target   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   K map key   ·   M sound';
+    var keys2='1–8 action bar   ·   T pick a target   ·   C gear   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   K map key   ·   M sound';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
       hx.textAlign='center'; hx.font='600 12.5px Georgia,serif';
@@ -10413,8 +10601,8 @@ function makeScreen(){
 }
 /* a new hunter (no argument), or the saved one carried on (sv from loadSave) */
 function startRun(sv){
-  if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; }
-  else { G.build.skills={}; G.build.points=0; G.build.gear={w:0,a:0}; if(!G.build.diff) G.build.diff='normal'; }
+  if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; gearInit(sv.build); }
+  else { G.build.skills={}; G.build.points=0; if(!G.build.diff) G.build.diff='normal'; gearInit(null); }
   wildLoad(sv&&sv.wild); CAVEENV=null; WILD.lore.wood=1;
   G.player=null; recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
@@ -10467,10 +10655,12 @@ function skillScreen(flash){
       return '<div class="sk ab'+(on?' has':' off')+'"><div class="skh"><b>'+a.n+'</b><span>'+(on?(DESKTOP?'key '+(i+3):'button'):'level '+a.lvl)+'</span></div><small>'+a.d+' · '+Math.round(abCdFull(a))+' s to recharge</small></div>'; }).join('')+'</div>'+
     '<h3>Skills</h3><div class="skills">'+rows+'</div>'+
     '<button class="btn" id="close">Back to the wood</button>'+
+    '<button class="btn alt" id="gearb">Gear and bag'+(G.build.bag&&G.build.bag.some(isBetter)?' (something better!)':'')+'</button>'+
     '<button class="btn alt" id="jrnl">Journal — '+loreCount()+' of '+LORE.length+' pages'+(G.loreNew?' (new!)':'')+'</button>'+
     '<button class="btn alt" id="diff">Difficulty: '+DF().n+' — tap to change</button>'+
     '<button class="btn alt" id="snd2">'+sndLabel()+'</button>');
   document.getElementById('snd2').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
+  document.getElementById('gearb').onclick=function(){ gearSheet(function(){ skillScreen(); }); };
   document.getElementById('jrnl').onclick=function(){ journalScreen(function(){ skillScreen(); }); };
   document.getElementById('diff').onclick=function(){
     var i=DIFF_ORDER.indexOf(G.build.diff||'normal'); G.build.diff=DIFF_ORDER[(i+1)%DIFF_ORDER.length];
@@ -10503,9 +10693,6 @@ var BOUNTIES=[
 ];
 var HIRE_PRICE={ranger:30,blade:30,knight:45,mage:40,druid:40,dwarf:45};
 var POTION_PRICE=15;
-/* gear: five tiers each, priced against what a few minutes of hunting brings in */
-var GEAR_NAMES=['Plain','Honed','Fine','Masterwork','Elvensteel','Legendary'];
-var GEAR_PRICE={w:[40,85,150,240,360], a:[35,75,135,215,330]};
 function bountyReward(b){ var l=G.player.level; return {coins:20+b.n*6+l*4, xp:60+b.n*20+l*10}; }
 function bountyTick(tags){
   var b=G.bounty; if(!b||b.got>=b.n) return;
@@ -10532,8 +10719,7 @@ function keeperScreen(say){
   var opts=[];
   opts.push({id:'rest',  t:'Rest by the fire', d:hpFull?'You are already rested':'Mend you and your company — free', off:false});
   opts.push({id:'potion',t:'Buy a healing potion — '+POTION_PRICE+' ◉', d:p.potions>=6?'Your belt is full':(p.coins<POTION_PRICE?'Not enough coin':'You carry '+p.potions+' of 6'), off:p.potions>=6||p.coins<POTION_PRICE});
-  var gr=G.build.gear||{w:0,a:0}, gNext=Math.min(gr.w,gr.a)<5;
-  opts.push({id:'gear', t:'Gear: better weapon and armour', d:gNext?'Weapon '+GEAR_NAMES[gr.w]+', armour '+GEAR_NAMES[gr.a]+' · next from '+Math.min(gr.w<5?GEAR_PRICE.w[gr.w]:1e9,gr.a<5?GEAR_PRICE.a[gr.a]:1e9)+' ◉':'The finest gear in the wood', off:false});
+  opts.push({id:'gear', t:'The forge: weapon and armour', d:'Bram\'s cousin makes pieces up to rare', off:false});
   var full=deployed()>=S.allies;
   opts.push({id:'hire',  t:'Hire a companion', d:full?'Your company is full ('+deployed()+' of '+S.allies+')':'Blades for coin ('+deployed()+' of '+S.allies+' in your company)', off:full});
   if(!WILD.torch) opts.push({id:'torch', t:'Buy a torch — '+TORCH_PRICE+' ◉', d:p.coins<TORCH_PRICE?'Not enough coin':'For the Glimmer Cave under the Dragon\'s Crag', off:p.coins<TORCH_PRICE});
@@ -10571,7 +10757,7 @@ function keeperDo(id){
   } else if(id==='parcel'){ keeperScreen(bramParcelDo());
   } else if(id==='story'){ var st=bramStory(); sfx('pickup'); keeperScreen(st);
   } else if(id==='hire'){ hireScreen(); }
-  else if(id==='gear'){ gearScreen(); }
+  else if(id==='gear'){ shopScreen(); }
   else if(id==='work'){
     var l=p.level, defs=BOUNTIES.filter(function(d){ return d.id!=='giant'||l>=3; });
     var d=defs[(Math.random()*defs.length)|0];
@@ -10583,29 +10769,6 @@ function keeperDo(id){
     sfx('coin'); gainXp(rw.xp,k?k.x:p.x,(k?k.y:p.y)+2.6,k?k.z:p.z,'+'+rw.xp+' XP — bounty');
     keeperScreen('As promised. You\'ve earned every coin.');
   } else if(id==='train'){ skillScreen(); }
-}
-function gearScreen(say){
-  var p=G.player, gr=G.build.gear||(G.build.gear={w:0,a:0}), cls=CLASSES[G.build.cls];
-  var wName=cls.weapon==='axe'?'axe':(cls.weapon==='staff'?'staff':'blade and crossbow');
-  var html='<h1>Gear</h1><p class="sub">Bram\'s cousin works the forge out back · ◉ '+p.coins+'</p>'+(say?'<p class="say">'+say+'</p>':'')+
-    '<div class="stat"><span>Weapon</span><b>'+GEAR_NAMES[gr.w]+' '+wName+' (+'+gr.w*15+'% damage)</b></div>'+
-    '<div class="stat"><span>Armour</span><b>'+GEAR_NAMES[gr.a]+' (+'+gr.a*20+' health, '+Math.round((1-Math.pow(0.94,gr.a))*100)+'% less harm)</b></div><div class="opts">';
-  [['w','Weapon','+15% damage, melee and ranged'],['a','Armour','+20 health and 6% less damage taken']].forEach(function(g){
-    var t=gr[g[0]];
-    if(t>=5){ html+='<button class="opt off" disabled><b>'+g[1]+': '+GEAR_NAMES[5]+'</b><small>As good as it gets</small></button>'; return; }
-    var price=GEAR_PRICE[g[0]][t], off=p.coins<price;
-    html+='<button class="opt'+(off?' off':'')+'" data-g="'+g[0]+'"'+(off?' disabled':'')+'><b>'+g[1]+': '+GEAR_NAMES[t+1]+' — '+price+' ◉</b><small>'+g[2]+(off?' · not enough coin':'')+'</small></button>';
-  });
-  html+='</div><button class="btn alt" id="gback">Back to the counter</button>';
-  show(html);
-  var els=ui.querySelectorAll('.opt[data-g]');
-  for(var i=0;i<els.length;i++) els[i].onclick=function(){
-    var k=this.getAttribute('data-g'), t=gr[k], price=GEAR_PRICE[k][t];
-    if(t>=5||p.coins<price) return;
-    p.coins-=price; gr[k]=t+1; recalc(); sfx('freed'); saveGame();
-    gearScreen(k==='w'?'Feel the balance on that. Sharp as winter.':'That\'ll turn a fang or two.');
-  };
-  document.getElementById('gback').onclick=function(){ keeperScreen(); };
 }
 function hireScreen(){
   var p=G.player, S=G.S, full=deployed()>=S.allies, html='<h1>Hire a companion</h1>'+
@@ -10748,7 +10911,8 @@ addEventListener('keydown',function(e){
   // keyboard combat beside WASD: E strikes, F shoots (J / K too); hold either to repeat
   if(e.key==='k'||e.key==='K'||e.key==='f'||e.key==='F'){ IN.shoot=true; IN.shotBuf=0.45; IN.shootHeld=true; }
   if(e.key==='q'||e.key==='Q') usePotion();
-  if(e.key==='c'||e.key==='C'||e.key==='Shift') IN.dash=true;
+  if(e.key==='Shift') IN.dash=true;
+  if((e.key==='c'||e.key==='C')&&!e.repeat){ if(G.state==='play') gearSheet(); else if(G.state==='skills') menuClose(); }
   if(DEBUG&&(e.key==='i'||e.key==='I')) SHOWDBG=!SHOWDBG;
   if(!e.repeat&&uiKey(e.key)) return;
   if((e.key==='t'||e.key==='T')&&!e.repeat&&G.state==='play') cycleTarget();

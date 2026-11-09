@@ -60,6 +60,8 @@ function uiIcon(id,x,y,s){
     case 'fireball': hx.arc(2,2,7,0,6.3); fl('#ff8a30'); hx.beginPath(); hx.arc(3,3,3.5,0,6.3); fl('#ffe080'); hx.beginPath(); hx.moveTo(-3,-3); hx.lineTo(-11,-9); hx.moveTo(-1,-6); hx.lineTo(-7,-12); st('#ff8a30',2); break;
     case 'ward': hx.moveTo(0,-11); hx.lineTo(9,-6); hx.lineTo(8,4); hx.quadraticCurveTo(5,9,0,11); hx.quadraticCurveTo(-5,9,-8,4); hx.lineTo(-9,-6); hx.closePath(); fl('#7fb0ff');
       hx.beginPath(); hx.arc(0,0,3,0,6.3); fl('#e8f4ff'); break;
+    case 'gear': hx.moveTo(-9,4); hx.quadraticCurveTo(-9,-10,0,-10); hx.quadraticCurveTo(9,-10,9,4); hx.lineTo(4,4); hx.lineTo(4,-1); hx.lineTo(-4,-1); hx.lineTo(-4,4); hx.closePath(); fl('#c8ccd4');
+      hx.beginPath(); hx.rect(-9,4,18,3); fl('#e8c26a'); break;
     case 'lock': hx.rect(-6,-2,12,10); fl('#6a6458'); hx.beginPath(); hx.arc(0,-3,4.5,3.14,6.29); st('#6a6458',2.4); break;
   }
   hx.restore();
@@ -128,7 +130,7 @@ function useItem(id){
 }
 var UIBAR=null;
 function barGeom(){
-  var n=8, s=clamp(W/26,42,56), gap=6, micro=WILD.eagle?3:2, mw=s*0.62;
+  var n=8, s=clamp(W/26,42,56), gap=6, micro=WILD.eagle?4:3, mw=s*0.62;
   var w=n*s+(n-1)*gap+14+micro*(mw+5)+12, x=W/2-w/2, y=H2-s-18;
   return {x:x,y:y,w:w,s:s,gap:gap,n:n,mw:mw,micro:micro};
 }
@@ -156,7 +158,8 @@ function drawActionBar(){
   }
   // the little buttons: skills, journal, and Aelfrend once he's yours
   var mx=B.x+B.n*(B.s+B.gap)+8, my=B.y+B.s/2-B.mw/2;
-  var micro=[{icon:'skills',k:'Tab',n:'Skills',act:function(){ skillScreen(); },glow:G.build.points>0},
+  var micro=[{icon:'gear',k:'C',n:'Gear and bag',act:function(){ gearSheet(); },glow:(G.build.bag||[]).some(isBetter)},
+             {icon:'skills',k:'Tab',n:'Skills',act:function(){ skillScreen(); },glow:G.build.points>0},
              {icon:'journal',k:'L',n:'Journal and quests',act:function(){ journalScreen(); },glow:G.loreNew>0}];
   if(WILD.eagle) micro.push({icon:'fly',k:'G',n:'Fly with Aelfrend',act:function(){ flyScreen(); }});
   for(var m=0;m<micro.length;m++){ var mc=micro[m], ux=mx+m*(B.mw+5);

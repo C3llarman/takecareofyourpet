@@ -104,17 +104,18 @@ function tree(){return SKILLS.shared.concat(SKILLS[G.build.cls]);}
 function recalc(){
   var r=RACES[G.build.race], c=CLASSES[G.build.cls], S={};
   var gear=G.build.gear||{w:0,a:0};
-  S.maxHp=Math.round(c.hp+r.hp+SK('vigor')*15+SK('iron')*22+gear.a*20+(G.player?(G.player.level-1)*10:0));
+  S.maxHp=c.hp+r.hp+SK('vigor')*15+SK('iron')*22+(G.player?(G.player.level-1)*10:0);
   S.move=6.4*r.move*(1+0.06*SK('swift'));
-  S.melee=c.melee*r.melee*(1+0.16*SK('cleave'))*(1+0.15*gear.w);
-  S.ranged=c.ranged*r.ranged*(1+0.16*SK('fletch'))*(1+0.18*SK('arcane'))*(1+0.15*gear.w);
+  S.melee=c.melee*r.melee*(1+0.16*SK('cleave'));
+  S.ranged=c.ranged*r.ranged*(1+0.16*SK('fletch'))*(1+0.18*SK('arcane'));
   S.cd=c.cd*(1-0.12*SK('quick'));
-  S.armor=Math.pow(0.88,SK('wall'))*Math.pow(0.94,gear.a);
+  S.armor=Math.pow(0.88,SK('wall'));
   S.lifesteal=0.09*SK('blood'); S.whirl=SK('whirl')>0; S.dash=SK('dash')>0;
   S.extra=SK('twin')+SK('fork'); S.pierce=SK('pierce');
   S.burst=SK('burst')?3.0+1.4*SK('burst'):0; S.frost=SK('frost');
   S.allies=2+SK('comp'); S.xp=r.xp*(1+0.25*SK('ley'));
-  S.proj=c.proj; if(typeof charmStats==='function'&&WILD) charmStats(S); G.S=S;
+  S.proj=c.proj; if(G.build.items) gearStats(S); if(typeof charmStats==='function'&&WILD) charmStats(S);
+  S.maxHp=Math.round(S.maxHp); G.S=S;
   if(G.player){var d=S.maxHp-G.player.maxHp; G.player.maxHp=S.maxHp; if(d>0)G.player.hp=Math.min(S.maxHp,G.player.hp+d);}
 }
 function look(race,cls,extra){
@@ -484,7 +485,7 @@ function hurtEnemy(e,d,quiet){
     stonesKill();
     if(e.boss) bossDown(e);
     if(e.mini) miniDown(e);
-    monsterDrop(e);
+    monsterDrop(e); dropLoot(e);
     if(e.elite) championDown(e);
     sfx(e.kind+'die',e.x,e.z);
     // monsters burst in a puff of ichor and dust, no blood
@@ -875,6 +876,7 @@ function updateEnts(dt){
     if(e.kind==='critter'){ updateCritter(e,dt,pd); continue; }
     if(e.kind==='node'){ updateNode(e,dt,pd); continue; }
     if(e.kind==='qitem'){ updateQItem(e,dt,pd); continue; }
+    if(e.kind==='loot'){ updateLoot(e,dt,pd); continue; }
     if(e.kind==='eagle'){ updateEagle(e,dt); continue; }
     if(e.kind==='gnome'){ e.yaw+=wrapA(Math.atan2(p.x-e.x,p.z-e.z)-e.yaw)*Math.min(1,dt*(pd<8?3:0));
       if(pd<2.2&&!p.dead) findGnome(e); continue; }
@@ -1254,6 +1256,7 @@ function pushEnt(e){
   else if(e.kind==='eagle') eagleRig(RIG,e,G.t);
   else if(e.kind==='node') nodeRig(RIG,e,G.t);
   else if(e.kind==='qitem') qitemRig(RIG,e,G.t);
+  else if(e.kind==='loot') lootRig(RIG,e,G.t);
   else if(e.kind==='critter'){ if(e.sub==='fly') flyRig(RIG,e,G.t); else if(e.sub==='gull') eagleRig(RIG,e,G.t); else bunnyRig(RIG,e,G.t); }
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
   else if(e.kind==='shot'||e.kind==='eshot'||e.kind==='stuck'){ pushShot(e); return; }
@@ -1636,7 +1639,7 @@ function drawHUD(){
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
     var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot   ·   space jump';
-    var keys2='1–8 action bar   ·   T pick a target   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   K map key   ·   M sound';
+    var keys2='1–8 action bar   ·   T pick a target   ·   C gear   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   K map key   ·   M sound';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
       hx.textAlign='center'; hx.font='600 12.5px Georgia,serif';
@@ -1757,8 +1760,8 @@ function makeScreen(){
 }
 /* a new hunter (no argument), or the saved one carried on (sv from loadSave) */
 function startRun(sv){
-  if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; }
-  else { G.build.skills={}; G.build.points=0; G.build.gear={w:0,a:0}; if(!G.build.diff) G.build.diff='normal'; }
+  if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; gearInit(sv.build); }
+  else { G.build.skills={}; G.build.points=0; if(!G.build.diff) G.build.diff='normal'; gearInit(null); }
   wildLoad(sv&&sv.wild); CAVEENV=null; WILD.lore.wood=1;
   G.player=null; recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
@@ -1811,10 +1814,12 @@ function skillScreen(flash){
       return '<div class="sk ab'+(on?' has':' off')+'"><div class="skh"><b>'+a.n+'</b><span>'+(on?(DESKTOP?'key '+(i+3):'button'):'level '+a.lvl)+'</span></div><small>'+a.d+' · '+Math.round(abCdFull(a))+' s to recharge</small></div>'; }).join('')+'</div>'+
     '<h3>Skills</h3><div class="skills">'+rows+'</div>'+
     '<button class="btn" id="close">Back to the wood</button>'+
+    '<button class="btn alt" id="gearb">Gear and bag'+(G.build.bag&&G.build.bag.some(isBetter)?' (something better!)':'')+'</button>'+
     '<button class="btn alt" id="jrnl">Journal — '+loreCount()+' of '+LORE.length+' pages'+(G.loreNew?' (new!)':'')+'</button>'+
     '<button class="btn alt" id="diff">Difficulty: '+DF().n+' — tap to change</button>'+
     '<button class="btn alt" id="snd2">'+sndLabel()+'</button>');
   document.getElementById('snd2').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
+  document.getElementById('gearb').onclick=function(){ gearSheet(function(){ skillScreen(); }); };
   document.getElementById('jrnl').onclick=function(){ journalScreen(function(){ skillScreen(); }); };
   document.getElementById('diff').onclick=function(){
     var i=DIFF_ORDER.indexOf(G.build.diff||'normal'); G.build.diff=DIFF_ORDER[(i+1)%DIFF_ORDER.length];
@@ -1847,9 +1852,6 @@ var BOUNTIES=[
 ];
 var HIRE_PRICE={ranger:30,blade:30,knight:45,mage:40,druid:40,dwarf:45};
 var POTION_PRICE=15;
-/* gear: five tiers each, priced against what a few minutes of hunting brings in */
-var GEAR_NAMES=['Plain','Honed','Fine','Masterwork','Elvensteel','Legendary'];
-var GEAR_PRICE={w:[40,85,150,240,360], a:[35,75,135,215,330]};
 function bountyReward(b){ var l=G.player.level; return {coins:20+b.n*6+l*4, xp:60+b.n*20+l*10}; }
 function bountyTick(tags){
   var b=G.bounty; if(!b||b.got>=b.n) return;
@@ -1876,8 +1878,7 @@ function keeperScreen(say){
   var opts=[];
   opts.push({id:'rest',  t:'Rest by the fire', d:hpFull?'You are already rested':'Mend you and your company — free', off:false});
   opts.push({id:'potion',t:'Buy a healing potion — '+POTION_PRICE+' ◉', d:p.potions>=6?'Your belt is full':(p.coins<POTION_PRICE?'Not enough coin':'You carry '+p.potions+' of 6'), off:p.potions>=6||p.coins<POTION_PRICE});
-  var gr=G.build.gear||{w:0,a:0}, gNext=Math.min(gr.w,gr.a)<5;
-  opts.push({id:'gear', t:'Gear: better weapon and armour', d:gNext?'Weapon '+GEAR_NAMES[gr.w]+', armour '+GEAR_NAMES[gr.a]+' · next from '+Math.min(gr.w<5?GEAR_PRICE.w[gr.w]:1e9,gr.a<5?GEAR_PRICE.a[gr.a]:1e9)+' ◉':'The finest gear in the wood', off:false});
+  opts.push({id:'gear', t:'The forge: weapon and armour', d:'Bram\'s cousin makes pieces up to rare', off:false});
   var full=deployed()>=S.allies;
   opts.push({id:'hire',  t:'Hire a companion', d:full?'Your company is full ('+deployed()+' of '+S.allies+')':'Blades for coin ('+deployed()+' of '+S.allies+' in your company)', off:full});
   if(!WILD.torch) opts.push({id:'torch', t:'Buy a torch — '+TORCH_PRICE+' ◉', d:p.coins<TORCH_PRICE?'Not enough coin':'For the Glimmer Cave under the Dragon\'s Crag', off:p.coins<TORCH_PRICE});
@@ -1915,7 +1916,7 @@ function keeperDo(id){
   } else if(id==='parcel'){ keeperScreen(bramParcelDo());
   } else if(id==='story'){ var st=bramStory(); sfx('pickup'); keeperScreen(st);
   } else if(id==='hire'){ hireScreen(); }
-  else if(id==='gear'){ gearScreen(); }
+  else if(id==='gear'){ shopScreen(); }
   else if(id==='work'){
     var l=p.level, defs=BOUNTIES.filter(function(d){ return d.id!=='giant'||l>=3; });
     var d=defs[(Math.random()*defs.length)|0];
@@ -1927,29 +1928,6 @@ function keeperDo(id){
     sfx('coin'); gainXp(rw.xp,k?k.x:p.x,(k?k.y:p.y)+2.6,k?k.z:p.z,'+'+rw.xp+' XP — bounty');
     keeperScreen('As promised. You\'ve earned every coin.');
   } else if(id==='train'){ skillScreen(); }
-}
-function gearScreen(say){
-  var p=G.player, gr=G.build.gear||(G.build.gear={w:0,a:0}), cls=CLASSES[G.build.cls];
-  var wName=cls.weapon==='axe'?'axe':(cls.weapon==='staff'?'staff':'blade and crossbow');
-  var html='<h1>Gear</h1><p class="sub">Bram\'s cousin works the forge out back · ◉ '+p.coins+'</p>'+(say?'<p class="say">'+say+'</p>':'')+
-    '<div class="stat"><span>Weapon</span><b>'+GEAR_NAMES[gr.w]+' '+wName+' (+'+gr.w*15+'% damage)</b></div>'+
-    '<div class="stat"><span>Armour</span><b>'+GEAR_NAMES[gr.a]+' (+'+gr.a*20+' health, '+Math.round((1-Math.pow(0.94,gr.a))*100)+'% less harm)</b></div><div class="opts">';
-  [['w','Weapon','+15% damage, melee and ranged'],['a','Armour','+20 health and 6% less damage taken']].forEach(function(g){
-    var t=gr[g[0]];
-    if(t>=5){ html+='<button class="opt off" disabled><b>'+g[1]+': '+GEAR_NAMES[5]+'</b><small>As good as it gets</small></button>'; return; }
-    var price=GEAR_PRICE[g[0]][t], off=p.coins<price;
-    html+='<button class="opt'+(off?' off':'')+'" data-g="'+g[0]+'"'+(off?' disabled':'')+'><b>'+g[1]+': '+GEAR_NAMES[t+1]+' — '+price+' ◉</b><small>'+g[2]+(off?' · not enough coin':'')+'</small></button>';
-  });
-  html+='</div><button class="btn alt" id="gback">Back to the counter</button>';
-  show(html);
-  var els=ui.querySelectorAll('.opt[data-g]');
-  for(var i=0;i<els.length;i++) els[i].onclick=function(){
-    var k=this.getAttribute('data-g'), t=gr[k], price=GEAR_PRICE[k][t];
-    if(t>=5||p.coins<price) return;
-    p.coins-=price; gr[k]=t+1; recalc(); sfx('freed'); saveGame();
-    gearScreen(k==='w'?'Feel the balance on that. Sharp as winter.':'That\'ll turn a fang or two.');
-  };
-  document.getElementById('gback').onclick=function(){ keeperScreen(); };
 }
 function hireScreen(){
   var p=G.player, S=G.S, full=deployed()>=S.allies, html='<h1>Hire a companion</h1>'+
@@ -2092,7 +2070,8 @@ addEventListener('keydown',function(e){
   // keyboard combat beside WASD: E strikes, F shoots (J / K too); hold either to repeat
   if(e.key==='k'||e.key==='K'||e.key==='f'||e.key==='F'){ IN.shoot=true; IN.shotBuf=0.45; IN.shootHeld=true; }
   if(e.key==='q'||e.key==='Q') usePotion();
-  if(e.key==='c'||e.key==='C'||e.key==='Shift') IN.dash=true;
+  if(e.key==='Shift') IN.dash=true;
+  if((e.key==='c'||e.key==='C')&&!e.repeat){ if(G.state==='play') gearSheet(); else if(G.state==='skills') menuClose(); }
   if(DEBUG&&(e.key==='i'||e.key==='I')) SHOWDBG=!SHOWDBG;
   if(!e.repeat&&uiKey(e.key)) return;
   if((e.key==='t'||e.key==='T')&&!e.repeat&&G.state==='play') cycleTarget();
