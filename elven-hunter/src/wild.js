@@ -383,6 +383,7 @@ function chestScreen(){
   var p=G.player, ready=WILD.chestT<=0;
   if(ready){
     var c=Math.round((180+p.level*12)*DF().pay); p.coins+=c; p.potions+=2; WILD.chestT=480; loreGet('hoard',true);
+    if(Math.random()<0.6) takeItem(makeItem(rollSlot(),rollTier(2,0.35)));
     sfx('coin'); sfx('freed');
     show('<h1>The Glimmer Hoard</h1><p class="say">Under a crust of crystal: coins, old and new, and two stoppered bottles that still smell of mint.</p>'+
       '<div class="stat"><span>You take</span><b>+'+c+' ◉ &nbsp; +2 ✚</b></div><p class="sub">The cave seems to fill it again, given time.</p><button class="btn" id="leave">Lovely</button>');

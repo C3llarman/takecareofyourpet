@@ -248,7 +248,7 @@ function saveGame(){
   if(!G.player||G.player.dead&&G.state!=='dead') return;
   var p=G.player, b=G.build;
   var sv={v:1, t:Date.now(),
-    build:{race:b.race,cls:b.cls,skills:b.skills,points:b.points,gear:b.gear||{w:0,a:0},diff:b.diff||'normal'},
+    build:{race:b.race,cls:b.cls,skills:b.skills,points:b.points,gear:b.gear||{w:0,a:0},diff:b.diff||'normal',items:b.items||{},bag:b.bag||[]},
     wild:wildSave(),
     p:{level:p.level,xp:p.xp,hp:Math.max(1,Math.round(p.hp)),coins:p.coins,potions:p.potions},
     killed:G.killed, freed:G.freed, found:G.found, bounty:G.bounty?{id:G.bounty.def.id,n:G.bounty.n,got:G.bounty.got}:null,

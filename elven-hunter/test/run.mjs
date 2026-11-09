@@ -524,7 +524,7 @@ section('Home and progress');
     spawnSnake(p.x + 2, p.z + 2); hurtEnemy(G.ents[G.ents.length - 1], 1e6); return p.coins - c0; });
   ok('every kill pays coins', pay >= 3, `+${pay}`);
   const gear = await page.evaluate(() => { const p = G.player, m0 = G.S.melee; p.coins = 100; G.state = 'play'; keeperScreen(); keeperDo('gear');
-    document.querySelector('.opt[data-g="w"]').click(); const r = { melee: G.S.melee / m0, coins: p.coins, tier: G.build.gear.w, price: GEAR_PRICE.w[0] }; menuClose(); return r; });
+    document.querySelector('.opt[data-g="weapon"]').click(); const r = { melee: G.S.melee / m0, coins: p.coins, tier: G.build.gear.w, price: SHOP_PRICE.weapon[0] }; menuClose(); return r; });
   ok('gear can be bought and makes you stronger', gear.tier === 1 && gear.melee > 1.14 && gear.coins === 100 - gear.price, `+${Math.round((gear.melee - 1) * 100)}% damage`);
 
   const locked = await page.evaluate(() => { const p = G.player; p.coins = 5000; G.state = 'play'; cottageScreen(); cottageDo('buy');
@@ -823,7 +823,7 @@ section('Lore, mini-bosses, champions and armour');
   const armour = await page.evaluate(() => new Promise((res) => {
     const count = () => { const a = ACTOR_OF.get(G.player); let n = 0; a.root.traverse((o) => { if (o.isMesh && o.geometry && ARMGEO && Object.values(ARMGEO).includes(o.geometry)) n++; }); return { n, glow: a.glow.length }; };
     const r = {}; const tiers = [0, 1, 3, 5]; let i = 0;
-    const step = () => { if (i >= tiers.length) { res(r); return; } G.build.gear = { w: tiers[i], a: tiers[i] }; recalc();
+    const step = () => { if (i >= tiers.length) { res(r); return; } equipTiers(tiers[i]);
       const t0 = G.t; const wait = () => { if (G.t - t0 < 0.2) { requestAnimationFrame(wait); return; } r[tiers[i]] = count(); i++; step(); }; wait(); };
     step();
   }));
@@ -1009,6 +1009,45 @@ section('Abilities');
     const low = Math.max(...btns.map((q) => q.y + q.r)); return { a, b, ov, clear: low < H2 - SAFEB }; });
   ok('on a phone each ability gets a button as it unlocks', ph.a === 0 && ph.b === 3);
   ok('ability buttons overlap nothing and clear the gesture strip', !ph.ov && ph.clear, ph.ov || '');
+  await page.close();
+}
+
+/* ---------------- gear: slots, loot, the bag ---------------- */
+section('Gear, loot and the bag');
+{
+  const page = await open(browser, LAPTOP);
+  const g = await page.evaluate(() => { startRun(); G.ents = G.ents.filter((e) => !FOE[e.kind]); const p = G.player; p.inv = 1e9;
+    const hp0 = G.S.maxHp, m0 = G.S.melee;
+    const a = makeItem('chest', 3); takeItem(a); const worn = equipped('chest') === a;
+    takeItem(makeItem('chest', 2)); const bagged = G.build.bag.length === 1;
+    takeItem(makeItem('weapon', 4)); const stronger = G.S.melee > m0 * 1.5 && G.S.maxHp > hp0;
+    const c0 = p.coins; const sold = sell(G.build.bag[0]) > 0 && p.coins > c0 && G.build.bag.length === 0;
+    const mini = spawnMini(MINIS[0]); hurtEnemy(mini, 1e9); const drops = G.ents.filter((e) => e.kind === 'loot').map((e) => e.item.tier);
+    const champ = []; for (let i = 0; i < 400; i++) champ.push(lootFor({ kind: 'spider', elite: 1 }).length);
+    const plain = []; for (let i = 0; i < 2000; i++) plain.push(lootFor({ kind: 'spider' }).length);
+    gearInit({ gear: { w: 2, a: 3 } }); const migrated = SLOTS.map((s) => tierOf(s)).join('');
+    return { worn, bagged, stronger, sold, drops, champRate: champ.filter(Boolean).length / 400, plainRate: plain.filter(Boolean).length / 2000, migrated }; });
+  ok('better loot goes on at once', g.worn && g.stronger);
+  ok('the rest waits in your bag, and sells', g.bagged && g.sold);
+  ok('a mini-boss always drops something rare or better', g.drops.length === 1 && g.drops[0] >= 3, `tier ${g.drops.join(',')}`);
+  ok('champions drop loot often, ordinary monsters rarely', g.champRate > 0.25 && g.plainRate < 0.06, `${Math.round(g.champRate * 100)}% vs ${Math.round(g.plainRate * 100)}%`);
+  ok('an old save\'s gear becomes items', g.migrated === '23330', g.migrated);
+  const walk = await page.evaluate(() => new Promise((res) => { equipTiers(0); const p = G.player; const it = makeItem('head', 5);
+    G.ents.push({ kind: 'loot', item: it, x: p.x + 1, y: p.y, z: p.z, t: 1, yaw: 0, scale: 1 });
+    const t0 = G.t; const tick = () => { if (G.t - t0 < 0.3) { requestAnimationFrame(tick); return; } res({ crown: tierOf('head') === 5, gone: !G.ents.some((e) => e.item === it) }); }; tick(); }));
+  ok('walk over a loot bag to pick it up', walk.crown && walk.gone);
+  await page.keyboard.press('c'); await page.waitForTimeout(150);
+  ok('C opens your gear and bag', await page.evaluate(() => G.state === 'skills' && /Your gear/.test(ui.textContent)));
+  await page.evaluate(() => menuClose());
+  const forge = await page.evaluate(() => { const p = G.player; equipTiers(3); p.coins = 9999; G.state = 'play'; keeperScreen(); keeperDo('gear');
+    const offers = document.querySelectorAll('.opt[data-g]:not([disabled])').length; menuClose(); return offers; });
+  ok('the forge stops at rare: epic and legendary must be hunted', forge === 0);
+  const saved = await page.evaluate(() => { equipTiers(0); takeItem(makeItem('shoulders', 4)); G.build.bag.push(makeItem('weapon', 2)); saveGame(); return tierOf('shoulders'); });
+  await page.reload(); await page.waitForFunction('window.__ready===true', { timeout: 60000 });
+  await page.click('#cont'); await page.waitForTimeout(300);
+  const back = await page.evaluate(() => ({ sh: tierOf('shoulders'), bag: G.build.bag.length }));
+  ok('what you wear and carry is saved', back.sh === saved && back.bag === 1);
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
   await page.close();
 }
 
