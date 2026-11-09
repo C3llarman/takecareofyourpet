@@ -128,7 +128,7 @@ function look(race,cls,extra){
   return L;
 }
 function msg(txt,col,x,y,z,size){ G.msgs.push({txt:txt,col:col||'#f3e7c9',x:x,y:y,z:z,t:0,size:size||17}); }
-function tip(s){ G.tip=s; G.tipT=3.2; }
+function tip(s){ G.tip=s; G.tipT=3.2; if(typeof logLine==='function') logLine(s,'#e8c26a'); }
 
 /* ---------- entities ---------- */
 function newPlayer(){
@@ -394,7 +394,7 @@ function doAttack(){
   if(p.cdT>0||p.dead) return;
   if(DESKTOP&&LOCKED) p.yaw=G.cam.yaw;
   // turn to face the nearest thing worth hitting, so a tap is never wasted on empty air
-  var lock=aimTarget(p,5.4);
+  var lock=(typeof pickedIn==='function'&&pickedIn(5.4))||aimTarget(p,5.4);
   if(lock) p.yaw=Math.atan2(lock.x-p.x,lock.z-p.z);
   p.cdT=0.45; p.atkT=p.atkDur=0.42; p.atkKind='melee';
   sfx('swing',p.x,p.z);
@@ -449,7 +449,7 @@ function doShoot(){
   sfx(S.proj==='arrow'?'bow':(S.proj==='bolt'?'zap':'throw'),p.x,p.z);
   var n=1+S.extra, sp=(S.proj==='bolt')?30:(S.proj==='axe'?26:38);
   if(DESKTOP&&LOCKED) p.yaw=G.cam.yaw;
-  var tgt=aimTarget(p,34); G.lock=tgt||null;
+  var tgt=(typeof pickedIn==='function'&&pickedIn(34))||aimTarget(p,34); G.lock=tgt||null;
   var sy=p.y+1.35*p.scale;
   var aimY=0;
   if(tgt){
@@ -488,7 +488,7 @@ function hurtEnemy(e,d,quiet){
     burst(e.x,e.y+(e.kind==='wasp'?aimH(e):0.7*(e.scale||1)),e.z,16,ICHOR[e.kind],{up:4,spread:4,size:0.16*(e.scale||1),life:0.9});
     // every kill pays a little; giants pay well
     var cn=Math.round(((e.big?16:3)+((Math.random()*(3+G.player.level/3))|0))*DF().pay);
-    G.player.coins+=cn; msg('+'+cn+' ◉','#ffe08a',e.x+0.6,e.y+1.6,e.z,13); sfx('coin');
+    G.player.coins+=cn; msg('+'+cn+' ◉','#ffe08a',e.x+0.6,e.y+1.6,e.z,13); sfx('coin'); logLine('+'+cn+' coins','#ffe08a');
     if(Math.random()<0.16){ G.player.potions++; msg('+potion','#ff9d9d',e.x,e.y+2,e.z); sfx('pickup'); }
     var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
     // leave a body that plays its death and sinks away
@@ -574,7 +574,7 @@ function breakCocoon(c,d){
 }
 function gainXp(n,x,y,z,label){
   var p=G.player; p.xp+=Math.round(n*G.S.xp);
-  msg(label||('+'+n+' XP'),'#ffe08a',x,y,z);
+  msg(label||('+'+n+' XP'),'#ffe08a',x,y,z); logLine(label||('+'+n+' XP'),'#c9b8ff');
   while(p.xp>=xpNeed(p.level)){
     p.xp-=xpNeed(p.level); p.level++; G.build.points++; recalc(); p.hp=p.maxHp;
     msg('LEVEL '+p.level+' — skill point','#9ff07a',p.x,p.y+2.8,p.z); buzz([20,40,20,40,40]);
@@ -1285,7 +1285,7 @@ var SHOWKEY=false;
 /* minimap placement: top-right on a laptop; on a phone it sits under the health
    panel, because the top-right corner belongs to the potion / skill buttons */
 function mapGeom(){
-  if(DESKTOP){ var r=Math.min(92,W*0.07); return {x:W-12*clamp(W/1100,1,1.5)-r, y:12*clamp(W/1100,1,1.5)+r+10, r:r}; }
+  if(DESKTOP){ var r=Math.min(92,W*0.07); return {x:W-12*clamp(W/1100,1,1.5)-r, y:12*clamp(W/1100,1,1.5)+r+26, r:r}; }
   var P=panelGeom(), r2=Math.min(54,W*0.13); return {x:12+r2, y:P.y+P.hMax+12+r2, r:r2};
 }
 /* the status panel, top-left: health bar, xp bar, a stats line and a status line.
@@ -1411,7 +1411,8 @@ function drawHUD(){
     if(e.elite&&sp.d<30){ hx.font='600 11px Georgia,serif'; hx.fillStyle='rgba(0,0,0,.6)'; hx.fillText(e.name,sp.x+1,sp.y-3);
       hx.fillStyle='#ffd76a'; hx.fillText(e.name,sp.x,sp.y-4); }
   }
-  // status panel
+  // status panel (phones; the laptop gets framed portraits in ui.js)
+  if(!DESKTOP){
   var P=panelGeom(), UI=P.UI, pad=P.x, bx=P.x+P.ins, by=P.y+P.ins, bw=P.bw;
   var hasBuff=(p.buff!==null&&p.buff!==undefined), pts=G.build.points, bq=G.bounty;
   var ph=P.hBase+((hasBuff||pts>0)?P.row:0)+(bq?P.row:0);
@@ -1473,6 +1474,7 @@ function drawHUD(){
     if(!done){ hx.fillStyle='rgba(255,215,106,.25)'; hx.fillRect(bx,qy+3*UI,bw,2*UI);
       hx.fillStyle='rgba(255,215,106,.8)'; hx.fillRect(bx,qy+3*UI,bw*bq.got/bq.n,2*UI); }
   }
+  }
   // minimap: every kind of thing has its own shape, landmarks off the edge stay
   // pinned to the rim so you always know which way they lie
   var MG=mapGeom(), mr=MG.r, mx=MG.x, my=MG.y;
@@ -1514,7 +1516,7 @@ function drawHUD(){
   hx.fillStyle='#e8c26a'; hx.fillText('N',mx+nr.x,my+nr.y+4*ms);
   hx.fillStyle='#f3e7c9'; hx.beginPath(); hx.moveTo(mx,my-5); hx.lineTo(mx-3.6,my+4); hx.lineTo(mx+3.6,my+4); hx.closePath(); hx.fill();
   hx.strokeStyle='rgba(232,194,106,.55)'; hx.lineWidth=2; hx.beginPath(); hx.arc(mx,my,mr,0,6.3); hx.stroke();
-  if(DESKTOP||SHOWKEY){
+  if(SHOWKEY){
     var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['shroom','Mushroom grump'],['cocoon','Captive — free them'],
       ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
       ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['cave','Glimmer Cave — bring a torch']];
@@ -1550,6 +1552,7 @@ function drawHUD(){
       hx.beginPath(); hx.arc(TELE.missPts[mi][0],TELE.missPts[mi][1],5,0,6.3); hx.fill();
     }
   }
+  if(DESKTOP) drawDeskHUD();
   drawBossBar();
   drawCompass(); drawFolkMarks();
   // tip
@@ -1617,13 +1620,13 @@ function drawHUD(){
   // left stick (touch only)
   var SR=Math.max(42,Math.min(W,H2)*0.11);
   if(DESKTOP){
-    var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot';
-    var keys2='space jump   ·   shift dash   ·   Q potion   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   M sound';
+    var keys='WASD move   ·   mouse look   ·   E / L-click strike   ·   F / R-click shoot   ·   space jump';
+    var keys2='1–6 action bar   ·   T pick a target   ·   TAB skills   ·   L journal'+(WILD.eagle?'   ·   G fly':'')+'   ·   K map key   ·   M sound';
     var runT=G.t-(G.runStart||0), ka=runT<50?0.42:Math.max(0,0.42*(1-(runT-50)/6));
     if(ka>0){
       hx.textAlign='center'; hx.font='600 12.5px Georgia,serif';
       hx.fillStyle='rgba(243,231,201,'+ka.toFixed(3)+')';
-      hx.fillText(keys,W/2,H2-30); hx.fillText(keys2,W/2,H2-13);
+      var kb=barGeom().y-48; hx.fillText(keys,W/2,kb-16); hx.fillText(keys2,W/2,kb);
     }
     if(!LOCKED){
       var bw3=210, bh3=34, by3=H2*0.80;
@@ -2074,6 +2077,9 @@ addEventListener('keydown',function(e){
   if(e.key==='q'||e.key==='Q') usePotion();
   if(e.key==='c'||e.key==='C'||e.key==='Shift') IN.dash=true;
   if(DEBUG&&(e.key==='i'||e.key==='I')) SHOWDBG=!SHOWDBG;
+  if(!e.repeat&&uiKey(e.key)) return;
+  if((e.key==='t'||e.key==='T')&&!e.repeat&&G.state==='play') cycleTarget();
+  if((e.key==='k'||e.key==='K')&&!e.repeat&&G.state==='play') SHOWKEY=!SHOWKEY;
   if((e.key==='g'||e.key==='G')&&!e.repeat&&G.state==='play'&&WILD.eagle&&!G.flight) flyScreen();
   if((e.key==='l'||e.key==='L')&&!e.repeat){ if(G.state==='play') journalScreen(); else if(G.state==='skills') menuClose(); }
   if(e.key==='e'||e.key==='E'){ IN.attack=true; IN.atkBuf=0.45; }
@@ -2092,7 +2098,7 @@ function wantLock(){
   if(document.pointerLockElement===cvs) return;
   try{ cvs.requestPointerLock(); }catch(e){}
 }
-cvs.addEventListener('click',function(){ wantLock(); });
+cvs.addEventListener('click',function(e){ if(DESKTOP&&!LOCKED&&G.state==='play'&&uiClick(e.clientX,e.clientY)) return; wantLock(); });
 document.addEventListener('pointerlockchange',function(){
   LOCKED=(document.pointerLockElement===cvs);
   if(!LOCKED){ IN.attack=false; IN.shoot=false; IN.shootHeld=false; }
@@ -2102,6 +2108,7 @@ addEventListener('touchstart',function(){ LASTTOUCH=performance.now(); },{captur
 addEventListener('mousemove',function(e){
   // phones send a fake mouse move after a tap; only a real mouse switches to laptop controls
   if((e.movementX||e.movementY)&&performance.now()-LASTTOUCH>1000) setMode(true);
+  UIMOUSE={x:e.clientX,y:e.clientY};
   if(!LOCKED) return;
   G.cam.yaw-=e.movementX*0.0024;
   G.cam.pitch=clamp(G.cam.pitch+e.movementY*0.0022,-0.30,1.05);

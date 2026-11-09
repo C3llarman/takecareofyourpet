@@ -20,7 +20,7 @@ var RES_ORDER=['herb','wood','ore','silk','honey','glowcap'];
 var NODE_REGROW=150;
 function inv(k){ return (WILD.inv&&WILD.inv[k])||0; }
 function addRes(k,n,x,y,z){
-  WILD.inv[k]=inv(k)+n;
+  WILD.inv[k]=inv(k)+n; logLine('+'+n+' '+RES[k].n.toLowerCase(),'#cfe8c0');
   if(x!==undefined) msg('+'+n+' '+RES[k].n.toLowerCase()+' ('+inv(k)+')','#cfe8c0',x,y,z,13);
 }
 /* a dry spot near (x,z), out of the water and out of anything solid */
@@ -61,9 +61,9 @@ function monsterDrop(e){
 /* ---------- crafting ---------- */
 var RECIPES=[
   {id:'potion', n:'Healing potion',     cost:{herb:2,honey:1}, d:'Heals 45%. Bram sells these for 15.'},
-  {id:'cake',   n:'Honey cake',         cost:{honey:2},        d:'You mend while it lasts (40 s).'},
+  {id:'cake',   n:'Honey cake',         cost:{honey:2},        d:'Keep it for later: you mend for 40 s.'},
   {id:'torch',  n:'Torch',              cost:{wood:2,silk:1},  d:'For the Glimmer Cave.', ok:function(){ return !WILD.torch; }},
-  {id:'tonic',  n:'Wardleaf tonic',     cost:{herb:2,glowcap:1}, d:'Halves the harm you take (45 s).'},
+  {id:'tonic',  n:'Wardleaf tonic',     cost:{herb:2,glowcap:1}, d:'Keep it for later: half damage for 45 s.'},
   {id:'glimmer',n:'Glimmer charm',      cost:{ore:3,glowcap:2}, d:'+8% damage, for good.', once:1},
   {id:'mantle', n:'Silkweave mantle',   cost:{silk:6,herb:2},   d:'+25 health, for good.', once:1},
   {id:'boots',  n:'Featherlight boots', cost:{wood:4,honey:2,silk:2}, d:'+8% speed, for good.', once:1}
@@ -74,7 +74,8 @@ function pay(cost){ for(var k in cost) WILD.inv[k]-=cost[k]; }
 function costText(cost){ return Object.keys(cost).map(function(k){ var c=inv(k)>=cost[k]?'#bfe8a0':'#e8a090';
   return '<span style="color:'+c+'">'+cost[k]+' '+RES[k].n.toLowerCase()+' ('+inv(k)+')</span>'; }).join(', '); }
 function satchelHtml(){
-  return '<div class="stat"><span>Your satchel</span><b>'+RES_ORDER.map(function(k){ return RES[k].n+' '+inv(k); }).join(' · ')+'</b></div>';
+  return '<div class="stat"><span>Your satchel</span><b>'+RES_ORDER.map(function(k){ return RES[k].n+' '+inv(k); }).join(' · ')+
+    (inv('cake')||inv('tonic')?' · Honey cakes '+inv('cake')+' · Tonics '+inv('tonic'):'')+'</b></div>';
 }
 function craftScreen(back,say){
   var known=RECIPES.filter(function(r){ return WILD.recipes[r.id]; }), p=G.player;
@@ -96,9 +97,9 @@ function craftDo(r){
   var p=G.player;
   switch(r.id){
     case 'potion': p.potions++; return 'A potion, green and faintly fizzing.';
-    case 'cake': p.buff=3; p.buffT=40; return 'Sticky, sweet, and you feel your bruises fading already.';
+    case 'cake': WILD.inv.cake=inv('cake')+1; return 'A honey cake, wrapped in a leaf. Eat it when you need mending'+(DESKTOP?' (key 5).':'.');
     case 'torch': WILD.torch=true; return 'Pitch-soaked silk on a stout stick. It\'ll burn for days.';
-    case 'tonic': p.buff=2; p.buffT=45; return 'It tastes of mint and cold iron. You feel sturdier.';
+    case 'tonic': WILD.inv.tonic=inv('tonic')+1; return 'A stoppered bottle of wardleaf tonic. Drink it before a hard fight'+(DESKTOP?' (key 6).':'.');
     default: WILD.charms[r.id]=1; recalc(); return r.n+' — yours for good.';
   }
 }

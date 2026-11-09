@@ -918,6 +918,33 @@ section('Folk, quests, gathering, crafting and the eagles');
   await page.close();
 }
 
+/* ---------------- the laptop HUD ---------------- */
+section('Laptop HUD: frames, action bar, targets');
+{
+  const page = await open(browser, LAPTOP);
+  await page.evaluate(() => { startRun(); G.ents = G.ents.filter((e) => !FOE[e.kind] || e.boss); });
+  await page.waitForTimeout(300);
+  const bar = await page.evaluate(() => { const p = G.player; p.potions = 2; p.hp = p.maxHp * 0.5; WILD.inv.cake = 1;
+    const h0 = p.hp; uiKey('4'); const potion = p.hp > h0 && p.potions === 1; uiKey('5'); const cake = inv('cake') === 0 && p.buff === 3;
+    return { potion, cake, slots: deskSlots().length, keys: deskSlots().map((s) => s.k).join('') }; });
+  ok('the action bar has six slots on keys 1–6', bar.slots === 6 && bar.keys === '123456');
+  ok('4 drinks a potion, 5 eats a honey cake', bar.potion && bar.cake);
+  const tgt = await page.evaluate(() => new Promise((res) => { const p = G.player; p.yaw = 0; G.cam.yaw = 0;
+    spawnSpider(p.x + 0.5, p.z + 8, false); spawnSnake(p.x - 4, p.z + 12);
+    const t0 = G.t; const tick = () => { if (G.t - t0 < 0.3) { requestAnimationFrame(tick); return; }
+      const auto = G.target && G.target.kind; cycleTarget(); const first = G.pick && G.pick.kind; cycleTarget(); const second = G.pick && G.pick.kind;
+      res({ auto, first, second }); }; tick(); }));
+  ok('the target frame shows what you face, with no clicking needed', tgt.auto === 'spider');
+  ok('T picks the next foe, for those who want to', tgt.first && tgt.second && tgt.first !== tgt.second, `${tgt.first} → ${tgt.second}`);
+  const click = await page.evaluate(() => { document.exitPointerLock && document.exitPointerLock(); LOCKED = false; drawHUD();
+    const a = UIBAR.slots[3]; const p = G.player; p.potions = 1; p.hp = p.maxHp * 0.5; const used = uiClick(a.x + a.s / 2, a.y + a.s / 2); return used && p.potions === 0; });
+  ok('with the cursor free, slots can be clicked', click);
+  const log = await page.evaluate(() => { tip('hello log'); return LOG.length > 0 && LOG[LOG.length - 1].t === 'hello log'; });
+  ok('tips and pickups go to the event log', log);
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
+  await page.close();
+}
+
 /* ---------------- rendering budget ---------------- */
 section('Rendering');
 {

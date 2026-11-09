@@ -88,6 +88,7 @@ function loreCount(){ var n=0; for(var k in WILD.lore) if(WILD.lore[k]&&LORE_BY[
 function loreGet(id,quiet){
   if(!LORE_BY[id]||WILD.lore[id]) return false;
   WILD.lore[id]=1;
+  logLine('✎ Journal: '+LORE_BY[id].t,'#d8c9ff');
   if(!quiet){ var p=G.player; if(p) msg('✎ Journal: '+LORE_BY[id].t,'#d8c9ff',p.x,p.y+3.2,p.z,15); sfx('pickup'); G.loreNew=(G.loreNew||0)+1; }
   setTimeout(saveGame,60);
   return true;

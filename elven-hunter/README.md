@@ -12,7 +12,7 @@ wasp, plus hand-built mushroom grumps, a stone golem and a dragon. The forest is
 music and the game into a single ~3.0 MB file. Open it from a USB stick on a plane and it
 plays.
 
-The wood is 300 × 300 units of procedurally generated hills, a winding river, open meadows
+The wood is 405 × 405 units of procedurally generated hills, a winding river, open meadows
 and about 1,850 trees, bushes, ferns, flowers, mossy rocks, stumps and logs, with seven
 landmarks to find. Spiders hunt the undergrowth, snakes lie in the grass, wasps swarm
 their hive, cross little mushrooms hop about the meadows, and your kin hang in cocoons
@@ -51,6 +51,9 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 | Dash | `Shift` *(unlocked by a skill; rolls the way you are pushing)* |
 | Drink a potion | `Q` |
 | Skills | `Tab` |
+| Action bar | `1`–`6`: strike, shoot, dash, potion, honey cake, tonic |
+| Pick a target | `T` (optional: attacks find the best target on their own) |
+| Map key | `K` |
 | Journal and quests | `L` (or the button on the skills screen) |
 | Fly with Aelfrend | `G` (phone: the **FLY** button), once he has hatched |
 | Sound | `M` cycles all on → effects only → off (also a button on the title and skills screens) |
@@ -87,6 +90,8 @@ src/
               Cave and its torch, butterflies, rabbits, toadstools and gnomes
   legends.js  the journal (36 pages of lore), waystones, Bram's tales, the five
               mini-bosses and the golden champions
+  ui.js       the laptop HUD: portrait and target frames, action bar, XP bar,
+              quest tracker, zone name, event log
   folk.js     Wren, Tobin and Ærtheldor and their ten quests, gathering, the
               workbench and its recipes, Tobin's compass, Aelfrend and flying
   audio.js    synthesised sound effects and the music loop (Web Audio)
@@ -241,6 +246,20 @@ live at the top of `src/home.js`.
   circlet; and at **Legendary**, gold plate with spikes, a jewelled crown and a glowing chest
   gem, with gold motes drifting off you. Weapons glow at the top two tiers.
 
+### The laptop HUD (`src/ui.js`)
+
+Framed panels in the style of the big online fantasy games, kept simple for young
+players. Top-left: your portrait (your calling's weapon, with your level on a badge),
+health, and chips for blessings, poison, webs and the bounty. Beside it, a **target
+frame** for whatever your attacks will go for, with a ring on the ground under it: the
+last thing you hit, else the best thing in front of you. Nothing has to be clicked; `T`
+picks the next foe for players who want to choose. The zone name sits over the minimap,
+the open quests under it, a short log of pickups, XP and discoveries bottom-left, and the
+**action bar** along the bottom: six slots with their keys printed on them, a sweep while
+they cool down, counts for potions, honey cakes and tonics (crafted ones now go in your
+bag for later), and buttons for skills, the journal and Aelfrend. With the cursor free,
+hover a slot for a tooltip or click it. Phones keep their touch layout.
+
 ### Folk, quests and crafting (`src/folk.js`)
 
 Walk up to a quest giver and `E` / **TALK**. A gold **!** floats over someone with work for
@@ -392,7 +411,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-155 assertions run the actual game in headless Chromium with software WebGL and check
+163 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames

@@ -537,7 +537,7 @@ function drawBossBar(){
   for(var i=0;i<G.ents.length;i++){ var e=G.ents[i]; if(!(e.boss||e.mini)||e.state==='sleep') continue;
     if(e.mini&&!(e.hp<e.maxHp||Math.hypot(e.x-p.x,e.z-p.z)<e.aggro*DF().aggro)) continue;
     var d=Math.hypot(e.x-p.x,e.z-p.z); if(d<60&&d<bd){ bd=d; b=e; } }
-  if(!b) return;
+  if(!b||(DESKTOP&&G.target===b)) return;          // on a laptop the target frame already shows it
   var w=Math.min(420,W*0.62), x=W/2-w/2, y=DESKTOP?18:Math.max(SAFET+8,12)+(DESKTOP?0:0);
   if(!DESKTOP){ var P=panelGeom(); y=Math.max(y,P.y); x=Math.max(P.x+P.w+10,x); w=Math.min(w,W-x-74); }
   hx.textAlign='center'; hx.font='700 13px Georgia,serif';
