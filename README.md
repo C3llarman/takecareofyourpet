@@ -16,7 +16,7 @@ The home of Elk Leaf Arcade at [elkleafarcade.com](https://elkleafarcade.com): a
 
 **Elven Hunter** is an open-world forest adventure: fight spiders, snakes, wasps and mushroom grumps, free your kin from their cocoons, call up the Stone Warden and face the dragon on his crag. It has its own README in `elven-hunter/`. Edit its files in `elven-hunter/src/`, then run `node tools/build.mjs` inside `elven-hunter/` to rebuild its `index.html`.
 
-**Cluck Patrol** is a 2D platformer: hop across a tropical island as a chicken and stomp all 22 raccoons and foxes within two and a half minutes. Everything, including its pictures, is inside `cluck-patrol/index.html`.
+**Cluck Patrol** is a 2D platformer: hop across a tropical island as a chicken and stomp or egg all 22 raccoons and foxes before the clock runs out. Pick Easy, Medium or Hard (more lives and time on the easier ones), throw eggs with X or the EGG button, and grab floating hearts for an extra life. Everything, including its pictures, is inside `cluck-patrol/index.html`.
 
 **Acorn Run** is an endless runner: race a squirrel across floating islands, backflip over wide gaps, throw acorns to break crates and knock out grumpy skunks, and say hi to the friendly skunks in hats. It runs straight from `acorn-run/` with no build step. To make a single self-contained HTML file instead, run `python3 tools/build.py` inside `acorn-run/`.
 
