@@ -30,6 +30,8 @@ const CRATE_H = 33;
 const HOLD_MAX = 0.16, HOLD_G = 0.5, APEX_V = 150, APEX_G = 0.6;
 // glide leaves: while one is active the squirrel floats down instead of dropping
 const GLIDE_T = 6, GLIDE_V = 95, INVULN = 1.3;
+// stop button: a butt slam in the air, a pause on the ground
+const SLAM_V = 1000, SLAM_BOUNCE = 620;
 
 // Difficulty: speed, how fast it ramps up, gap size, how many skunks and how many are friends
 const DIFFS = [
@@ -189,6 +191,7 @@ let dieT = 0, overT = 0, deathKind = '', lastDist = 0, newBest = false;
 let acornCount = 0, bridgeNext = false, lastMain = null;
 let shotCD = 0, btnFlash = 0, btnPress = 0;
 let held = false, holdId = null, ui = [];
+let stopHeld = false, stopId = null, runV = 0, shakeT = 0;
 let player, plats, acorns, skunks, props, parts, pops, shots, leaves, platCount;
 
 function makePlat(type, x, y, w) {
@@ -200,12 +203,13 @@ function makePlat(type, x, y, w) {
 function reset() {
   D = DIFFS[diffI]; SQ = SQUIRRELS[sqI];
   player = { x: 0, y: 360, vy: 0, onGround: true, plat: null, coyote: 0, buffer: 0, run: 0, rot: 0, landT: 0, hidden: false, throwT: 0, jumps: 0, flipT: 99,
-             holdT: 99, glideT: 0, shield: SQ.shield || 0, inv: 0 };
+             holdT: 99, glideT: 0, shield: SQ.shield || 0, inv: 0, slam: false, slamT: 0, stopped: false };
   plats = [makePlat('island', -300, 360, 900)];
   lastMain = plats[0];
   player.plat = plats[0];
   acorns = []; skunks = []; parts = []; pops = []; shots = []; leaves = [];
   props = [{ name: 'sign', x: -70, y: 363, k: 0.55 }, { name: 'flowers', x: -190, y: 363, k: 0.4 }];
+  runV = D.base; shakeT = 0;
   platCount = 0; acornCount = D.start + (SQ.acorns || 0); elapsed = 0; speed = D.base; dieT = 0; overT = 0; bridgeNext = false;
   shotCD = 0; btnFlash = 0;
   camX = player.x - PX;
@@ -372,6 +376,17 @@ function waterY() { return riverTop() + 18 - oy; }            // world space sur
 
 // ---- Throwing ----
 function btn() { return { x: 58, y: VH - 60 - safeBot, r: 38 }; }
+function stopBtn() { return { x: VW - 58, y: VH - 60 - safeBot, r: 38 }; }
+function pressStop() {
+  if (state !== 'play') return;
+  stopHeld = true;
+  if (!player.onGround && !player.slam) {
+    // butt slam: drop straight down, bum first
+    player.slam = true; player.vy = Math.max(player.vy, SLAM_V); player.flipT = 99; player.holdT = HOLD_MAX; player.buffer = 0;
+    for (let i = 0; i < 6; i++) parts.push({ type: 'dust', x: player.x + rand(-6, 14), y: player.y - 20, vx: rand(-40, 40), vy: rand(-120, -60),
+      r: rand(2, 3.5), grow: 6, life: 0.3, max: 0.3, c: '#FFFFFF' });
+  }
+}
 function shoot() {
   if (state !== 'play') return;
   if (shotCD > 0) return;
@@ -426,6 +441,7 @@ function updateShots(dt) {
 }
 
 function backflip() {
+  player.slam = false;
   player.vy = -JUMP2 * (SQ.jump || 1); player.jumps = Math.max(player.jumps, 1) + 1; player.flipT = 0; player.buffer = 0;
   player.holdT = HOLD_MAX;   // the flip is a fixed height; holding only boosts the first jump
   for (let i = 0; i < 10; i++) {
@@ -468,7 +484,12 @@ function findSupport(x, y) {
 function land(p) {
   player.y = p.y; player.vy = 0; player.onGround = true; player.plat = p; player.landT = 0.12;
   player.jumps = 0; player.flipT = 99;
-  puff(player.x, p.y, 3);
+  if (player.slam) {
+    player.slam = false; player.slamT = 0.1; player.landT = 0.2; shakeT = 0.18;
+    puff(player.x, p.y, 12);
+    for (let i = 0; i < 8; i++) parts.push({ type: 'spark', x: player.x + 4, y: p.y - 2, vx: rand(-220, 220), vy: rand(-260, -80),
+      r: rand(2, 3.5), life: 0.45, max: 0.45, c: pick(['#E8DDB5', '#C9A46A', '#8A5A2B']) });
+  } else puff(player.x, p.y, 3);
 }
 
 function update(dt) {
@@ -478,10 +499,14 @@ function update(dt) {
   if (state === 'title') {
     camX = player.x - PX;
   } else if (state === 'play') {
-    elapsed += dt;
+    // holding stop on the ground pauses the run; the world eases to a halt and back
+    player.stopped = stopHeld && player.onGround && !player.slam;
+    if (!player.stopped) elapsed += dt;
     speed = Math.min(D.maxs, D.base + elapsed * D.accel);
-    camX += speed * dt;
-    player.run += dt;
+    runV = player.stopped ? Math.max(0, runV - 2400 * dt) : Math.min(speed, runV + 1400 * dt);
+    camX += runV * dt;
+    if (runV > 20) player.run += dt;
+    shakeT -= dt; player.slamT -= dt;
     player.landT -= dt;
     player.throwT -= dt;
     player.flipT += dt;
@@ -499,7 +524,7 @@ function update(dt) {
 
     // horizontal: keep pace with the camera; catch up if something held us back
     const target = camX + PX;
-    let nx = player.x < target - 0.5 ? Math.min(target, player.x + (speed + 90) * dt) : target;
+    let nx = player.x < target - 0.5 ? Math.min(target, player.x + (runV + 90) * dt) : target;
     for (const p of plats) {
       if (p === player.plat) continue;
       if (player.x + 14 <= p.x + 1 && nx + 14 > p.x) {
@@ -526,7 +551,8 @@ function update(dt) {
       else if (Math.abs(player.vy) < APEX_V) g *= APEX_G;                 // brief hang at the top
       player.holdT += dt;
       player.vy += g * dt;
-      if (player.glideT > 0) {
+      if (player.slam) player.vy = Math.max(player.vy, SLAM_V);
+      else if (player.glideT > 0) {
         const gv = GLIDE_V * (SQ.glide ? 0.75 : 1);
         if (player.vy > gv) player.vy = Math.max(gv, player.vy - 3200 * dt);
       }
@@ -547,6 +573,17 @@ function update(dt) {
       if (s.ko) continue;
       if (pr > s.x - 18 && pl < s.x + 20 && pb > s.y - 24 && pt < s.y) {
         if (s.kind === 'bad') {
+          if (player.slam || player.slamT > 0) {
+            // butt slam: flatten the grump and bounce off
+            s.ko = true; s.vy = -260; s.dir = -1;
+            acornCount += 3;
+            pop(s.x, s.y - 48, 'Bonk! +3', '#FFD85A', 24);
+            sparkle(s.x, s.y - 20, true); stink(s.x, s.y - 16, 5);
+            player.slam = false; player.slamT = 0; player.onGround = false; player.plat = null; player.vy = -SLAM_BOUNCE; player.jumps = 1; player.holdT = HOLD_MAX; player.flipT = 99;
+            shakeT = 0.15;
+            if (navigator.vibrate) navigator.vibrate(30);
+            continue;
+          }
           if (player.inv > 0) continue;
           if (player.shield > 0) {
             // Plum is tough: shrug it off once and bounce clear
@@ -829,6 +866,14 @@ function drawSquirrelBody(p) {
   let name, rot = 0, bob = 0, sy = 1;
   if (state === 'title') { name = 'sq_idle'; sy = 1 + Math.sin(time * 3) * 0.015; }
   else if (state === 'dying' || state === 'over') { name = 'sq_hurt'; rot = p.rot; }
+  else if (!p.onGround && p.slam) {
+    // bum-first drop with speed lines
+    name = 'sq_land'; rot = -0.5; sy = 1.08;
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const dx of [-10, 4, 18]) { ctx.moveTo(p.x + dx, p.y - 50); ctx.lineTo(p.x + dx, p.y - 50 - 26 - (dx === 4 ? 10 : 0)); }
+    ctx.stroke();
+  }
   else if (!p.onGround) {
     name = 'sq_jump';
     if (p.flipT < FLIP_DUR) {
@@ -844,6 +889,7 @@ function drawSquirrelBody(p) {
     sy = 1 + clamp(-p.vy / 1500, -0.05, 0.16);     // stretch on the way up
     if (p.glideT > 0 && p.vy > 0) rot = Math.sin(time * 5) * 0.06;
   }
+  else if (p.stopped && runV < 20 && p.landT <= 0) { name = 'sq_idle'; sy = 1 + Math.sin(time * 3) * 0.015; }
   else if (p.landT > 0) { name = 'sq_land'; sy = 1 - 0.16 * clamp(p.landT / 0.12, 0, 1); }   // squash on landing
   else {
     name = 'sq_run';
@@ -924,7 +970,30 @@ function drawHUD() {
   }
   ctx.restore();
   ctx.globalAlpha = 1;
+  drawStopBtn();
   if (btnFlash > 0) text('No acorns', b.x, b.y - b.r - 16, 16, CREAM, 'center', INK, 5);
+}
+
+// Stop sign: says SLAM while the squirrel is in the air
+function drawStopBtn() {
+  const b = stopBtn(), air = !player.onGround;
+  const sc = stopHeld ? 0.9 : 1;
+  ctx.save();
+  ctx.translate(b.x, b.y); ctx.scale(sc, sc);
+  const oct = (r, dy = 0) => {
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) { const a = Math.PI / 8 + i * Math.PI / 4; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r + dy); }
+    ctx.closePath();
+  };
+  ctx.fillStyle = 'rgba(59,36,18,0.35)'; oct(b.r, 4); ctx.fill();
+  ctx.fillStyle = air ? '#F08A24' : '#E2453A'; oct(b.r); ctx.fill();
+  ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke();
+  ctx.lineWidth = 3; ctx.strokeStyle = CREAM; oct(b.r - 6); ctx.stroke();
+  if (air) {
+    text('SLAM', 0, -5, 15, CREAM, 'center', INK, 4, 900);
+    ctx.fillStyle = CREAM; ctx.beginPath(); ctx.moveTo(-7, 7); ctx.lineTo(7, 7); ctx.lineTo(0, 16); ctx.closePath(); ctx.fill();
+  } else text('STOP', 0, 1, 16, CREAM, 'center', INK, 4, 900);
+  ctx.restore();
 }
 
 // ---- Menus ----
@@ -986,8 +1055,9 @@ function drawTitle() {
 
   const py = cy + ch + 18;
   button(cx - 90, py, 180, 52, 'Play', '#5FA83A', startRun, 28);
-  text('Tap to jump · hold to jump higher · tap again to flip', cx, py + 72, 14, CREAM, 'center', INK, 4, 700);
-  text('Hoodie skunks are friends. Grab 🍃 leaves to glide.', cx, py + 92, 14, CREAM, 'center', INK, 4, 700);
+  text('Tap to jump · hold to jump higher · tap again to flip', cx, py + 68, 13, CREAM, 'center', INK, 4, 700);
+  text('STOP in the air = butt slam a grumpy skunk · hold STOP to pause', cx, py + 86, 13, CREAM, 'center', INK, 4, 700);
+  text('Hoodie skunks are friends. Grab 🍃 leaves to glide.', cx, py + 104, 13, CREAM, 'center', INK, 4, 700);
 }
 
 function drawOver() {
@@ -1039,7 +1109,8 @@ function draw() {
   }
   drawBackground();
   ctx.save();
-  ctx.translate(-camX, oy);
+  const sh = shakeT > 0 ? shakeT * 30 : 0;
+  ctx.translate(-camX + rand(-sh, sh), oy + rand(-sh, sh));
   const L = camX - 80, Rt = camX + VW + 80;
   for (const p of plats) if (!p.crate && p.x + p.w > L && p.x < Rt) drawPlat(p);
   for (const pr of props) if (pr.x > L && pr.x < Rt) drawSpr(pr.name, pr.x, pr.y, pr.k, 0.5, 1);
@@ -1079,15 +1150,21 @@ cvs.addEventListener('pointerdown', e => {
   if (state === 'play') {
     const b = btn();
     if (Math.hypot(wx - b.x, wy - b.y) < b.r + 14) { shoot(); return; }
+    const sb = stopBtn();
+    if (Math.hypot(wx - sb.x, wy - sb.y) < sb.r + 14) { stopId = e.pointerId; pressStop(); return; }
     held = true; holdId = e.pointerId;
   }
   press();
 });
-const release = e => { if (e.pointerId === holdId) { held = false; holdId = null; } };
+const release = e => {
+  if (e.pointerId === holdId) { held = false; holdId = null; }
+  if (e.pointerId === stopId) { stopHeld = false; stopId = null; }
+};
 window.addEventListener('pointerup', release);
 window.addEventListener('pointercancel', release);
-window.addEventListener('blur', () => { held = false; holdId = null; });
+window.addEventListener('blur', () => { held = false; holdId = null; stopHeld = false; stopId = null; });
 const JUMP_KEYS = ['Space', 'ArrowUp', 'KeyW'];
+const STOP_KEYS = ['ArrowDown', 'KeyS'];
 window.addEventListener('keydown', e => {
   if (state === 'title') {
     if (e.code === 'ArrowLeft') { e.preventDefault(); setSquirrel(sqI - 1); }
@@ -1098,10 +1175,14 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (state === 'over' && ['Escape', 'KeyM'].includes(e.code)) { if (overT > 0.5) toMenu(); return; }
+  if (STOP_KEYS.includes(e.code)) { e.preventDefault(); if (!e.repeat) { stopId = 'key'; pressStop(); } return; }
   if (JUMP_KEYS.includes(e.code)) { e.preventDefault(); held = true; holdId = 'key'; if (!e.repeat) press(); }
   else if (['KeyX', 'KeyF', 'Enter', 'ArrowRight'].includes(e.code)) { e.preventDefault(); if (!e.repeat) shoot(); }
 });
-window.addEventListener('keyup', e => { if (JUMP_KEYS.includes(e.code) && holdId === 'key') { held = false; holdId = null; } });
+window.addEventListener('keyup', e => {
+  if (JUMP_KEYS.includes(e.code) && holdId === 'key') { held = false; holdId = null; }
+  if (STOP_KEYS.includes(e.code) && stopId === 'key') { stopHeld = false; stopId = null; }
+});
 document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
 document.addEventListener('gesturestart', e => e.preventDefault());
 
