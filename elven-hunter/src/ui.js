@@ -110,7 +110,7 @@ function deskSlots(){
   var main=cls==='warrior'?'axe':(cls==='wizard'?'staff':'sword'), ranged=S.proj==='arrow'?'bow':(S.proj==='bolt'?'bolt':'throw');
   var cd=Math.max(0,p.cdT);
   var abs=abList().map(function(a,i){ var on=abUnlocked(a);
-    return {k:''+(i+3),icon:on?a.icon:'lock',n:on?a.n:a.n+' (level '+a.lvl+')',d:on?a.d:'Unlocks at level '+a.lvl,cd:on?abLeft(a)/abCdFull(a):0,off:!on,lockLvl:on?0:a.lvl,
+    return {k:''+(i+3),alt:i===0?'⇧':undefined,icon:on?a.icon:'lock',n:on?a.n:a.n+' (level '+a.lvl+')',d:on?a.d:'Unlocks at level '+a.lvl,cd:on?abLeft(a)/abCdFull(a):0,off:!on,lockLvl:on?0:a.lvl,
       act:function(){ useAbility(i); }}; });
   return [
     {k:'1',alt:'E',icon:main,n:'Strike',d:'Swing at what\'s in front of you',cd:cd/0.45,act:function(){ press('attack'); IN.attack=false; }},

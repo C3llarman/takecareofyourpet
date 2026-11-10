@@ -1005,6 +1005,10 @@ section('Abilities');
     ok(`${cls}: all three abilities work`, r.hit.every(Boolean), r.hit.map((h) => (h ? '✓' : '✗')).join(' '));
     ok(`${cls}: and then recharge`, r.again.every(Boolean));
   }
+  const shift = await page.evaluate(() => { G.build.cls = 'wizard'; startRun(); G.ents = G.ents.filter((e) => !FOE[e.kind]); const p = G.player; p.level = 2; recalc();
+    const before = abLeft(abList()[0]); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' })); window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift' }));
+    return { before, after: abLeft(abList()[0]) }; });
+  ok('Shift fires the first special, like 3', shift.before === 0 && shift.after > 0);
   const easy = await page.evaluate(() => { G.build.diff = 'easy'; const e = abCdFull(abList()[0]); G.build.diff = 'normal'; return e / abCdFull(abList()[0]); });
   ok('Easy recharges abilities faster', easy < 1, `×${easy.toFixed(2)}`);
   const unlock = await page.evaluate(() => { G.build.cls = 'rogue'; startRun(); const p = G.player; abTick(0.01); p.level = 2; abTick(0.01); return G.tip; });

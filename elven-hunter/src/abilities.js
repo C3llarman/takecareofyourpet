@@ -41,7 +41,7 @@ function abTick(dt){
   var L=p.level;
   if(p.abSeen===undefined) p.abSeen=L;
   if(L>p.abSeen){ abList().forEach(function(a,i){ if(a.lvl>p.abSeen&&a.lvl<=L){
-      tip('New ability: '+a.n+'! '+(DESKTOP?'Press '+(i+3):'Tap its new button'));
+      tip('New ability: '+a.n+'! '+(DESKTOP?'Press '+(i+3)+(i===0?' or Shift':''):'Tap its new button'));
       msg(a.n+'!','#ffe6a0',p.x,p.y+3.2,p.z,20); sfx('discover'); layoutButtons(); } });
     p.abSeen=L; }
 }

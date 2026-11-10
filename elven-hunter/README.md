@@ -49,10 +49,10 @@ Or just open `index.html` directly in a browser — it needs nothing else.
 | Strike | `E` or left click (hold to keep swinging) |
 | Shoot | `F` or right click (hold to keep firing) |
 | Jump | `Space` |
-| Dash | `Shift` *(unlocked by a skill; rolls the way you are pushing)* |
+| Dash | `X` *(unlocked by a skill; rolls the way you are pushing)* |
 | Drink a potion | `Q` |
 | Skills | `Tab` |
-| Action bar | `1` strike, `2` shoot, `3`–`5` your calling's abilities, `6` potion, `7` honey cake, `8` tonic |
+| Action bar | `1` strike, `2` shoot, `3`–`5` your calling's abilities (`Shift` fires the first too), `6` potion, `7` honey cake, `8` tonic |
 | Gear and bag | `C` (phone: the skills screen) |
 | Pick a target | `T` (optional: attacks find the best target on their own) |
 | Map key | `K` |
@@ -451,7 +451,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-191 assertions run the actual game in headless Chromium with software WebGL and check
+192 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames
