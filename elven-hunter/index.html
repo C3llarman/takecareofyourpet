@@ -8888,7 +8888,7 @@ var CINE_SHOTS=[                    // [start, end] in real seconds, and the cam
 var CINE_LINES=[                    // [in, out, text]
   [0.9,7.2,'A long time ago, in a wood far away…'],
   [8.9,20.3,'where the wilds have taken over…'],
-  [21.7,28.0,'one hunter and his weary band'],
+  [21.7,28.0,'one hunter and her weary band'],
   [29.2,35.0,'seek to bring peace to the land,<br>and restore harmony to its creatures.']
 ];
 var CINE_TITLE=[34.4,38.2];
@@ -8907,11 +8907,11 @@ var cineQ=function(s){ return cineEl.querySelector(s); };
 function cineSeen(){ try{ return localStorage.getItem('eh3_intro')==='1'; }catch(e){ return false; } }
 function cineMarkSeen(){ try{ localStorage.setItem('eh3_intro','1'); }catch(e){} }
 
-/* a fresh wood for the film and the title: your saved hunter if there is one */
+/* a fresh wood for the film and the title. The story's hunter is always the elf
+   (the hooded elf rogue); a new hunter still picks race and calling on the next screen */
 function cineWorld(){
-  var sv=loadSave();
-  if(sv){ G.build.race=sv.build.race; G.build.cls=sv.build.cls; }
-  gearInit(sv?sv.build:null);
+  G.build.race='elf'; G.build.cls='rogue';
+  gearInit(null);
   wildLoad(null); CAVEENV=null; WILD.inCave=false; setCaveEnv(false);
   G.player=null; recalc();
   G.player=newPlayer(); G.msgs.length=0; G.bounty=null; FX.length=0; G.hitStop=0; G.shakeA=0; G.tipT=0;
