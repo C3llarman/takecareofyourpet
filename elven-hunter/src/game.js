@@ -1123,28 +1123,33 @@ function draw(){
   var p=G.player, c=G.cam;
   // the HUD projects through these, so keep them alongside the three.js camera
   var fov=(W/H2<1)?1.22:1.03;
+  // the intro and the title frame their own shots: F is what the camera looks at
+  var CN=G.cine&&G.state!=='play'?G.cine:null;
+  var F=CN?CN.look:{x:p.x,y:p.y+1.5,z:p.z};
+  if(CN&&CN.fov) fov=CN.fov*((W/H2<1)?1.25:1);
   m4persp(proj,fov,W/H2,0.35,260);
-  m4look(view,c.x,c.y,c.z,p.x,p.y+1.5,p.z);
+  m4look(view,c.x,c.y,c.z,F.x,F.y,F.z);
   CAM3.fov=fov*180/Math.PI; CAM3.aspect=W/H2; CAM3.updateProjectionMatrix();
   var sa=(G.shakeA||0)>0.01?G.shakeA:0;
   var shx=(Math.random()-0.5)*sa, shy=(Math.random()-0.5)*sa, shz=(Math.random()-0.5)*sa;
-  CAM3.position.set(c.x+shx,c.y+shy,c.z+shz); CAM3.lookAt(p.x+shx*0.4,p.y+1.5+shy*0.4,p.z+shz*0.4);
+  CAM3.position.set(c.x+shx,c.y+shy,c.z+shz); CAM3.lookAt(F.x+shx*0.4,F.y+shy*0.4,F.z+shz*0.4);
   cullProps(c.x,c.z);
   SKY.position.set(c.x,c.y,c.z);
   WORLDU.uTime.value=G.t;
   WORLDU.uCam.value.set(c.x,c.y,c.z);
-  WORLDU.uFocus.value.set(p.x,p.y+1.1*(p.scale||1),p.z);
+  if(CN) WORLDU.uFocus.value.set(F.x,F.y-0.4,F.z); else WORLDU.uFocus.value.set(p.x,p.y+1.1*(p.scale||1),p.z);
   batchesBegin();
   // contact shadows
   SHAD.length=0;
   // the sun's shadow map follows the hunter; contact discs only cover what lies
   // beyond its reach
-  SUN.position.set(p.x+SUNDIR[0]*80,p.y+SUNDIR[1]*80,p.z+SUNDIR[2]*80);
-  SUN.target.position.set(p.x,p.y,p.z); SUN.target.updateMatrixWorld();
+  var SF=CN?{x:F.x,y:F.y-1.4,z:F.z}:p;
+  SUN.position.set(SF.x+SUNDIR[0]*80,SF.y+SUNDIR[1]*80,SF.z+SUNDIR[2]*80);
+  SUN.target.position.set(SF.x,SF.y,SF.z); SUN.target.updateMatrixWorld();
   for(var si=0;si<G.ents.length;si++){ var se=G.ents[si];
     if(se.kind==='shot'||se.kind==='eshot'||se.kind==='fairy'||se.kind==='stuck') continue;
     var sd=Math.hypot(se.x-c.x,se.z-c.z);
-    if(sd>50||Math.hypot(se.x-p.x,se.z-p.z)<SHADOWR-4) continue;
+    if(sd>50||Math.hypot(se.x-SF.x,se.z-SF.z)<SHADOWR-4) continue;
     addShadow(se); }
   var sb=shadowBatch();
   for(var sk=0;sk<SHAD.length;sk++) batchAdd(sb,SHAD[sk],null);
@@ -1702,20 +1707,22 @@ function project(x,y,z){
 
 /* ---------- screens ---------- */
 function show(html){
-  ui.innerHTML='<div class="card">'+html+'</div>'; ui.classList.add('on');
+  ui.innerHTML='<div class="card">'+html+'</div>'; ui.classList.add('on'); ui.classList.remove('see');
   // any page over the game frees a captured mouse, or its buttons could not be clicked
   if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
 }
-function hide(){ ui.classList.remove('on'); ui.innerHTML=''; touches={}; IN.attack=false; }
+function hide(){ ui.classList.remove('on','see'); ui.innerHTML=''; touches={}; IN.attack=false; }
 var SAVED=null;
 function titleScreen(){
   if(G.player&&(G.state==='dead'||G.state==='play')) saveGame();
+  if(!G.cine) cineWorld();         // the wood, and your band, behind the title
   G.state='title'; SAVED=loadSave();
   show('<h1>Elven Hunter</h1>'+
     '<p class="sub">An open wood. Spiders in the canopy, snakes in the grass, wasps round their hive, cross little mushrooms in the meadows, and your kin strung up between the trees.</p>'+
     '<p class="sub">Free them and they fight beside you. Wake the standing stones, find seven lost gnomes, and mind the dragon asleep on his crag.</p>'+
     (SAVED?'<button class="btn" id="cont">Continue — '+RACES[SAVED.build.race].name+' '+CLASSES[SAVED.build.cls].name+', level '+SAVED.p.level+'</button>':'')+
     '<button class="btn'+(SAVED?' alt':'')+'" id="make">'+(SAVED?'New hunter':'Make your hunter')+'</button>'+
+    '<button class="btn alt" id="story">&#9654; The story so far</button>'+
     '<button class="btn alt" id="snd">'+sndLabel()+'</button>'+
     '<a class="btn alt" id="arcade" href="../">&larr; Back to Elk Leaf Arcade</a>'+
     (G.best?'<p class="hint">Best: level '+G.best+'</p>':'')+
@@ -1725,6 +1732,8 @@ function titleScreen(){
       : '<p class="hint"><b>Phone:</b> drag the left side to move, the right side to look, buttons to fight.<br>'+
         'Your hunter swings on her own when something gets close.</p>'));
   document.getElementById('make').onclick=makeScreen;
+  document.getElementById('story').onclick=cinePlay;
+  ui.classList.add('see');
   if(SAVED) document.getElementById('cont').onclick=function(){ startRun(loadSave()); };
   document.getElementById('snd').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
 }
@@ -1763,6 +1772,7 @@ function startRun(sv){
   if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; gearInit(sv.build); }
   else { G.build.skills={}; G.build.points=0; if(!G.build.diff) G.build.diff='normal'; gearInit(null); }
   wildLoad(sv&&sv.wild); CAVEENV=null; WILD.lore.wood=1;
+  cineStop();
   G.player=null; recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
   homeReset();
@@ -2023,6 +2033,7 @@ function frame(ts){
   MPI=0;
   var t0=performance.now();
   if(G.state==='play') update(dt);
+  else if(G.cine){ cineUpdate(realDt); FRAMEDT=G.cine.sd; }
   var t1=performance.now();
   draw(); drawHUD();
   var t2=performance.now();
@@ -2043,7 +2054,7 @@ function boot(){
     R3.compile(SCENE,CAM3);        // warm every shader up front
     for(var wi=ACTORS.length-1;wi>=0;wi--) if(ACTORS[wi].spec==='warm'){ SCENE.remove(ACTORS[wi].group); ACTORS.splice(wi,1); }
     if(bt) bt.style.display='none';
-    titleScreen();
+    cineBoot();
     window.__ready=true;
     requestAnimationFrame(function(t){last=t;requestAnimationFrame(frame);});
   });

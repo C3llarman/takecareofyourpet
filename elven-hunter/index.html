@@ -69,6 +69,34 @@ a.btn{text-align:center;text-decoration:none}
 .lp p{margin:0;font-size:13px;line-height:1.55;color:#d8c9a2}
 .lp.off{opacity:.55;border-style:dashed}.lp.off b{color:#8a7a5a;font-style:italic}.lp.off p{color:#8a7a5a;font-style:italic}
 .opt:not(.off):active{transform:translateY(1px);background:#2a1f0c}
+#ui.see{background:radial-gradient(ellipse at center,rgba(5,8,6,.25),rgba(5,8,6,.7))}
+#ui.see .card{margin:auto;background:linear-gradient(rgba(36,28,14,.92),rgba(20,16,6,.92))}
+/* the intro film */
+#cine{position:absolute;inset:0;display:none;pointer-events:auto;cursor:pointer;overflow:hidden}
+#cine.on{display:block}
+#cine .cv{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55))}
+#cine .cb{position:absolute;left:0;right:0;height:11vh;background:#000;transition:transform 1.2s ease}
+#cine .cb.top{top:0}#cine .cb.bot{bottom:0}
+#cine.gate .cb.top{transform:translateY(-100%)}#cine.gate .cb.bot{transform:translateY(100%)}
+#cine .cblack{position:absolute;inset:0;background:#000;opacity:1}
+#cine .cline{position:absolute;left:6%;right:6%;bottom:calc(11vh + 4vh);text-align:center;
+  font-size:clamp(19px,3.1vw,34px);line-height:1.45;font-style:italic;letter-spacing:.6px;color:#f6e7bf;
+  text-shadow:0 2px 14px rgba(0,0,0,.9),0 0 3px rgba(0,0,0,.8);opacity:0;transform:translateY(8px);
+  transition:opacity 1.3s ease,transform 2.4s ease}
+#cine .cline.on{opacity:1;transform:none}
+#cine .ctitle{position:absolute;left:0;right:0;top:36%;text-align:center;font-size:clamp(44px,8.5vw,104px);
+  font-weight:600;letter-spacing:4px;color:#f0cf7c;text-shadow:0 4px 30px rgba(0,0,0,.85),0 0 40px rgba(232,194,106,.35);
+  opacity:0;transform:scale(.96);transition:opacity 1.6s ease,transform 5s ease}
+#cine .ctitle.on{opacity:1;transform:none}
+#cine .cgate{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+#cine.gate .cgate{display:flex}
+#cine.gate .cline,#cine.gate .ctitle,#cine.gate .cskip{display:none}
+#cine .cgate b{font-size:clamp(40px,7vw,84px);font-weight:600;letter-spacing:4px;color:#f0cf7c;text-shadow:0 4px 30px rgba(0,0,0,.85)}
+#cine .cgate span{font-size:17px;letter-spacing:2px;color:#e8dcbc;text-transform:uppercase;animation:cpulse 2.2s ease-in-out infinite}
+@keyframes cpulse{0%,100%{opacity:.35}50%{opacity:1}}
+#cine .cskip{position:absolute;right:18px;bottom:calc(5.5vh - 9px + var(--sab));font-size:14px;letter-spacing:1.5px;color:#a89873;
+  opacity:0;transition:opacity 1s}
+#cine .cskip.on{opacity:.8}
 #boot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   background:#0a0d09;color:var(--gold);font-size:15px;letter-spacing:.5px}
 </style>
@@ -8846,6 +8874,200 @@ function drawDeskHUD(){
 
 </script>
 <script>
+/* ---------- the intro: a slow-motion fly-through of the wood, with the story ----------
+   Shot in the game's own world, so it costs nothing in file size and always matches
+   the game. A first visit gets "tap to begin" (which also wakes the sound), then the
+   film; later visits go straight to the title, which offers it again. Any key or tap
+   skips it. Behind the title the camera keeps circling your hunter and band. */
+
+var CINE_SLOW=0.38;                 // the world runs at this fraction of real time
+var CINE_END=38.5;
+var CINE_SHOTS=[                    // [start, end] in real seconds, and the camera for it
+  [0,8,'aerial'],[8,14.5,'hollow'],[14.5,21,'dragon'],[21,28.5,'band'],[28.5,CINE_END,'crane']
+];
+var CINE_LINES=[                    // [in, out, text]
+  [0.9,7.2,'A long time ago, in a wood far away…'],
+  [8.9,20.3,'where the wilds have taken over…'],
+  [21.7,28.0,'one hunter and his weary band'],
+  [29.2,35.0,'seek to bring peace to the land,<br>and restore harmony to its creatures.']
+];
+var CINE_TITLE=[34.4,38.2];
+var CINE_BAND=[[2,'Maera'],[0,'Corin'],[5,'Durgan'],[3,'Ilsevel']];   // knight, ranger, dwarf, mage
+var CINE_FORM=[[-1.9,-2.3],[1.9,-2.5],[-1.0,-4.6],[1.3,-4.9]];       // right, ahead (negative: behind)
+var CINE_START={x:0,z:9};
+
+var cineEl=document.createElement('div');
+cineEl.id='cine';
+cineEl.innerHTML='<div class="cv"></div><div class="cb top"></div><div class="cb bot"></div>'+
+  '<div class="cblack"></div><div class="cline"></div><div class="ctitle">Elven Hunter</div>'+
+  '<div class="cgate"><b>Elven Hunter</b><span></span></div><div class="cskip">skip ›</div>';
+(document.getElementById('wrap')||document.body).appendChild(cineEl);
+var cineQ=function(s){ return cineEl.querySelector(s); };
+
+function cineSeen(){ try{ return localStorage.getItem('eh3_intro')==='1'; }catch(e){ return false; } }
+function cineMarkSeen(){ try{ localStorage.setItem('eh3_intro','1'); }catch(e){} }
+
+/* a fresh wood for the film and the title: your saved hunter if there is one */
+function cineWorld(){
+  var sv=loadSave();
+  if(sv){ G.build.race=sv.build.race; G.build.cls=sv.build.cls; }
+  gearInit(sv?sv.build:null);
+  wildLoad(null); CAVEENV=null; WILD.inCave=false; setCaveEnv(false);
+  G.player=null; recalc();
+  G.player=newPlayer(); G.msgs.length=0; G.bounty=null; FX.length=0; G.hitStop=0; G.shakeA=0; G.tipT=0;
+  homeReset();
+  G.player.x=CINE_START.x; G.player.z=CINE_START.z;
+  populate();
+  buildCottage();
+  var p=G.player;
+  p.yaw=Math.atan2(TAVERN.x-p.x,TAVERN.z-p.z); p.y=H(p.x,p.z);
+  G.cineBand=[];
+  for(var i=0;i<CINE_BAND.length;i++){ spawnAlly(CINE_BAND[i][0],p.x,p.z,CINE_BAND[i][1]);
+    var a=G.ents[G.ents.length-1]; a.cheer=0; a.yaw=p.yaw; a.ears=1; G.cineBand.push(a); }
+  // nothing hostile wanders up to the band while they pose
+  for(var j=G.ents.length-1;j>=0;j--){ var e=G.ents[j];
+    if(FOE[e.kind]&&!e.boss&&Math.hypot(e.x-p.x,e.z-p.z)<26) G.ents.splice(j,1); }
+  cineForm(0);
+  G.cine={mode:'orbit',T:0,sd:0,look:{x:p.x,y:p.y+1.4,z:p.z},fov:null,orbit:0.9};
+}
+/* the band keeps its formation round the hunter */
+function cineForm(speed){
+  var p=G.player, fx=Math.sin(p.yaw), fz=Math.cos(p.yaw), rx=-fz, rz=fx;
+  p.speed=speed; p.y=H(p.x,p.z);
+  for(var i=0;i<G.cineBand.length;i++){ var a=G.cineBand[i], f=CINE_FORM[i];
+    var wob=Math.sin(G.t*0.9+i*1.7)*0.25;
+    a.x=p.x+rx*(f[0]+wob)+fx*f[1]; a.z=p.z+rz*(f[0]+wob)+fz*f[1]; a.y=H(a.x,a.z);
+    a.yaw=p.yaw; a.speed=speed; a.onGround=true; a.cheer=0; }
+}
+
+/* ---------- the camera, shot by shot ---------- */
+function ease(u){ return 0.5-0.5*Math.cos(Math.PI*clamp(u,0,1)); }
+function lerp(a,b,u){ return a+(b-a)*u; }
+function cineSet(x,y,z,lx,ly,lz,fov){
+  var g=Math.max(H(x,z),WATER)+1.0; if(y<g) y=g;          // never inside a hill
+  G.cam.x=x; G.cam.y=y; G.cam.z=z;
+  G.cine.look.x=lx; G.cine.look.y=ly; G.cine.look.z=lz; G.cine.fov=fov||null;
+}
+var CINE_CAM={
+  // over the sea, gliding in on the wood
+  aerial:function(u){ var e=ease(u);
+    var x=lerp(118,46,e), z=lerp(52,24,e), y=lerp(46,20,e);
+    var lx=lerp(10,0,e), lz=lerp(-14,-4,e);
+    cineSet(x,y,z,lx,H(lx,lz)+lerp(6,2,e),lz,lerp(0.95,0.85,e)); },
+  // low through the Queen's Hollow: spiders creeping past the cocoons
+  hollow:function(u){ var h=LM.hollow, e=ease(u), a=lerp(2.6,1.6,e), r=lerp(14,9.5,e);
+    var x=h.x+Math.sin(a)*r, z=h.z+Math.cos(a)*r, base=H(h.x,h.z);
+    cineSet(x,Math.max(base,H(x,z))+lerp(8,4.5,e),z,h.x,base+0.6,h.z,0.80); },
+  // round the sleeping dragon on his crag
+  // (from the south-west you see his head curled by the hoard)
+  dragon:function(u){ var L=CRAG.lair, e=ease(u), a=lerp(-0.45,0.75,e), r=lerp(13,10,e);
+    var top=CRAG.top||H(L.x,L.z);
+    cineSet(L.x+Math.sin(a)*r,top+lerp(5.5,3.4,e),L.z+Math.cos(a)*r,L.x,top+1.5,L.z,0.70); },
+  // beside the band as they run, long lens, slow motion
+  band:function(u){ var p=G.player, e=ease(u), fx=Math.sin(p.yaw), fz=Math.cos(p.yaw), rx=-fz, rz=fx;
+    var ahead=lerp(6.5,4.2,e), side=lerp(-3.4,2.6,e);
+    cineSet(p.x+fx*ahead+rx*side,p.y+lerp(1.0,1.6,e),p.z+fz*ahead+rz*side,
+      p.x+fx*1.5,p.y+1.35,p.z+fz*1.5,0.62); },
+  // rise up and back as they run on into the wood
+  crane:function(u){ var p=G.player, e=ease(u), fx=Math.sin(p.yaw), fz=Math.cos(p.yaw);
+    var back=lerp(5,15,e), up=lerp(2.0,15,e);
+    cineSet(p.x-fx*back+Math.cos(p.yaw)*lerp(1.5,4,e),p.y+up,p.z-fz*back-Math.sin(p.yaw)*lerp(1.5,4,e),
+      p.x+fx*lerp(3,14,e),p.y+lerp(1.4,2.5,e),p.z+fz*lerp(3,14,e),lerp(0.78,0.95,e)); },
+  // behind the title: circle the band where they stand
+  orbit:function(dt){ var p=G.player, c=G.cine;
+    c.orbit+=dt*0.045;
+    var cx=p.x-Math.sin(p.yaw)*1.6, cz=p.z-Math.cos(p.yaw)*1.6, a=p.yaw+c.orbit;
+    // on a wide screen, aim past the band so they stand clear of the title card, on the left
+    var off=(W/Math.max(1,H2)>1.2)?5.2:0;
+    cineSet(cx+Math.sin(a)*10.5,p.y+3.6,cz+Math.cos(a)*10.5,
+      cx+Math.cos(a)*off,p.y+1.3,cz-Math.sin(a)*off,0.80); }
+};
+
+/* ---------- the clock ---------- */
+function cineUpdate(dt){
+  var c=G.cine; if(!c||!G.player) return;
+  var sd=dt*CINE_SLOW; c.sd=sd;
+  G.t+=sd; updateFX(sd);
+  // pollen and motes drift through the light
+  var L=c.look;
+  if(Math.random()<dt*24){ var a=Math.random()*6.283, d=2+Math.random()*9;
+    burst(L.x+Math.cos(a)*d,L.y-0.5+Math.random()*3,L.z+Math.sin(a)*d,1,
+      Math.random()<0.7?[1.0,0.86,0.52]:[0.80,1.0,0.70],{up:0.25,spread:0.35,size:0.05,life:5,grav:-0.04}); }
+  if(c.mode!=='intro'){ cineForm(0); CINE_CAM.orbit(dt); cineFade(0); return; }
+  c.T+=dt; var T=c.T;
+  if(T>=CINE_END){ cineEnd(); return; }
+  var shot=CINE_SHOTS[0];
+  for(var i=0;i<CINE_SHOTS.length;i++) if(T>=CINE_SHOTS[i][0]) shot=CINE_SHOTS[i];
+  // the band runs from the moment we meet them
+  var p=G.player;
+  if(T>=CINE_SHOTS[3][0]){ var run=6.0*sd; p.x+=Math.sin(p.yaw)*run; p.z+=Math.cos(p.yaw)*run; cineForm(6.0); }
+  else cineForm(0);
+  // the Queen's brood creeps about the hollow
+  if(shot[2]==='hollow') for(var k=0;k<G.ents.length;k++){ var s=G.ents[k];
+    if(s.kind!=='spider'||Math.hypot(s.x-LM.hollow.x,s.z-LM.hollow.z)>24) continue;
+    s.yaw=(s.yaw||0)+Math.sin(G.t*0.7+k)*sd*0.8; s.speed=1.6;
+    if(Math.hypot(s.x-G.cam.x,s.z-G.cam.z)<9) s.yaw=Math.atan2(s.x-G.cam.x,s.z-G.cam.z);   // not into the lens
+    s.x+=Math.sin(s.yaw)*1.6*sd; s.z+=Math.cos(s.yaw)*1.6*sd; s.y=H(s.x,s.z); }
+  CINE_CAM[shot[2]]((T-shot[0])/(shot[1]-shot[0]));
+  // fade through black between shots
+  var edge=Math.min(T-shot[0],shot[1]-T), black=clamp(1-edge/0.6,0,1);
+  if(T<1.4) black=Math.max(black,1-T/1.4);
+  cineFade(black);
+  // the words
+  var txt='', on=0;
+  for(var j=0;j<CINE_LINES.length;j++){ var l=CINE_LINES[j];
+    if(T>=l[0]-0.2&&T<l[1]+1.2){ txt=l[2]; on=(T>=l[0]&&T<l[1])?1:0; } }
+  var ln=cineQ('.cline'); if(ln.__t!==txt){ ln.innerHTML=txt; ln.__t=txt; }
+  ln.classList.toggle('on',!!on);
+  cineQ('.ctitle').classList.toggle('on',T>=CINE_TITLE[0]&&T<CINE_TITLE[1]);
+  if(T>1.2) cineQ('.cskip').classList.add('on');
+}
+function cineFade(b){ var el=cineQ('.cblack'); var v=b.toFixed(3); if(el.__v!==v){ el.style.opacity=v; el.__v=v; } }
+
+/* ---------- starting, skipping, ending ---------- */
+function cineShow(mode){ cineEl.className='on '+mode; }
+function cineGate(){
+  G.state='intro'; G.cine.mode='gate';
+  cineQ('.cgate span').textContent=DESKTOP?'click to begin':'tap to begin';
+  cineShow('gate'); cineFade(0.45);
+}
+function cinePlay(){
+  // from the gate the wood is already set; from the title, start the band afresh
+  if(!G.cine||G.cine.mode!=='gate') cineWorld();
+  hide();
+  G.state='intro'; G.cine.mode='intro'; G.cine.T=0;
+  cineQ('.cline').classList.remove('on'); cineQ('.ctitle').classList.remove('on'); cineQ('.cskip').classList.remove('on');
+  cineFade(1); cineShow('play');
+  sndWake();
+}
+function cineEnd(){
+  if(!G.cine) return;
+  cineMarkSeen();
+  G.cine.mode='orbit'; G.cine.orbit=0.9;
+  // the title picks up from wherever the band has run to
+  cineEl.className=''; cineFade(0);
+  titleScreen();
+}
+function cineStop(){ G.cine=null; G.cineBand=null; cineEl.className=''; }
+function cineBoot(){
+  cineWorld();
+  if(cineSeen()||navigator.webdriver) titleScreen();
+  else cineGate();
+}
+cineEl.addEventListener('pointerdown',function(e){
+  e.preventDefault(); e.stopPropagation();
+  if(!G.cine) return;
+  if(G.cine.mode==='gate') cinePlay();
+  else if(G.cine.mode==='intro'&&G.cine.T>0.4) cineEnd();
+});
+addEventListener('keydown',function(e){
+  if(G.state!=='intro'||!G.cine||e.repeat||e.key==='m'||e.key==='M') return;   // M only changes the sound
+  if(G.cine.mode==='gate'&&(e.key==='Enter'||e.key===' ')){ cinePlay(); return; }
+  if(G.cine.mode==='intro'&&G.cine.T>0.4) cineEnd();
+},true);
+
+</script>
+<script>
 /* ================= Elven Hunter 3D ================= */
 var cvs=document.getElementById('gl'), hud=document.getElementById('hud'), hx=hud.getContext('2d');
 var ui=document.getElementById('ui');
@@ -9971,28 +10193,33 @@ function draw(){
   var p=G.player, c=G.cam;
   // the HUD projects through these, so keep them alongside the three.js camera
   var fov=(W/H2<1)?1.22:1.03;
+  // the intro and the title frame their own shots: F is what the camera looks at
+  var CN=G.cine&&G.state!=='play'?G.cine:null;
+  var F=CN?CN.look:{x:p.x,y:p.y+1.5,z:p.z};
+  if(CN&&CN.fov) fov=CN.fov*((W/H2<1)?1.25:1);
   m4persp(proj,fov,W/H2,0.35,260);
-  m4look(view,c.x,c.y,c.z,p.x,p.y+1.5,p.z);
+  m4look(view,c.x,c.y,c.z,F.x,F.y,F.z);
   CAM3.fov=fov*180/Math.PI; CAM3.aspect=W/H2; CAM3.updateProjectionMatrix();
   var sa=(G.shakeA||0)>0.01?G.shakeA:0;
   var shx=(Math.random()-0.5)*sa, shy=(Math.random()-0.5)*sa, shz=(Math.random()-0.5)*sa;
-  CAM3.position.set(c.x+shx,c.y+shy,c.z+shz); CAM3.lookAt(p.x+shx*0.4,p.y+1.5+shy*0.4,p.z+shz*0.4);
+  CAM3.position.set(c.x+shx,c.y+shy,c.z+shz); CAM3.lookAt(F.x+shx*0.4,F.y+shy*0.4,F.z+shz*0.4);
   cullProps(c.x,c.z);
   SKY.position.set(c.x,c.y,c.z);
   WORLDU.uTime.value=G.t;
   WORLDU.uCam.value.set(c.x,c.y,c.z);
-  WORLDU.uFocus.value.set(p.x,p.y+1.1*(p.scale||1),p.z);
+  if(CN) WORLDU.uFocus.value.set(F.x,F.y-0.4,F.z); else WORLDU.uFocus.value.set(p.x,p.y+1.1*(p.scale||1),p.z);
   batchesBegin();
   // contact shadows
   SHAD.length=0;
   // the sun's shadow map follows the hunter; contact discs only cover what lies
   // beyond its reach
-  SUN.position.set(p.x+SUNDIR[0]*80,p.y+SUNDIR[1]*80,p.z+SUNDIR[2]*80);
-  SUN.target.position.set(p.x,p.y,p.z); SUN.target.updateMatrixWorld();
+  var SF=CN?{x:F.x,y:F.y-1.4,z:F.z}:p;
+  SUN.position.set(SF.x+SUNDIR[0]*80,SF.y+SUNDIR[1]*80,SF.z+SUNDIR[2]*80);
+  SUN.target.position.set(SF.x,SF.y,SF.z); SUN.target.updateMatrixWorld();
   for(var si=0;si<G.ents.length;si++){ var se=G.ents[si];
     if(se.kind==='shot'||se.kind==='eshot'||se.kind==='fairy'||se.kind==='stuck') continue;
     var sd=Math.hypot(se.x-c.x,se.z-c.z);
-    if(sd>50||Math.hypot(se.x-p.x,se.z-p.z)<SHADOWR-4) continue;
+    if(sd>50||Math.hypot(se.x-SF.x,se.z-SF.z)<SHADOWR-4) continue;
     addShadow(se); }
   var sb=shadowBatch();
   for(var sk=0;sk<SHAD.length;sk++) batchAdd(sb,SHAD[sk],null);
@@ -10550,20 +10777,22 @@ function project(x,y,z){
 
 /* ---------- screens ---------- */
 function show(html){
-  ui.innerHTML='<div class="card">'+html+'</div>'; ui.classList.add('on');
+  ui.innerHTML='<div class="card">'+html+'</div>'; ui.classList.add('on'); ui.classList.remove('see');
   // any page over the game frees a captured mouse, or its buttons could not be clicked
   if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
 }
-function hide(){ ui.classList.remove('on'); ui.innerHTML=''; touches={}; IN.attack=false; }
+function hide(){ ui.classList.remove('on','see'); ui.innerHTML=''; touches={}; IN.attack=false; }
 var SAVED=null;
 function titleScreen(){
   if(G.player&&(G.state==='dead'||G.state==='play')) saveGame();
+  if(!G.cine) cineWorld();         // the wood, and your band, behind the title
   G.state='title'; SAVED=loadSave();
   show('<h1>Elven Hunter</h1>'+
     '<p class="sub">An open wood. Spiders in the canopy, snakes in the grass, wasps round their hive, cross little mushrooms in the meadows, and your kin strung up between the trees.</p>'+
     '<p class="sub">Free them and they fight beside you. Wake the standing stones, find seven lost gnomes, and mind the dragon asleep on his crag.</p>'+
     (SAVED?'<button class="btn" id="cont">Continue — '+RACES[SAVED.build.race].name+' '+CLASSES[SAVED.build.cls].name+', level '+SAVED.p.level+'</button>':'')+
     '<button class="btn'+(SAVED?' alt':'')+'" id="make">'+(SAVED?'New hunter':'Make your hunter')+'</button>'+
+    '<button class="btn alt" id="story">&#9654; The story so far</button>'+
     '<button class="btn alt" id="snd">'+sndLabel()+'</button>'+
     '<a class="btn alt" id="arcade" href="../">&larr; Back to Elk Leaf Arcade</a>'+
     (G.best?'<p class="hint">Best: level '+G.best+'</p>':'')+
@@ -10573,6 +10802,8 @@ function titleScreen(){
       : '<p class="hint"><b>Phone:</b> drag the left side to move, the right side to look, buttons to fight.<br>'+
         'Your hunter swings on her own when something gets close.</p>'));
   document.getElementById('make').onclick=makeScreen;
+  document.getElementById('story').onclick=cinePlay;
+  ui.classList.add('see');
   if(SAVED) document.getElementById('cont').onclick=function(){ startRun(loadSave()); };
   document.getElementById('snd').onclick=function(){ sndWake(); this.textContent=sndCycle(); };
 }
@@ -10611,6 +10842,7 @@ function startRun(sv){
   if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; gearInit(sv.build); }
   else { G.build.skills={}; G.build.points=0; if(!G.build.diff) G.build.diff='normal'; gearInit(null); }
   wildLoad(sv&&sv.wild); CAVEENV=null; WILD.lore.wood=1;
+  cineStop();
   G.player=null; recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
   homeReset();
@@ -10871,6 +11103,7 @@ function frame(ts){
   MPI=0;
   var t0=performance.now();
   if(G.state==='play') update(dt);
+  else if(G.cine){ cineUpdate(realDt); FRAMEDT=G.cine.sd; }
   var t1=performance.now();
   draw(); drawHUD();
   var t2=performance.now();
@@ -10891,7 +11124,7 @@ function boot(){
     R3.compile(SCENE,CAM3);        // warm every shader up front
     for(var wi=ACTORS.length-1;wi>=0;wi--) if(ACTORS[wi].spec==='warm'){ SCENE.remove(ACTORS[wi].group); ACTORS.splice(wi,1); }
     if(bt) bt.style.display='none';
-    titleScreen();
+    cineBoot();
     window.__ready=true;
     requestAnimationFrame(function(t){last=t;requestAnimationFrame(frame);});
   });

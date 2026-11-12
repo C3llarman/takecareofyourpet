@@ -72,6 +72,23 @@ you click.) Tap the minimap to show its key.
 The game switches between the two schemes live — move a mouse and it goes to desktop
 mode, touch the screen and it goes back.
 
+### The intro
+
+The first time the game is opened it waits on **tap to begin** (that tap also wakes the
+sound, so the music plays), then runs a ~38-second slow-motion film shot in the game's own
+world, with the story over it:
+
+> A long time ago, in a wood far away, where the wilds have taken over, one hunter and his
+> weary band seek to bring peace to the land, and restore harmony to its creatures.
+
+Five shots: over the sea onto the wood; down into the Queen's Hollow among the spiders and
+cocoons; round Cinderwing asleep on his hoard; beside the hunter and four companions as they
+run, on a long lens; and a crane up and away as they run on towards the tavern, where the
+title rises. The world runs at 38% speed throughout. Any key, click or tap skips it. After
+that the title opens straight away over the wood, with the camera circling your hunter
+(your saved one, if you have one) and the band, and **The story so far** plays it again.
+The shots, timings and words are the tables at the top of `src/intro.js`.
+
 ---
 
 ## How it's built
@@ -100,6 +117,7 @@ src/
   folk.js     Wren, Tobin and Ærtheldor and their ten quests, gathering, the
               workbench and its recipes, Tobin's compass, Aelfrend and flying
   audio.js    synthesised sound effects and the music loop (Web Audio)
+  intro.js    the slow-motion intro film and the living title backdrop
   game.js     state, input, camera, combat, AI, allies, skills, HUD, particles, telemetry
 assets/       compressed models (*.glb), the forest (nature.json), music.mp3 — all CC0,
               see assets/CREDITS.md

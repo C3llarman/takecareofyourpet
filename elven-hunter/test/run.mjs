@@ -1090,6 +1090,46 @@ section('Rendering');
   await page.close();
 }
 
+/* ---------------- intro ---------------- */
+section('Intro');
+{
+  const page = await open(browser, LAPTOP);
+  // the test browser skips the "tap to begin" gate: the title shows over the wood
+  const t = await page.evaluate(() => ({ state: G.state, band: G.cineBand.length, story: !!document.getElementById('story') }));
+  ok('the title stands over the wood, with your band', t.state === 'title' && t.band === 4);
+  ok('the title offers the story', t.story);
+  // a first visit (outside the test browser) waits for a tap, which also wakes the sound
+  await page.evaluate(() => { hide(); cineGate(); });
+  ok('a first visit waits at "begin"', await page.evaluate(() => G.state === 'intro' && G.cine.mode === 'gate' && cineEl.classList.contains('gate')));
+  await page.mouse.click(700, 400);
+  ok('a tap starts the film', await page.evaluate(() => G.cine.mode === 'intro'));
+  // (software rendering is slow, and each frame advances the film by at most 0.05 s)
+  await page.waitForFunction(() => G.cine.T > 0.8, null, { timeout: 30000 }).catch(() => {});
+  const run = await page.evaluate(() => ({ T: G.cine.T, look: G.cine.look.y > -50 }));
+  ok('the film plays', run.T > 0.8 && run.look, `${run.T.toFixed(2)} s in`);
+  // every shot frames something, and the band runs once we meet them
+  const shots = await page.evaluate(() => {
+    const out = [];
+    for (const s of CINE_SHOTS) { G.cine.T = (s[0] + s[1]) / 2; cineUpdate(0.016); out.push([s[2], Math.hypot(G.cam.x - G.cine.look.x, G.cam.z - G.cine.look.z)]); }
+    return out; });
+  ok('every shot keeps its subject in reach', shots.every((s) => s[1] > 2 && s[1] < 120), shots.map((s) => s[0] + ' ' + s[1].toFixed(0)).join(', '));
+  const z0 = await page.evaluate(() => { G.cine.T = 22; return G.player.z; });
+  await page.waitForTimeout(800);
+  ok('the band runs, in slow motion', await page.evaluate((z0) => G.player.z < z0 && G.cine.sd < 0.025, z0));
+  await page.keyboard.press('Enter');
+  ok('a key skips to the title', await page.evaluate(() => G.state === 'title' && !cineEl.classList.contains('on')));
+  ok('and it is remembered', await page.evaluate(() => localStorage.getItem('eh3_intro') === '1'));
+  await page.evaluate(() => document.getElementById('story').click());
+  ok('the story can be watched again', await page.evaluate(() => G.state === 'intro' && G.cine.mode === 'intro' && G.cine.T < 1));
+  await page.evaluate(() => { G.cine.T = CINE_END - 0.01; });
+  await page.waitForFunction(() => G.state === 'title', null, { timeout: 20000 });
+  ok('the film ends on the title', true);
+  await page.evaluate(() => startRun());
+  ok('starting a hunter leaves the film behind', await page.evaluate(() => G.state === 'play' && !G.cine && !G.ents.some((e) => e.kind === 'ally')));
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 3).join(' | '));
+  await page.close();
+}
+
 await browser.close();
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
