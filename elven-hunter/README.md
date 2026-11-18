@@ -27,8 +27,9 @@ killing: gathering, finding lost things, a delivery, a repair; what you gather c
 potions, tonics and lasting charms. Far in the south, Ærtheldor the Great Eagle has a quest
 chain of his own, and at its end an eaglet, Aelfrend, follows you and flies you back to
 the quest givers. And across the sea from the beach lies the next land, the **Emberleaf
-Isle**: an autumn island with tougher foes, a ruined spire and a mini-boss of its own, reached
-by a white boat at the jetty. Pick Easy, Normal, Hard or Expert. Progress is saved in the
+Isle**: an autumn island with tougher foes, a ruined spire, a mini-boss, and a castle where
+Cinderwing's sister Ashwing keeps Princess Elowen in a gilded cage, reached by a white boat
+at the jetty. Pick Easy, Normal, Hard or Expert. Progress is saved in the
 browser.
 
 ---
@@ -110,10 +111,11 @@ src/
   home.js     the cottage, its farm, and saving / continuing
   wild.js     difficulty, mushroom grumps, the Stone Warden, the dragon, the Glimmer
               Cave and its torch, butterflies, rabbits, toadstools and gnomes
-  legends.js  the journal (43 pages of lore), waystones, Bram's tales, the six
+  legends.js  the journal (47 pages of lore), waystones, Bram's tales, the six
               mini-bosses and the golden champions
-  isle.js     the Emberleaf Isle: its ground, autumn trees, the landing and the Sunken
-              Spire, the white boat, its light, and the foes that live there
+  isle.js     the Emberleaf Isle: its ground, autumn trees, the landing, the Sunken
+              Spire and Caer Aelfhaven, the white boat, its light, its foes, Ashwing
+              and Princess Elowen
   abilities.js three abilities per calling, unlocked at levels 2, 4 and 7
   gear.js     five gear slots, five rarities, loot bags, the bag and character
               sheet, Bram's cousin's forge
@@ -272,16 +274,29 @@ mist hid it; now it has thinned, and a white Sylvani boat is tied up beside the 
   champions turn up half again as often. Six of your kin hang in cocoons round the spire.
 - **Emberfang, Warden of the Spire**, a mini-boss: a fire-coloured giant spider who nests in
   the ruins, spits webs and calls her brood.
+- **Caer Aelfhaven**, on the isle's north shore: the old castle of Aelfhaven's royal house,
+  white walls, corner towers, a gatehouse with red banners and a tall keep. When the mist
+  came, Cinderwing's sister **Ashwing** flew over the water and took it. She sleeps on her
+  hoard in the courtyard, and in a gilded cage beside her is **Princess Elowen**, the last of
+  the isle's royal house (Ashwing collects shiny things). Talk to Elowen through the bars.
+- **Ashwing** is her brother in negative: ash-pale scales, dark horns, amber wings. Walk into
+  the courtyard and she wakes. She fights like him (bites, breathes fire, takes off and rains
+  fireballs, enrages below a third of her health) but harder, and keeps to her courtyard on
+  foot. Slay her and the cage key is yours: Elowen gives you **Elowen's Favour**, a legendary
+  trinket, and coins, then takes the boat to wait for you at the Greenleaf, where she has
+  something to say whenever you pass. Ashwing comes back twelve minutes later, tougher; the
+  princess stays free. Both dragons share one AI in `wild.js`: each has a *nest* (the ground
+  it keeps to, its lair, and what wakes it).
 - **The landing is safe ground**, like the tavern yard: foes break off and you slowly mend.
 - **Tuning** lives in the `ISLE` object at the top of `src/isle.js`: where it is, how big,
   `tough`, `bite`, `pay` and the recommended `level`.
 
 This is the first part of the isle. Still to come: folk and quests of its own, gathering
-and recipes, more places to find, gnomes, and a boss of its own.
+and recipes, more places to find, and gnomes.
 
 ### Legends (`src/legends.js`)
 
-- **The journal** (`L`, or from the skills screen). Forty-three pages: the story of the
+- **The journal** (`L`, or from the skills screen). Forty-seven pages: the story of the
   Elderwood and the Long Weaving, every landmark, every named foe, Bram's tales and five
   carved **waystones** set about the wood (walk up and `E` / **READ**). Pages fill as you
   discover, read, listen and kill; empty pages carry a hint where to look.

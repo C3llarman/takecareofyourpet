@@ -62,7 +62,7 @@ section('World');
     })(),
   }));
   ok('world mesh builds', w.tris > 50000, `${w.tris} triangles in one draw call`);
-  ok('eleven landmarks placed (nine in the wood, two on the isle)', w.landmarks.length === 11, w.landmarks.join(', '));
+  ok('twelve landmarks placed (nine in the wood, three on the isle)', w.landmarks.length === 12, w.landmarks.join(', '));
   ok('spawn is above water', w.spawnAboveWater);
   // the "objectives outside the map" bug: things were scattered over a square, but the
   // walkable land is a circle inside the mountains, so the corners were unreachable
@@ -654,7 +654,7 @@ section('Forest');
   ok('you can wade into the shallows, not out to sea', coast.deep >= WATER_ - 1.0, `stopped where the water is ${(WATER_ - coast.deep + 0).toFixed(1)} deep`);
   ok('the wood is open, not a thicket', trees.n / trees.area < 500, `${trees.n} trees, ${Math.round(trees.n / trees.area)} per original map's worth of ground`);
   const size = (await import('node:fs')).statSync(PAGE.replace('file://', '')).size / 1024 / 1024;
-  ok('the whole game stays small', size < 3.2, `${size.toFixed(2)} MB with models, forest and music`);
+  ok('the whole game stays small', size < 3.3, `${size.toFixed(2)} MB with models, forest and music`);
   await page.close();
 }
 
@@ -828,6 +828,24 @@ section('Expert, and the Emberleaf Isle');
     for (let t = 0; t <= 1; t += 0.05) { const x = L.x + (S.x - L.x) * t, z = L.z + (S.z - L.z) * t; if (H(x, z) < WATER + 0.3) bad++; }
     return { bad, spire: H(S.x, S.z) > H(L.x, L.z) + 5 }; });
   ok('you can walk from the landing up to the spire', ground.bad === 0 && ground.spire);
+  // Cinderwing's sister holds the castle, and the princess is in her cage
+  const castle = await page.evaluate(() => { const s = G.ents.find((e) => e.sister), pr = princessEnt();
+    return { sister: !!s && s.state === 'sleep' && inCastle(s.x, s.z), princess: !!pr && inCastle(pr.x, pr.z), st: WILD.princess,
+      walls: solidAt(CASTLE.x + CASTLE.A, CASTLE.z, 1) && solidAt(CASTLE.x, CASTLE.z - CASTLE.A, 1), gate: !solidAt(CASTLE.gate.x, CASTLE.gate.z, 1),
+      dry: H(CASTLE.x, CASTLE.z) > WATER + 1 }; });
+  ok('Ashwing sleeps in Caer Aelfhaven, with the princess caged in the courtyard', castle.sister && castle.princess && castle.st === 0);
+  ok('the castle has walls, and an open gate', castle.walls && castle.gate && castle.dry);
+  const wake = await page.evaluate(() => new Promise((res) => { const p = G.player, s = G.ents.find((e) => e.sister);
+    G.ents = G.ents.filter((e) => !FOE[e.kind] || e.boss); p.x = CASTLE.x - 6; p.z = CASTLE.z; p.y = H(p.x, p.z); p.hp = p.maxHp = 99999;
+    const t0 = G.t; const tick = () => { if (G.t - t0 > 0.5) res({ state: s.state, lore: !!WILD.lore.ashwing }); else requestAnimationFrame(tick); }; tick(); }));
+  ok('walk into the courtyard and she wakes', wake.state !== 'sleep' && wake.lore, wake.state);
+  const freed = await page.evaluate(() => { const s = G.ents.find((e) => e.sister), c0 = G.player.coins; hurtEnemy(s, s.hp + 10);
+    const pr = princessEnt(); G.player.x = pr.x - 3; G.player.z = pr.z; princessScreen(); menuClose();
+    return { st: WILD.princess, coins: G.player.coins > c0, fav: Object.values(G.build.items || {}).concat(G.build.bag || []).some((i) => i && /Elowen/.test(i.n)),
+      atTavern: (() => { const q = princessEnt(); return !!q && Math.hypot(q.x - TAVERN.x, q.z - TAVERN.z) < 20; })(), back: WILD.sister.t > 0, lore: !!WILD.lore.elowen }; });
+  ok('slay Ashwing, and Elowen is free', freed.st === 2 && freed.coins && freed.lore, JSON.stringify(freed));
+  ok('she gives you her favour, and waits for you at the Greenleaf', freed.fav && freed.atTavern);
+  ok('Ashwing comes back in time, but the princess stays free', freed.back);
   const home = await page.evaluate(() => { sail(false); const p = G.player; return { on: WILD.inIsle, wood: !inIsle(p.x, p.z) && inBounds(p.x, p.z, 0), world: WORLD.visible, isle: ISLE3.visible }; });
   ok('and the boat sails you home again', !home.on && home.wood && home.world && !home.isle);
   ok('no runtime errors', page.__errors.length === 0, page.__errors.join(' | '));

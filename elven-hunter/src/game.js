@@ -965,7 +965,7 @@ function updateEnts(dt){
       // Bram turns to watch you come up the path, and raises a mug when you arrive
       var want=pd<10?Math.atan2(p.x-e.x,p.z-e.z):e.home;
       e.yaw+=(wrapA(want-e.yaw))*Math.min(1,dt*4);
-      if(pd<10&&!e.greeted){ e.greeted=true; e.cheer=1.6; msg(e.npcId?FOLK[e.npcId].greet:(G.bounty&&G.bounty.got>=G.bounty.n?'Back already? Come, collect!':'Welcome to the Greenleaf!'),'#ffe08a',e.x,e.y+2.6,e.z); }
+      if(pd<10&&!e.greeted){ e.greeted=true; e.cheer=1.6; msg(e.greet||(e.npcId?FOLK[e.npcId].greet:(G.bounty&&G.bounty.got>=G.bounty.n?'Back already? Come, collect!':'Welcome to the Greenleaf!')),'#ffe08a',e.x,e.y+2.6,e.z); }
       if(pd>18) e.greeted=false;
       if(e.cheer>0) e.cheer-=dt;
       continue;
@@ -1393,6 +1393,9 @@ function mapIcon(kind,x,y,s,unknown){
     case 'landing':                      // a white boat
       hx.fillStyle='#f3efe4'; hx.beginPath(); hx.moveTo(-5.5,0.5); hx.lineTo(5.5,0.5); hx.lineTo(3.5,3.5); hx.lineTo(-3.5,3.5); hx.closePath(); hx.fill();
       hx.fillStyle='#c9a64a'; hx.fillRect(-0.5,-5,1,5.5); hx.fillStyle='#f3efe4'; hx.beginPath(); hx.moveTo(0.6,-4.5); hx.lineTo(4,-0.3); hx.lineTo(0.6,-0.3); hx.closePath(); hx.fill(); break;
+    case 'castle':                       // battlements
+      hx.fillStyle='#c8bca8'; hx.beginPath(); hx.moveTo(-5,4.5); hx.lineTo(-5,-4); hx.lineTo(-3.4,-4); hx.lineTo(-3.4,-2.4); hx.lineTo(-0.8,-2.4); hx.lineTo(-0.8,-4); hx.lineTo(0.8,-4); hx.lineTo(0.8,-2.4); hx.lineTo(3.4,-2.4); hx.lineTo(3.4,-4); hx.lineTo(5,-4); hx.lineTo(5,4.5); hx.closePath(); hx.fill();
+      hx.fillStyle='#2a1a0a'; hx.beginPath(); hx.arc(0,2.6,1.8,3.14,6.29); hx.lineTo(1.8,4.5); hx.lineTo(-1.8,4.5); hx.closePath(); hx.fill(); break;
     case 'spire':                        // a broken tower
       hx.fillStyle='#b8aea0'; hx.beginPath(); hx.moveTo(-3.5,4.5); hx.lineTo(-3,-3); hx.lineTo(-1.5,-5); hx.lineTo(0,-3); hx.lineTo(1.5,-4.2); hx.lineTo(3,-2.5); hx.lineTo(3.5,4.5); hx.closePath(); hx.fill();
       hx.fillStyle='#e0702e'; hx.fillRect(-1,0.5,2,4); break;
@@ -1553,7 +1556,7 @@ function drawHUD(){
   if(SHOWKEY){
     var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['shroom','Mushroom grump'],['cocoon','Captive — free them'],
       ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
-      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['shore','The Sunlit Shore — a boat east'],['cave','Glimmer Cave — bring a torch'],['landing','Emberleaf Landing — sail home'],['spire','The Sunken Spire']];
+      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['shore','The Sunlit Shore — a boat east'],['cave','Glimmer Cave — bring a torch'],['landing','Emberleaf Landing — sail home'],['spire','The Sunken Spire'],['castle','Caer Aelfhaven — Ashwing']];
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
     hx.textAlign='left'; hx.font='600 '+(DESKTOP?11.5:10.5)+'px Georgia,serif';
@@ -2004,7 +2007,7 @@ function wakeUp(){
   for(var i=0;i<G.ents.length;i++){ var e=G.ents[i];
     if(e.kind==='ally'){ e.x=p.x+Math.cos(i)*2.5; e.z=p.z+Math.sin(i)*2.5; e.y=H(e.x,e.z); e.hp=e.maxHp; }
     if(FOE[e.kind]&&!e.boss&&Math.hypot(e.x-p.x,e.z-p.z)<25){ e.x=e.home.x; e.z=e.home.z; e.y=H(e.x,e.z); }
-    if(e.kind==='dragon'){ e.x=e.home.x; e.z=e.home.z; e.state='sleep'; e.fly=0; e.flyK=0; e.hp=e.maxHp; e.wind=0; e.breathT=0; e.yaw=2.2; }
+    if(e.kind==='dragon'){ e.x=e.home.x; e.z=e.home.z; e.state='sleep'; e.fly=0; e.flyK=0; e.hp=e.maxHp; e.wind=0; e.breathT=0; e.yaw=dragonNest(e).yaw; }
   }
   for(var gi=G.ents.length-1;gi>=0;gi--) if(G.ents[gi].kind==='golem'){ G.ents.splice(gi,1); WILD.stone.c=1; WILD.stone.full=true; }
   G.cam.yaw=p.yaw; G.cam.x=p.x-Math.sin(p.yaw)*8; G.cam.z=p.z-Math.cos(p.yaw)*8; G.cam.y=p.y+5;

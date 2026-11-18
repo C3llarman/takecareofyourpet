@@ -91,7 +91,15 @@ LORE.push(
   {id:'spire',sec:'The Emberleaf Isle',t:"The Sunken Spire",h:"The ruined tower on the isle's one hill.",
    x:"A Sylvani watchtower, sunk to its shoulders in the hill. Its keepers lit a beacon in the brazier every night so the white boats could find their way home. The brazier is still burning. Nobody has been up there to light it."},
   {id:'emberfang',sec:'Foes of note',t:"Emberfang, Warden of the Spire",h:"She nests in the ruins on the isle's hill.",
-   x:"A spider the colour of a banked fire, grown fat on a century of warmth from the beacon. She keeps the spire as her own and strings up anyone who climbs the hill. Bram, told about her, poured himself a very large drink."}
+   x:"A spider the colour of a banked fire, grown fat on a century of warmth from the beacon. She keeps the spire as her own and strings up anyone who climbs the hill. Bram, told about her, poured himself a very large drink."},
+  {id:'castle',sec:'The Emberleaf Isle',t:"Caer Aelfhaven",h:"The castle on the isle's north shore.",
+   x:"The seat of Aelfhaven's royal house, who were Sylvani of the sea: they built in white stone and flew red banners so the boats could see them from the Sunlit Shore. The banners are still there. So, now, is a dragon."},
+  {id:'ashwing',sec:'Foes of note',t:"Ashwing",h:"Something sleeps in the courtyard of Caer Aelfhaven.",
+   x:"Cinderwing's sister: pale as cold ash where he is black, with wings like a forge seen through smoke. When the mist came she flew over the water and took the castle for her own, hoard, banners, princess and all. She does not visit her brother. They had a disagreement about a mountain, four hundred years ago, and neither has forgotten."},
+  {id:'ashwing_down',sec:'Foes of note',t:"Queen of Nothing",h:"Slay Ashwing.",
+   x:"Ashwing falls in her own courtyard, on her own gold. The key on her horn is warm to the touch. Somewhere across the sea, a black dragon on a crag lifts his head, sniffs, and goes back to sleep looking rather pleased."},
+  {id:'elowen',sec:'Folk of the wood',t:"Princess Elowen",h:"Someone is locked in a gilded cage in Caer Aelfhaven.",
+   x:"Elowen of Aelfhaven, last of the isle's royal house, kept in a birdcage for a hundred years and not one bit the worse for it — the cage, she says, kept her young, the way a jar keeps jam. She is sharp, cheerful and entirely unwilling to be rescued twice. She waits at the Greenleaf now, and Bram has started wearing a clean apron."}
 );
 var LORE_BY={}; LORE.forEach(function(l){ LORE_BY[l.id]=l; });
 function loreCount(){ var n=0; for(var k in WILD.lore) if(WILD.lore[k]&&LORE_BY[k]) n++; return n; }
@@ -137,7 +145,7 @@ function waystoneScreen(w){
     (fresh?'<p class="sub">✎ Written in your journal.</p>':'')+'<button class="btn" id="leave">Walk on</button>');
   document.getElementById('leave').onclick=menuClose;
 }
-var LANDLORE={landing:'isle',spire:'spire',shore:'shore',eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
+var LANDLORE={landing:'isle',spire:'spire',castle:'castle',shore:'shore',eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
 
 /* ---------- mini-bosses ----------
    Named monsters with a home they guard and a trick of their own. Beaten, they

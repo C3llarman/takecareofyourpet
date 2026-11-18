@@ -42,10 +42,11 @@ function isleH(x,z){
   return h;
 }
 /* the trodden path from the landing up to the spire */
-function islePathD(x,z){ return segDist(x,z,ISLE.land.x+6,ISLE.land.z,ISLE.spire.x-9,ISLE.spire.z+3); }
+function islePathD(x,z){ return Math.min(segDist(x,z,ISLE.land.x+6,ISLE.land.z,ISLE.spire.x-9,ISLE.spire.z+3),
+  segDist(x,z,ISLE.land.x+6,ISLE.land.z+2,CASTLE.gate.x-3,CASTLE.gate.z)); }       // and on to the castle gate
 function isleClear(x,z,pad){
   pad=pad||0;
-  return Math.hypot(x-ISLE.land.x,z-ISLE.land.z)<15+pad||Math.hypot(x-ISLE.spire.x,z-ISLE.spire.z)<14+pad||islePathD(x,z)<3+pad;
+  return Math.hypot(x-ISLE.land.x,z-ISLE.land.z)<15+pad||Math.hypot(x-ISLE.spire.x,z-ISLE.spire.z)<14+pad||inCastle(x,z,8+pad)||islePathD(x,z)<3+pad;
 }
 var C_RUST=[0.50,0.29,0.12], C_AMBER=[0.62,0.45,0.17], C_OLIVE=[0.42,0.38,0.17];
 function isleCol(x,z,y){
@@ -55,6 +56,7 @@ function isleCol(x,z,y){
   col=mix3(col,C_PATH,(1-smooth01((islePathD(x,z)-0.9)/1.3))*(0.85+g*0.3));
   col=mix3(col,C_PATH,(1-smooth01((Math.hypot(x-ISLE.land.x,z-ISLE.land.z)-5)/3))*0.8);
   col=mix3(col,[0.52,0.50,0.46],(1-smooth01((Math.hypot(x-ISLE.spire.x,z-ISLE.spire.z)-8)/2))*0.7);   // old paving
+  if(inCastle(x,z,1)) col=mix3(col,[0.48,0.45,0.40],0.75);                                                 // the courtyard's flags
   col=mix3(col,C_DIRT,smooth01((sl-0.26)/0.16));
   col=mix3(col,C_ROCK,smooth01((sl-0.48)/0.14));
   var d=Math.hypot(x-ISLE.x,z-ISLE.z)/ISLE.R;
@@ -203,7 +205,7 @@ function scatterIsle(){
 function buildIsle(homeMesh){
   buildHomeBoat(homeMesh);
   var m=isleMesh();
-  buildLanding(m); buildSpire(m); scatterIsle();
+  buildLanding(m); buildSpire(m); buildCastle(m); scatterIsle();
   ISLE3=new THREE.Mesh(toGeom(m),WORLDMAT); ISLE3.frustumCulled=false;
   ISLE3.castShadow=true; ISLE3.receiveShadow=true; ISLE3.visible=false;
   SCENE.add(ISLE3);
@@ -261,6 +263,7 @@ function sail(out){
 }
 function isleTalk(p,list){
   if(WILD.inCave) return;
+  princessTalk(p,list);
   if(!WILD.inIsle){
     var Q=SHORE.pier; if(Q&&Math.hypot(Q.x-p.x,Q.z-p.z)<4.5)
       list.push({x:SHORE.boat.x,y:WATER+1,z:SHORE.boat.z,lift:2.6,label:'the white boat',tap:'SAIL',open:function(){ sailScreen(true); }});
@@ -274,6 +277,7 @@ function isleSafe(p){ return WILD.inIsle&&Math.hypot(p.x-ISLE.land.x,p.z-ISLE.la
 function isleUpdate(dt){
   var p=G.player;
   setIsleEnv(inIsle(p.x,p.z));
+  castleTick(dt);
   if(!WILD.inIsle) return;
   if(isleSafe(p)&&!p.dead&&p.hp<p.maxHp) p.hp=Math.min(p.maxHp,p.hp+p.maxHp*0.06*dt);
   var B=ISLE.brazier;                            // the brazier's embers
@@ -299,7 +303,7 @@ function isleSpawnSpot(far){
   var p=G.player;
   for(var k=0;k<16;k++){ var a=Math.random()*6.283, d=Math.sqrt(Math.random())*ISLE.R*0.7, x=ISLE.x+Math.cos(a)*d, z=ISLE.z+Math.sin(a)*d;
     if(H(x,z)<WATER+0.8||solidAt(x,z,0.5)) continue;
-    if(Math.hypot(x-ISLE.land.x,z-ISLE.land.z)<26) continue;
+    if(Math.hypot(x-ISLE.land.x,z-ISLE.land.z)<26||inCastle(x,z,10)) continue;
     if(far&&Math.hypot(x-p.x,z-p.z)<far) continue;
     return {x:x,z:z}; }
   return null;
@@ -312,6 +316,8 @@ function isleSpawnPack(far){
 }
 function populateIsle(){
   var D=DF(), packs=Math.round(11*D.pop);
+  if(WILD.sister.t<=0) spawnSister();
+  spawnPrincess();
   for(var i=0;i<packs;i++) isleSpawnPack(0);
   var r=mulberry(616);
   for(var c=0;c<6;c++){ var a=r()*6.283, d=16+r()*14, x=ISLE.spire.x+Math.cos(a)*d, z=ISLE.spire.z+Math.sin(a)*d;   // kin, strung up round the spire
@@ -327,4 +333,141 @@ function populateIsle(){
 function isleRespawn(){
   var n=0; for(var i=0;i<G.ents.length;i++){ var e=G.ents[i]; if(e.isle&&FOE[e.kind]) n++; }
   if(n<Math.round(30*DF().pop)) isleSpawnPack(40);
+}
+
+/* ================= Ashwing's castle =================
+   On the isle's north shore stands Caer Aelfhaven, the old Sylvani castle.
+   Cinderwing's sister Ashwing took it when the mist came, and keeps the last
+   princess of the isle, Elowen, locked in a gilded cage in the courtyard
+   (she likes shiny things). Slay Ashwing and Elowen is free. */
+var CASTLE={x:ISLE.x+6,z:ISLE.z+44,A:18};            // A: half the courtyard's width, to the walls
+CASTLE.gate={x:CASTLE.x-CASTLE.A,z:CASTLE.z};
+CASTLE.lair={x:CASTLE.x+5,z:CASTLE.z-5};
+CASTLE.cage={x:CASTLE.x+10,z:CASTLE.z+9};
+CASTLE.nest={x:CASTLE.x,z:CASTLE.z,r:16,lair:CASTLE.lair,top:null,yaw:-Math.PI/2,
+  wake:'WHO DARES WALK IN MY CASTLE?',rage:'YOU KILLED NOTHING OF MINE YET!'};
+ISLE.flats.push({x:CASTLE.x,z:CASTLE.z,r:30,h:null});
+var SISTER_RESPAWN=720;
+function inCastle(x,z,pad){ return Math.abs(x-CASTLE.x)<CASTLE.A+(pad||0)&&Math.abs(z-CASTLE.z)<CASTLE.A+(pad||0); }
+
+function buildCastle(m){
+  var C=CASTLE, A=C.A, y=H(C.x,C.z), stone=[0.62,0.58,0.52], dark=[0.45,0.42,0.38], slate=[0.30,0.32,0.42], red=[0.70,0.16,0.12], gold=[0.92,0.74,0.26];
+  var T=1.8, WH=7;
+  function wall(x0,z0,x1,z1){                     // a straight stretch of wall with battlements
+    var cx=(x0+x1)/2, cz=(z0+z1)/2, len=Math.hypot(x1-x0,z1-z0), alongX=Math.abs(x1-x0)>Math.abs(z1-z0);
+    addMesh(m,boxMesh(stone),cx,y-1.5,cz,0,alongX?len:T,WH+1.5,alongX?T:len);
+    collBox(cx,cz,alongX?len/2:T/2,alongX?T/2:len/2,0);
+    for(var k=0;k<len/2.2-0.5;k++){ var t=(k+0.5)*2.2/len, bx=x0+(x1-x0)*t, bz=z0+(z1-z0)*t;
+      addMesh(m,boxMesh(dark),bx,y+WH,bz,0,alongX?1.1:T+0.2,0.9,alongX?T+0.2:1.1); }
+  }
+  function tower(x,z,r,h,roof){
+    addMesh(m,coneMesh(stone,12,0.5,0.47),x,H(x,z)-1.5,z,0,r*2,h+1.5,r*2); collCircle(x,z,r);
+    if(roof){ addMesh(m,coneMesh(slate,12,0.5,0),x,H(x,z)+h,z,0,r*2.5,r*2.2,r*2.5);
+      addMesh(m,boxMesh(red),x+0.3,H(x,z)+h+r*2.2,z,0,0.06,1.6,1.0); addMesh(m,boxMesh(dark),x,H(x,z)+h+r*2.1,z,0,0.1,2.2,0.1); }
+    else for(var k=0;k<8;k++){ var a=k/8*6.283; addMesh(m,boxMesh(dark),x+Math.cos(a)*r*0.88,H(x,z)+h,z+Math.sin(a)*r*0.88,-a,1.0,0.9,0.7); }
+  }
+  var g=3.6;                                      // half the gate's width
+  wall(C.x-A,C.z-A,C.x-A,C.z-g); wall(C.x-A,C.z+g,C.x-A,C.z+A);          // west, either side of the gate
+  wall(C.x+A,C.z-A,C.x+A,C.z+A); wall(C.x-A,C.z-A,C.x+A,C.z-A); wall(C.x-A,C.z+A,C.x+A,C.z+A);
+  tower(C.x-A,C.z-A,3.2,11,true); tower(C.x+A,C.z-A,3.2,11,true); tower(C.x-A,C.z+A,3.2,11,true);
+  tower(C.x+A,C.z+A,3.2,9,false);                 // this one's roof is long gone: scorch marks up its side
+  for(var s=0;s<5;s++) addMesh(m,boxMesh([0.16,0.13,0.12]),C.x+A+Math.cos(2.5+s*0.2)*3.25,H(C.x+A,C.z+A)+2+s*1.3,C.z+A+Math.sin(2.5+s*0.2)*3.25,-(2.5+s*0.2),1.6,1.6,0.1);
+  tower(C.x-A,C.z-g-1.8,2.3,9.5,false); tower(C.x-A,C.z+g+1.8,2.3,9.5,false);                  // the gatehouse
+  addMesh(m,boxMesh(stone),C.x-A,y+5.6,C.z,0,T+0.6,1.6,g*2+1.5);                               // the arch over the gate
+  for(var pb=0;pb<5;pb++) addMesh(m,boxMesh([0.24,0.22,0.22]),C.x-A,y+4.7,C.z-g+0.8+pb*1.5,0,0.18,0.9,0.18);   // the portcullis, raised
+  for(var bn=-1;bn<=1;bn+=2){ addMesh(m,boxMesh(red),C.x-A-T/2-0.05,y+2.4,C.z+bn*(g+3.6),0,0.08,3.2,1.3);       // banners by the gate
+    addMesh(m,boxMesh(gold),C.x-A-T/2-0.08,y+3.7,C.z+bn*(g+3.6),0,0.06,0.5,0.5); }
+  // the keep, leaning on the east wall: a tall round tower with a slate roof
+  var K={x:C.x+A+4.5,z:C.z-4}; addMesh(m,coneMesh(stone,14,0.5,0.46),K.x,H(K.x,K.z)-2,K.z,0,10,20,10); collCircle(K.x,K.z,5);
+  addMesh(m,coneMesh(slate,14,0.5,0),K.x,H(K.x,K.z)+18,K.z,0,12,7,12);
+  for(var wi=0;wi<3;wi++){ var wa=Math.PI+wi*0.5-0.5; addMesh(m,boxMesh([0.95,0.78,0.40]),K.x+Math.cos(wa)*4.7,H(K.x,K.z)+9+wi*2.5,K.z+Math.sin(wa)*4.7,-wa,0.4,1.4,0.7); }
+  // the courtyard: old paving, scorched round the lair, and her hoard
+  for(var f=0;f<26;f++){ var fx=C.x+((f*37)%30)-15, fz=C.z+((f*53)%30)-15; if(Math.hypot(fx-C.lair.x,fz-C.lair.z)<6) continue;
+    addMesh(m,boxMesh([0.50,0.48,0.44]),fx,H(fx,fz)-0.18,fz,(f*0.7)%1.5,1.6+(f%3)*0.4,0.22,1.4+(f%2)*0.5); }
+  addMesh(m,coneMesh([0.18,0.15,0.14],16,0.5,0.5),C.lair.x,H(C.lair.x,C.lair.z)-0.02,C.lair.z,0,13,0.06,13);
+  for(var h=0;h<24;h++){ var ha=h*0.62, hr=2.6+(h%5)*0.7, hx=C.lair.x+Math.cos(ha)*hr, hz=C.lair.z+Math.sin(ha)*hr;
+    addMesh(m,blobMesh(h%4===0?[0.85,0.85,0.90]:gold,0,1),hx,H(hx,hz)-0.1,hz,h,0.7+(h%3)*0.3,0.35+(h%2)*0.2,0.7); }
+  // the gilded cage, and a cushion in it
+  var Q=C.cage, qy=H(Q.x,Q.z);
+  addMesh(m,coneMesh(gold,16,0.5,0.5),Q.x,qy-0.05,Q.z,0,3.6,0.25,3.6);
+  for(var b=0;b<14;b++){ var ba=b/14*6.283; addMesh(m,boxMesh(gold),Q.x+Math.cos(ba)*1.7,qy+0.2,Q.z+Math.sin(ba)*1.7,-ba,0.1,3.6,0.1); }
+  addMesh(m,blobMesh(gold,0,2),Q.x,qy+3.8,Q.z,0,1.85,1.1,1.85);
+  addMesh(m,boxMesh(gold),Q.x,qy+4.8,Q.z,0,0.12,1.2,0.12);
+  addMesh(m,blobMesh([0.70,0.22,0.40],0,1),Q.x,qy+0.35,Q.z,0,0.9,0.18,0.9);
+  collCircle(Q.x,Q.z,1.8);
+  LANDMARKS.push({x:C.x,z:C.z,r:A+2,name:'Caer Aelfhaven',kind:'castle',isle:1});
+}
+
+/* ---------- Ashwing ---------- */
+function spawnSister(){
+  var L=CASTLE.lair, k=WILD.sister.kills, hp=3200*(1+0.4*k)*bossLevel()*DF().hp;
+  G.ents.push({kind:'dragon',sister:1,isle:1,boss:1,name:k?'Ashwing, Queen of Cinders':'Ashwing, Cinderwing\'s Sister',short:'Ashwing',
+    x:L.x,y:H(L.x,L.z),z:L.z,vy:0,yaw:CASTLE.nest.yaw,scale:1.18,rad:3.4,tall:5.2,
+    hp:hp,maxHp:hp,dmg:34*(1+0.2*k)*bossLevel()*ISLE.bite,speed:0,walkPhase:0,onGround:true,
+    // ash-pale scales, dark horns, amber wings and a molten belly: her brother in negative
+    look:{body:[0.52,0.48,0.50],dark:[0.30,0.26,0.29],belly:[0.88,0.58,0.24],horn:[0.20,0.16,0.18],wing:[0.88,0.50,0.12],eye:[0.55,0.95,1.0],ember:[1.0,0.70,0.25]},
+    aggro:22, atkCd:2, wind:0, hurtT:0, state:'sleep', stT:0, fly:0, flyK:0, fireCd:1.3, home:{x:L.x,z:L.z}, snore:0, nest:CASTLE.nest});
+}
+function sisterDown(e){
+  var p=G.player, pay=DF().pay, c=Math.round((600+150*WILD.sister.kills)*pay);
+  p.coins+=c; p.potions+=3; WILD.sister.kills++; WILD.sister.t=SISTER_RESPAWN; loreGet('ashwing_down');
+  gainXp(2000,e.x,e.y+5,e.z,'+2000 XP — Ashwing falls');
+  msg('+'+c+' ◉  +3 potions','#ffe08a',e.x,e.y+4,e.z,20);
+  if(WILD.princess===0){ WILD.princess=1; tip('Ashwing falls! The cage key clatters onto the stones — go to Elowen'); }
+  else tip('Ashwing falls again. Somewhere, her brother sulks.');
+  burst(e.x,e.y+2,e.z,70,[1.0,0.78,0.30],{up:7,spread:7,size:0.24,life:1.6,grav:-1});
+  sfx('levelup'); shake(0.8); setTimeout(saveGame,100);
+}
+
+/* ---------- Princess Elowen ---------- */
+var PRINCESS_SAY=['“Bram says the stew is a family recipe. I\'ve met his family. I believe him.”',
+  '“When the isle is quiet again, I\'ll light the beacon on the spire myself.”',
+  '“You smell of smoke. Good. So does everyone worth knowing.”',
+  '“Ashwing kept every shiny thing on the isle. Including me. I\'m told I\'m very shiny.”'];
+function princessSpot(){
+  if(WILD.princess>=2){ var t=dryNear(TAVERN.x-6,TAVERN.z+7); return {x:t.x,z:t.z,yaw:TAVERN.ry+Math.PI}; }
+  return {x:CASTLE.cage.x,z:CASTLE.cage.z,yaw:-Math.PI/2};
+}
+function spawnPrincess(){
+  var q=princessSpot(), gown=[0.86,0.52,0.74];
+  G.ents.push({kind:'npc',npcId:'princess',name:'Princess Elowen',x:q.x,y:H(q.x,q.z),z:q.z,yaw:q.yaw,home:q.yaw,
+    scale:0.95,speed:0,walkPhase:0,onGround:true,hp:1,maxHp:1,cheer:0,greeted:false,model:'rogue',tint:[1.0,0.80,0.92],
+    greet:WILD.princess===0?'“Help! Over here — in the cage!”':(WILD.princess===1?'“You did it! Quick, the key!”':'“My rescuer!”'),
+    look:look('elf','wizard',{tunic:gown,sleeve:gown,cloak:[0.95,0.85,0.55],weapon:null,hair:HAIR.blonde})});
+}
+function princessEnt(){ return folkEnt('princess'); }
+function princessScreen(){
+  menuOpen('talk'); sfx('click');
+  var p=G.player, st=WILD.princess, html='<h1>Princess Elowen</h1>', btn='Farewell';
+  if(st===0){
+    var sis=null; G.ents.forEach(function(d){ if(d.sister) sis=d; });
+    html+='<p class="sub">Locked in a gilded cage in the courtyard of Caer Aelfhaven</p>'+
+      '<p class="say">“I\'m Elowen — the last of Aelfhaven\'s royal house, for what it\'s worth with no house left. When the mist came, so did <b>Ashwing</b>, Cinderwing\'s sister. She took the castle, and she took me: she collects shiny things, and apparently a princess counts. The key hangs from her horn.”</p>'+
+      '<p class="say">“'+(sis&&sis.state==='sleep'?'She\'s asleep on her hoard. She won\'t be for long, once you start. ':'')+'She breathes fire on the ground, and when she takes to the air she rains it down. Fight her inside the walls — she won\'t leave her courtyard on foot.”</p>'+
+      '<div class="stat"><span>A fight for</span><b>level '+(ISLE.level+3)+' or so — you are '+p.level+'</b></div>';
+    btn='I\'ll be back with that key';
+  } else if(st===1){
+    var c=Math.round(300*DF().pay), it=makeItem('trinket',5); it.n='Elowen\'s Favour';
+    p.coins+=c; takeItem(it); WILD.princess=2; loreGet('elowen');
+    gainXp(800,p.x,p.y+3,p.z,'+800 XP — the princess is free');
+    html+='<p class="sub">Free</p><p class="say">The key turns with a squeal. Elowen steps out, stretches, and looks down at Ashwing, sprawled across her own gold, with deep satisfaction.</p>'+
+      '<p class="say">“Thank you. Truly. Take this — my mother\'s favour, from the treasury Ashwing didn\'t find. And this, for the boat. I hear there\'s a tavern on the far shore with a fire and a very loud innkeeper. I\'ll wait for you there.”</p>'+
+      '<div class="stat"><span>You receive</span><b>+'+c+' ◉ &nbsp; Elowen\'s Favour (legendary trinket)</b></div>';
+    btn='See you at the Greenleaf';
+    var e=princessEnt(); if(e){ burst(e.x,e.y+1.2,e.z,40,[1.0,0.85,0.95],{up:4,spread:3,size:0.14,life:1.2,grav:-1}); G.ents.splice(G.ents.indexOf(e),1); }
+    spawnPrincess(); sfx('freed'); sfx('levelup'); setTimeout(saveGame,60);
+  } else {
+    html+='<p class="sub">At the Greenleaf, by the fire</p><p class="say">'+PRINCESS_SAY[(Math.random()*PRINCESS_SAY.length)|0]+'</p>';
+  }
+  show(html+'<button class="btn" id="leave">'+btn+'</button>');
+  document.getElementById('leave').onclick=menuClose;
+}
+function princessTalk(p,list){
+  var e=princessEnt(); if(!e||Math.hypot(e.x-p.x,e.z-p.z)>(WILD.princess>=2?3.6:4.4)) return;
+  list.push({x:e.x,y:e.y,z:e.z,lift:2.5,label:WILD.princess===1?'unlock the cage':'talk to Elowen',tap:WILD.princess===1?'FREE':'TALK',open:princessScreen});
+}
+function castleTick(dt){
+  if(WILD.sister.t>0){ WILD.sister.t-=dt;
+    if(WILD.sister.t<=0&&!G.ents.some(function(d){ return d.sister; })){
+      if(WILD.inIsle&&inCastle(G.player.x,G.player.z,6)) WILD.sister.t=10; else spawnSister(); } }
 }

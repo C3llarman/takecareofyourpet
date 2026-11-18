@@ -27,12 +27,12 @@ function DF(){ return DIFFS[G.build.diff]||DIFFS.normal; }
 var WILD=null;
 function wildReset(){
   WILD={inIsle:false, torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0,
-    q:{}, inv:{}, recipes:{}, charms:{}, compass:0, eagle:0};
+    q:{}, inv:{}, recipes:{}, charms:{}, compass:0, eagle:0, sister:{t:0,kills:0}, princess:0};
 }
 wildReset();
 function wildSave(){ return {torch:WILD.torch,gnomes:WILD.gnomes,stone:{c:WILD.stone.c,tier:WILD.stone.tier},
   dragon:WILD.dragon,chestT:Math.round(WILD.chestT),wardens:WILD.wardens,lore:WILD.lore,minis:WILD.minis,trophies:WILD.trophies,
-  q:WILD.q,inv:WILD.inv,recipes:WILD.recipes,charms:WILD.charms,compass:WILD.compass,eagle:WILD.eagle}; }
+  q:WILD.q,inv:WILD.inv,recipes:WILD.recipes,charms:WILD.charms,compass:WILD.compass,eagle:WILD.eagle,sister:{t:Math.round(WILD.sister.t),kills:WILD.sister.kills},princess:WILD.princess}; }
 function wildLoad(w){
   wildReset(); if(!w) return;
   WILD.torch=!!w.torch; WILD.gnomes=w.gnomes||{}; WILD.chestT=w.chestT||0; WILD.wardens=w.wardens||0;
@@ -40,6 +40,8 @@ function wildLoad(w){
   WILD.q=w.q||{}; WILD.inv=w.inv||{}; WILD.recipes=w.recipes||{}; WILD.charms=w.charms||{}; WILD.compass=w.compass||0; WILD.eagle=w.eagle||0;
   if(w.stone){ WILD.stone.c=w.stone.c||0; WILD.stone.tier=w.stone.tier||0; WILD.stone.full=WILD.stone.c>=1; }
   if(w.dragon){ WILD.dragon.t=w.dragon.t||0; WILD.dragon.kills=w.dragon.kills||0; }
+  if(w.sister){ WILD.sister.t=w.sister.t||0; WILD.sister.kills=w.sister.kills||0; }
+  WILD.princess=w.princess||0;
 }
 
 /* ---------- mushroom grumps ---------- */
@@ -72,7 +74,7 @@ function spawnDragon(){
     hp:hp,maxHp:hp,dmg:30*(1+0.2*k)*bossLevel(),speed:0,walkPhase:0,onGround:true,
     // obsidian scales, a membrane like banked coals, gold-ivory horns and an ember-lit belly
     look:{body:[0.17,0.13,0.14],dark:[0.10,0.08,0.09],belly:[0.52,0.30,0.18],horn:[0.92,0.80,0.52],wing:[0.62,0.12,0.08],eye:[1.0,0.78,0.22],ember:[1.0,0.52,0.14]},
-    aggro:22, atkCd:2, wind:0, hurtT:0, state:'sleep', stT:0, fly:0, flyK:0, fireCd:1.5, home:{x:L.x,z:L.z}, snore:0});
+    aggro:22, atkCd:2, wind:0, hurtT:0, state:'sleep', stT:0, fly:0, flyK:0, fireCd:1.5, home:{x:L.x,z:L.z}, snore:0, short:'Cinderwing', nest:cragNest});
 }
 function findKind(k){ for(var i=0;i<G.ents.length;i++) if(G.ents[i].kind===k) return G.ents[i]; return null; }
 /* a boss lob: a boulder or a fireball that bursts where it lands */
@@ -151,11 +153,17 @@ function updateGolem(e,dt){
 /* Cinderwing: sleeps on the crag until you climb up. On the ground he bites and
    breathes fire; then he takes off, circles and rains fireballs, and lands again.
    Lead him off the crag and he flies home to sulk and heal. */
+/* where a dragon lives: Cinderwing on his crag, his sister in her castle on the isle.
+   x,z the middle of the ground she keeps to on foot (r across), lair where she sleeps,
+   top the height you must climb to before she wakes (null: anywhere inside), yaw her sleeping pose */
+function cragNest(){ return {x:CRAG.x,z:CRAG.z,r:CRAG.r,lair:CRAG.lair,top:CRAG.top,yaw:2.2,
+  wake:'WHO DISTURBS MY NAP?',rage:'ENOUGH!'}; }
+function dragonNest(e){ return typeof e.nest==='function'?e.nest():(e.nest||cragNest()); }
 function updateDragon(e,dt){
-  var p=G.player, D=DF(), L=CRAG.lair, top=CRAG.top;
+  var p=G.player, D=DF(), N=dragonNest(e), L=N.lair, top=N.top, nm=e.short||'Cinderwing';
   // a third of his life gone and the fire gets out: faster, angrier, more of it
   if(!e.enraged&&e.hp<e.maxHp*0.35&&e.state!=='sleep'){ e.enraged=true; sfx('roar',e.x,e.z); shake(0.8);
-    tip('Cinderwing\'s scales split with fire!'); msg('ENOUGH!','#ff8a50',e.x,e.y+6,e.z,22); }
+    tip(nm+'\'s scales split with fire!'); msg(N.rage,'#ff8a50',e.x,e.y+6,e.z,22); }
   var cdK=e.enraged?0.6:1;
   // smoke curls from his nostrils; embers drift off him when he's angry
   if(e.nose&&Math.random()<dt*(e.state==='sleep'?1.5:4)){ var nz=dragonPoint(e,e.nose);
@@ -169,8 +177,8 @@ function updateDragon(e,dt){
       e.speed=0; flyTo(0,3); e.hp=Math.min(e.maxHp,e.hp+e.maxHp*0.05*dt);
       e.snore-=dt; if(e.snore<=0&&pd<40){ e.snore=2.6; msg('z z z','#d9d2ff',e.x,e.y+3.5,e.z,15);
         burst(e.x+Math.sin(e.yaw)*4.5,e.y+1.2,e.z+Math.cos(e.yaw)*4.5,5,[0.5,0.5,0.5],{up:1.5,spread:0.8,size:0.2,life:1.4,grav:-1}); }
-      if(!p.dead&&pl<CRAG.r+3&&p.y>top-3){ e.state='wake'; e.stT=0; sfx('roar',e.x,e.z); shake(0.7); loreGet('cinderwing');
-        tip('Cinderwing wakes!'); msg('WHO DISTURBS MY NAP?','#ffb070',e.x,e.y+5,e.z,20); }
+      if(!p.dead&&pl<N.r+3&&(top===null||p.y>top-3)){ e.state='wake'; e.stT=0; sfx('roar',e.x,e.z); shake(0.7); loreGet(e.sister?'ashwing':'cinderwing');
+        tip(nm+' wakes!'); msg(N.wake,'#ffb070',e.x,e.y+5,e.z,20); }
       break;
     case 'wake':
       e.speed=0; faceTo(e,p.x,p.z,2,dt); e.headLift=Math.min(1,e.stT);
@@ -178,23 +186,23 @@ function updateDragon(e,dt){
       break;
     case 'ground':
       flyTo(0,4); e.flyK=Math.max(0,e.flyK-dt*2);
-      if(p.dead||pl>CRAG.r+30){ e.state='return'; e.stT=0; break; }
+      if(p.dead||pl>N.r+30){ e.state='return'; e.stT=0; break; }
       e.atkCd-=dt;
       if(e.wind>0){
         e.wind-=dt; e.speed=0; faceTo(e,p.x,p.z,e.windKind==='breath'?2.5:4,dt);
         if(e.wind<=0){
           if(e.windKind==='bite'){ e.atkT=0.4; e.atkDur=0.4;
-            var bx=e.x+Math.sin(e.yaw)*7.5, bz=e.z+Math.cos(e.yaw)*7.5; bossHit(bx,bz,3.6,e.dmg,'Cinderwing\'s jaws'); sfx('bite',bx,bz); shake(0.3); }
+            var bx=e.x+Math.sin(e.yaw)*7.5, bz=e.z+Math.cos(e.yaw)*7.5; bossHit(bx,bz,3.6,e.dmg,nm+'\'s jaws'); sfx('bite',bx,bz); shake(0.3); }
           else { e.breathT=e.enraged?2.2:1.5; sfx('fire',e.x,e.z); }
         }
       } else if(e.breathT>0){
         e.speed=0; faceTo(e,p.x,p.z,1.2,dt); breathe(e,dt);
-      } else if(e.stT>11||(pl>CRAG.r+1&&e.stT>2)){ e.state='takeoff'; e.stT=0; sfx('wings',e.x,e.z); }
+      } else if(e.stT>11||(pl>N.r+1&&e.stT>2)){ e.state='takeoff'; e.stT=0; sfx('wings',e.x,e.z); }
       else if(pd<10&&e.atkCd<=0){ e.atkCd=1.8*D.cd*cdK; e.wind=0.65; e.windFull=0.65; e.windKind='bite'; sfx('growl',e.x,e.z); }
       else if(pd<18&&pd>7&&e.atkCd<=0){ e.atkCd=3.2*D.cd*cdK; e.wind=0.8; e.windFull=0.8; e.windKind='breath'; sfx('growl',e.x,e.z); }
       else if(pd>7.5) stepTo(e,p.x,p.z,3.6*D.spd*(e.enraged?1.3:1),dt); else { e.speed*=0.6; faceTo(e,p.x,p.z,3,dt); }
-      // he keeps to his crag on foot
-      var cd=Math.hypot(e.x-CRAG.x,e.z-CRAG.z), lim=CRAG.r-3.5; if(cd>lim){ e.x=CRAG.x+(e.x-CRAG.x)*lim/cd; e.z=CRAG.z+(e.z-CRAG.z)*lim/cd; }
+      // on foot a dragon keeps to its own ground: his crag, her courtyard
+      var cd=Math.hypot(e.x-N.x,e.z-N.z), lim=N.r-3.5; if(cd>lim){ e.x=N.x+(e.x-N.x)*lim/cd; e.z=N.z+(e.z-N.z)*lim/cd; }
       break;
     case 'takeoff':
       e.speed=2; e.flyK=Math.min(1,e.flyK+dt*1.5); flyTo(9,1.6); faceTo(e,p.x,p.z,2,dt);
@@ -203,7 +211,7 @@ function updateDragon(e,dt){
       break;
     case 'fly':
       e.flyK=1; flyTo(9,1.2);
-      if(p.dead||pl>CRAG.r+48){ e.state='return'; e.stT=0; break; }
+      if(p.dead||pl>N.r+48){ e.state='return'; e.stT=0; break; }
       // circle above where you stand, breathing fireballs down at you
       e.orb+=dt*0.55; var R=13, cx=p.x+Math.sin(e.orb)*R, cz=p.z+Math.cos(e.orb)*R;
       var dx=cx-e.x, dz=cz-e.z, dd=Math.hypot(dx,dz)||1, sp=Math.min(11*D.spd,dd*2.5);
@@ -217,9 +225,9 @@ function updateDragon(e,dt){
           lob(e,m,ox,H(ox,oz)+0.3,oz,22,'fire',e.dmg*0.45,2.4,true); } }
       if(e.stT>9){ e.state='land'; e.stT=0;
         // come down on the crag, near you if you're up there, else by the lair
-        var on=Math.hypot(p.x-CRAG.x,p.z-CRAG.z)<CRAG.r-3;
+        var on=Math.hypot(p.x-N.x,p.z-N.z)<N.r-3;
         e.landX=on?p.x+Math.sin(e.orb)*7:L.x; e.landZ=on?p.z+Math.cos(e.orb)*7:L.z;
-        var c2=Math.hypot(e.landX-CRAG.x,e.landZ-CRAG.z), l2=CRAG.r-4; if(c2>l2){ e.landX=CRAG.x+(e.landX-CRAG.x)*l2/c2; e.landZ=CRAG.z+(e.landZ-CRAG.z)*l2/c2; } }
+        var c2=Math.hypot(e.landX-N.x,e.landZ-N.z), l2=N.r-4; if(c2>l2){ e.landX=N.x+(e.landX-N.x)*l2/c2; e.landZ=N.z+(e.landZ-N.z)*l2/c2; } }
       break;
     case 'land':
       var ld=stepTo(e,e.landX,e.landZ,10,dt); e.walkPhase-=dt*e.speed*0.9;
@@ -235,7 +243,7 @@ function updateDragon(e,dt){
       break;
     case 'settle':
       flyTo(0,2); e.flyK=Math.max(0,e.flyK-dt); e.speed=0;
-      if(e.fly<0.3){ e.state='sleep'; e.stT=0; e.fly=0; e.headLift=0; e.yaw=2.2; }
+      if(e.fly<0.3){ e.state='sleep'; e.stT=0; e.fly=0; e.headLift=0; e.yaw=N.yaw; }
       break;
   }
   e.y=H(e.x,e.z)+e.fly;
@@ -253,7 +261,7 @@ function breathe(e,dt){
       col:hot<0.5?[1.0,0.80,0.30]:[1.0,0.42,0.12],grav:-2,spin:Math.random()*6,flat:false});
   }
   var dx2=p.x-e.x, dz2=p.z-e.z, d=Math.hypot(dx2,dz2), dot=(dx2*fx+dz2*fz)/(d||1);
-  if(d<19&&dot>0.85&&Math.abs(p.y-(e.y-e.fly))<4) hurtPlayer(e.dmg*0.7,'Cinderwing\'s fire');
+  if(d<19&&dot>0.85&&Math.abs(p.y-(e.y-e.fly))<4) hurtPlayer(e.dmg*0.7,(e.short||'Cinderwing')+'\'s fire');
   for(var j=0;j<G.ents.length;j++){ var a2=G.ents[j]; if(a2.kind!=='ally') continue;
     var ax=a2.x-e.x, az=a2.z-e.z, ad=Math.hypot(ax,az); if(ad<19&&(ax*fx+az*fz)/(ad||1)>0.8) a2.hp-=e.dmg*0.4*dt*D.dmg; }
 }
@@ -267,6 +275,7 @@ function bossDown(e){
     msg('+'+c+' ◉  +2 potions','#ffe08a',e.x,e.y+4,e.z,18);
     tip('The Warden crumbles. The stones fall quiet… for now');
     burst(e.x,e.y+2,e.z,60,[0.45,0.95,1.0],{up:6,spread:6,size:0.2,life:1.5,grav:-1});
+  } else if(e.sister){ sisterDown(e); return;
   } else {
     var c2=Math.round((450+150*WILD.dragon.kills)*pay); p.coins+=c2; p.potions+=3;
     WILD.dragon.kills++; WILD.dragon.t=600; loreGet('dragonslayer');
@@ -540,7 +549,7 @@ function wildUpdate(dt){
   p.bounceCd=Math.max(0,(p.bounceCd||0)-dt);
   if(!WILD.inCave) bounceCheck(p);
   // the dragon comes back to his crag in his own time
-  if(WILD.dragon.t>0){ WILD.dragon.t-=dt; if(WILD.dragon.t<=0&&!findKind('dragon')){ spawnDragon(); } }
+  if(WILD.dragon.t>0){ WILD.dragon.t-=dt; if(WILD.dragon.t<=0&&!G.ents.some(function(d){ return d.kind==='dragon'&&!d.sister; })){ spawnDragon(); } }
   // a glint where the hoard waits
   if(WILD.inCave&&WILD.chestT<=0&&Math.random()<0.15) burst(CAVE.chest.x+(Math.random()-0.5)*1.4,H(CAVE.chest.x,CAVE.chest.z)+1.2,CAVE.chest.z+(Math.random()-0.5)*1,1,[1.0,0.9,0.5],{up:1,spread:0.3,size:0.07,life:0.6,grav:-1});
 }
@@ -548,7 +557,7 @@ function wildUpdate(dt){
 /* the boss's name and health across the top while it's awake */
 function drawBossBar(){
   var p=G.player, b=null, bd=1e9;
-  for(var i=0;i<G.ents.length;i++){ var e=G.ents[i]; if(!(e.boss||e.mini)||e.state==='sleep') continue;
+  for(var i=0;i<G.ents.length;i++){ var e=G.ents[i]; if(!(e.boss||e.mini)||e.kind==='corpse'||e.state==='sleep') continue;
     if(e.mini&&!(e.hp<e.maxHp||Math.hypot(e.x-p.x,e.z-p.z)<e.aggro*DF().aggro)) continue;
     var d=Math.hypot(e.x-p.x,e.z-p.z); if(d<60&&d<bd){ bd=d; b=e; } }
   if(!b||(DESKTOP&&G.target===b)) return;          // on a laptop the target frame already shows it

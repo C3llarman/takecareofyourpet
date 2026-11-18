@@ -256,7 +256,7 @@ function updateQItem(e,dt,pd){
     burst(e.x,e.y+0.8,e.z,22,[1.0,0.86,0.45],{up:3,spread:2,size:0.1,life:1,grav:-1});
     if(pr.have>=pr.need) tip(q.t+': done — go back to '+FOLK[q.giver].name);
     if(e.iid==='satchel') loreGet('hesper');
-    if(e.sneak){ var d=findKind('dragon');
+    if(e.sneak){ var d=null; G.ents.forEach(function(q){ if(q.kind==='dragon'&&!q.sister) d=q; });
       if(d&&d.state==='sleep'&&Math.random()<0.45){ d.state='wake'; d.stT=0; sfx('roar',d.x,d.z); shake(0.7); tip('Cinderwing stirs! Run!'); loreGet('cinderwing'); }
       else if(d&&d.state==='sleep') msg('…he snorts in his sleep…','#d9d2ff',d.x,d.y+4,d.z,15); }
     var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
