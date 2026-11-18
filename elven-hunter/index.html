@@ -4708,6 +4708,7 @@ function cragZone(x,z){
 /* world height */
 function H(x,z){
   if(z>CAVE.z0) return caveH(x,z);
+  if(x>ISLE.x0) return isleH(x,z);          // the Emberleaf Isle (isle.js)
   var h=Hraw(x,z);
   // level the tavern yard and the cottage's plot
   for(var i=0;i<FLATS.length;i++){ var F=FLATS[i], dt=Math.hypot(x-F.x,z-F.z);
@@ -6098,7 +6099,7 @@ function actorSpec(e){
   if(e.kind==='npc')                  // the innkeeper: a barbarian with a mug, in warm tones
     return {model:'barbarian', weapons:['Mug'], beard:true, tint:[1.0,0.88,0.74], key:'keeper'};
   var ck=e.kind==='corpse'?e.of:e.kind;
-  if(ck==='spider') return {model:'spider', weapons:[], tint:e.look&&e.look.body, key:(e.cave?'cave':'')+(e.mini?'mini'+e.mini:'')+(e.elite?'elite':'')+(e.big?'bigspider':'spider')};
+  if(ck==='spider') return {model:'spider', weapons:[], tint:e.look&&e.look.body, key:(e.cave?'cave':'')+(e.isle?'isle':'')+(e.mini?'mini'+e.mini:'')+(e.elite?'elite':'')+(e.big?'bigspider':'spider')};
   if(ck==='snake'||ck==='wasp') return {model:ck, weapons:[], key:ck};
   var K=ALLYKIND[e.ak]||ALLYKIND[0];
   switch(K.k){
@@ -6912,22 +6913,26 @@ addEventListener('pagehide',function(){ if(G.state==='play'||G.state==='talk'||G
 
 /* ---------- difficulty ----------
    Easy is the wood as it used to be. Normal and Hard bring more monsters, hitting
-   harder and more often, and pay a little better for the trouble. */
+   harder and more often, and pay a little better for the trouble. Expert is for
+   hunters who have beaten Hard: everything above, again, with sharper teeth —
+   mini-bosses call more help, and a fall costs a fifth of your purse. */
 var DIFFS={
   easy:  {n:'Easy',  hp:1.0, dmg:1.0, spawn:7.0, cap:46, aggro:1.0,  spd:1.0,  cd:1.0,  pop:0.8, pay:1.0, elites:0, champ:0, abCd:0.75,
           d:'The gentle wood. Fewer foes, and they forgive mistakes.'},
   normal:{n:'Normal',hp:1.35,dmg:1.55,spawn:4.0, cap:64, aggro:1.18, spd:1.08, cd:0.82, pop:1.15,pay:1.2, elites:5, champ:0.12, abCd:1,
           d:'A proper hunt. Foes come in numbers and bite hard.'},
-  hard:  {n:'Hard',  hp:1.8, dmg:2.2, spawn:2.6, cap:84, aggro:1.35, spd:1.16, cd:0.68, pop:1.5, pay:1.5, elites:10, champ:0.24, abCd:1,
-          d:'The wood wants you dead. Half again the pay, if you live.'}
+  hard:  {n:'Hard',  hp:1.8, dmg:2.2, spawn:2.6, cap:84, aggro:1.35, spd:1.16, cd:0.68, pop:1.5, pay:1.5, elites:10, champ:0.24, abCd:1, brood:1,
+          d:'The wood wants you dead. Half again the pay, if you live.'},
+  expert:{n:'Expert',hp:2.4, dmg:3.0, spawn:1.9, cap:100,aggro:1.5,  spd:1.24, cd:0.56, pop:1.85,pay:2.0, elites:16, champ:0.36, abCd:1, brood:2, fall:0.2, fallMax:150,
+          d:'For those who have beaten Hard. Foes in droves, quick and cruel; bosses call more help, and a fall costs a fifth of your purse. Double pay.'}
 };
-var DIFF_ORDER=['easy','normal','hard'];
+var DIFF_ORDER=['easy','normal','hard','expert'];
 function DF(){ return DIFFS[G.build.diff]||DIFFS.normal; }
 
 /* ---------- the wild state, saved with your hunter ---------- */
 var WILD=null;
 function wildReset(){
-  WILD={torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0,
+  WILD={inIsle:false, torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0,
     q:{}, inv:{}, recipes:{}, charms:{}, compass:0, eagle:0};
 }
 wildReset();
@@ -7279,9 +7284,10 @@ function moveParty(x,z,yaw){
   var n=0;
   for(var i=0;i<G.ents.length;i++){ var e=G.ents[i];
     if(e.kind==='ally'){ e.x=x+Math.cos(n*2.1)*2.2-Math.sin(yaw)*2; e.z=z+Math.sin(n*2.1)*2.2-Math.cos(yaw)*2; e.y=H(e.x,e.z); collide(e,0.42); n++; }
+    if(e.kind==='eagle'&&e.sub==='pet'){ e.x=x; e.z=z; e.y=H(x,z)+6; }
     if(e.kind==='shot'||e.kind==='eshot') e.life=0; }
   G.cam.yaw=yaw; G.cam.x=x-Math.sin(yaw)*6; G.cam.z=z-Math.cos(yaw)*6; G.cam.y=p.y+4; G.cam.cd=undefined;
-  setCaveEnv(inCave(x,z));
+  setCaveEnv(inCave(x,z)); setIsleEnv(inIsle(x,z));
 }
 function chestScreen(){
   menuOpen('talk'); sfx('click');
@@ -7410,7 +7416,7 @@ function bounceCheck(p){
 
 /* ---------- what you can walk up to and use ---------- */
 function wildTalk(p,list){
-  legendTalk(p,list); folkTalk(p,list);
+  legendTalk(p,list); folkTalk(p,list); isleTalk(p,list);
   var g=findKind('golem');
   if(!WILD.inCave){
     if(!g&&Math.hypot(STONES.x-p.x,STONES.z-p.z)<3.6)
@@ -7432,6 +7438,7 @@ function wildTalk(p,list){
 function wildUpdate(dt){
   var p=G.player;
   setCaveEnv(inCave(p.x,p.z));
+  isleUpdate(dt);
   torchUpdate();
   stonesUpdate(dt);
   minisTick(dt);
@@ -7550,6 +7557,14 @@ var LORE=[
   {id:'way5',sec:'Waystones',t:"The Meadow Stone",h:"In the meadow west of the glade.",
    x:"HERE THE LAST SINGER DANCED. The grass round the stone grows in a perfect ring, and the grumps will not step inside it."}
 ];
+LORE.push(
+  {id:'isle',sec:'The Emberleaf Isle',t:"The Emberleaf Isle",h:"Take the white boat from the Sunlit Shore.",
+   x:"The Sylvani called it Aelfhaven, the trading isle, where the leaves turned in autumn and then simply forgot to turn back. When the Long Weaving came the mist came with it, and for a hundred years there was nothing past the surf but grey. Now the mist has thinned, and a white boat waits at the jetty as if someone sent it. Whatever lives over there has had a century without anyone to keep it small."},
+  {id:'spire',sec:'The Emberleaf Isle',t:"The Sunken Spire",h:"The ruined tower on the isle's one hill.",
+   x:"A Sylvani watchtower, sunk to its shoulders in the hill. Its keepers lit a beacon in the brazier every night so the white boats could find their way home. The brazier is still burning. Nobody has been up there to light it."},
+  {id:'emberfang',sec:'Foes of note',t:"Emberfang, Warden of the Spire",h:"She nests in the ruins on the isle's hill.",
+   x:"A spider the colour of a banked fire, grown fat on a century of warmth from the beacon. She keeps the spire as her own and strings up anyone who climbs the hill. Bram, told about her, poured himself a very large drink."}
+);
 var LORE_BY={}; LORE.forEach(function(l){ LORE_BY[l.id]=l; });
 function loreCount(){ var n=0; for(var k in WILD.lore) if(WILD.lore[k]&&LORE_BY[k]) n++; return n; }
 function loreGet(id,quiet){
@@ -7594,7 +7609,7 @@ function waystoneScreen(w){
     (fresh?'<p class="sub">✎ Written in your journal.</p>':'')+'<button class="btn" id="leave">Walk on</button>');
   document.getElementById('leave').onclick=menuClose;
 }
-var LANDLORE={shore:'shore',eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
+var LANDLORE={landing:'isle',spire:'spire',shore:'shore',eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
 
 /* ---------- mini-bosses ----------
    Named monsters with a home they guard and a trick of their own. Beaten, they
@@ -7605,7 +7620,8 @@ var MINIS=[
   {id:'mother',kind:'wasp',   name:'The Hive Mother',            at:function(){ return {x:LM.hive.x+3,z:LM.hive.z-2}; }, scale:2.0, hp:520, dmg:11, tricks:['volley','swarm']},
   {id:'coil',  kind:'snake',  name:'Old Coil, the River Adder',  at:function(){ return dryNear(40*WS,61*WS); },  scale:2.6, hp:650, dmg:19, tricks:['lunge']},
   {id:'puffcap',kind:'shroom',name:'King Puffcap',               at:function(){ return dryNear(-56*WS,-34*WS); }, scale:2.6, hp:560, dmg:13, cap:[0.70,0.20,0.62], tricks:['spores','court']},
-  {id:'matron',kind:'spider', name:'The Pale Matron',            at:function(){ return {x:CAVE.x-4,z:CAVE.z+24}; }, scale:2.3, hp:860, dmg:17, tint:[0.82,0.82,0.86], cave:1, tricks:['brood','web']}
+  {id:'matron',kind:'spider', name:'The Pale Matron',            at:function(){ return {x:CAVE.x-4,z:CAVE.z+24}; }, scale:2.3, hp:860, dmg:17, tint:[0.82,0.82,0.86], cave:1, tricks:['brood','web']},
+  {id:'emberfang',kind:'spider',name:'Emberfang, Warden of the Spire', at:function(){ return {x:ISLE.spire.x-11,z:ISLE.spire.z+5}; }, scale:2.5, hp:1150, dmg:21, tint:[0.58,0.18,0.05], isle:1, tricks:['brood','web']}
 ];
 var MINI_BY={}; MINIS.forEach(function(m){ MINI_BY[m.id]=m; });
 function spawnMini(def){
@@ -7621,6 +7637,7 @@ function spawnMini(def){
   if(def.tint) e.look.body=def.tint.slice();
   if(def.cap){ e.look.cap=def.cap; e.crown=1; }
   if(def.cave){ e.cave=1; e.look.eye=[0.6,0.9,1.0]; }
+  if(def.isle){ e.isle=1; e.look.eye=[1.0,0.62,0.15]; e.dmg*=ISLE.bite; }
   if(def.kind==='wasp') e.hover=1.25;
   return e;
 }
@@ -7658,9 +7675,9 @@ function miniAct(e,dt,tgt,tdist){
   }
   if(T.indexOf('brood')>=0&&e.ab2<=0&&minionCount(e.mini)<6){  // her children come running
     e.ab2=8*D.cd; msg('Children!','#d9a0ff',e.x,e.y+3*e.scale,e.z,16);
-    for(var b=0;b<2+(D===DIFFS.hard?1:0);b++){ var a=Math.random()*6.28;
+    for(var b=0;b<2+(D.brood||0);b++){ var a=Math.random()*6.28;
       spawnSpider(e.x+Math.cos(a)*3,e.z+Math.sin(a)*3,false); var s=G.ents[G.ents.length-1];
-      s.scale=0.5; s.hp=s.maxHp=lvlHp(10)*D.hp; s.minion=e.mini; s.aggro=30; if(e.cave){ s.cave=1; s.look.body=[0.62,0.62,0.68]; } }
+      s.scale=0.5; s.hp=s.maxHp=lvlHp(10)*D.hp; s.minion=e.mini; s.aggro=30; if(e.cave){ s.cave=1; s.look.body=[0.62,0.62,0.68]; } if(e.isle){ s.isle=1; s.look.body=[0.42,0.17,0.07]; } }
   }
   if(T.indexOf('volley')>=0&&e.abT<=0&&tdist<24){              // a fan of five stings
     e.abT=4.2*D.cd; e.atkT=0.4; e.atkDur=0.4; sfx('sting',e.x,e.z);
@@ -7697,7 +7714,7 @@ function miniDown(e){
   tip(e.name+' is slain!'); sfx('levelup'); shake(0.4);
   burst(e.x,e.y+1.5,e.z,40,[1.0,0.86,0.42],{up:5,spread:4,size:0.16,life:1.3,grav:-1});
   loreGet(e.mini);
-  if(e.mini==='queen'||e.mini==='matron') for(var i=G.ents.length-1;i>=0;i--) if(G.ents[i].minion===e.mini) G.ents[i].aggro=8;
+  if(e.mini==='queen'||e.mini==='matron'||e.mini==='emberfang') for(var i=G.ents.length-1;i>=0;i--) if(G.ents[i].minion===e.mini) G.ents[i].aggro=8;
   setTimeout(saveGame,80);
 }
 
@@ -7737,6 +7754,339 @@ function legendTalk(p,list){
 
 </script>
 <script>
+/* ================= the Emberleaf Isle =================
+   The next land: an island across the sea from the Sunlit Shore, where the
+   leaves never stopped turning. The Sylvani traded here in their white boats;
+   one of them is moored at the jetty again, and it sails you over.
+
+   Like the Glimmer Cave, the isle lies far off the map (everything with x past
+   ISLE.x0): sailing carries you and your company there, and the sky, fog and
+   light change over. It is a harder hunt than the wood: everything that lives
+   there is tougher, hits harder and pays better.
+
+   Loaded after legends.js; nothing here runs until the game calls it. */
+
+var ISLE={x:900,z:0,x0:600,R:110,
+  tough:1.6,          // foe health on the isle, on top of the difficulty
+  bite:1.35,          // foe damage on the isle
+  pay:1.6,            // coins from isle kills
+  level:12,           // the level the isle is meant for
+  flats:[]};
+ISLE.land={x:ISLE.x-ISLE.R*0.66,z:ISLE.z+4};        // the landing, on the west shore, facing home
+ISLE.spire={x:ISLE.x+20,z:ISLE.z-16};               // the Sunken Spire, on the island's one real hill
+ISLE.flats.push({x:ISLE.land.x,z:ISLE.land.z,r:10,h:0.9},{x:ISLE.spire.x,z:ISLE.spire.z,r:11,h:null});
+var ISLE_FOG=[0.55,0.47,0.40], ISLE_TINT=[1.18,0.86,0.74];
+
+function inIsle(x,z){ return x>ISLE.x0; }
+function offMap(x,z){ return inCave(x,z)||inIsle(x,z); }
+
+/* ---------- the ground ---------- */
+function isleRaw(x,z){
+  var lx=x-ISLE.x, lz=z-ISLE.z, d=Math.hypot(lx,lz)/ISLE.R+(vnoise(x*0.025+11,z*0.025-7)-0.5)*0.16;
+  var h=(fbm(x*0.7+300,z*0.7,4,0.02)*2-1)*8+(fbm(x+40,z+90,3,0.05)*2-1)*2.2+4.0;
+  h+=9*Math.exp(-Math.pow(Math.hypot(x-ISLE.spire.x,z-ISLE.spire.z)/34,2));    // the spire's hill
+  var beach=smooth01((d-0.70)/0.12), sea=smooth01((d-0.86)/0.08);
+  h=h*(1-beach)+0.4*beach;                       // a ring of sand
+  return h*(1-sea)+(-7)*sea;                     // and the sea floor drops away
+}
+function isleH(x,z){
+  var h=isleRaw(x,z);
+  for(var i=0;i<ISLE.flats.length;i++){ var F=ISLE.flats[i], dt=Math.hypot(x-F.x,z-F.z);
+    if(dt>F.r*2.2) continue;
+    if(F.h===null) F.h=isleRaw(F.x,F.z);
+    var w=Math.exp(-Math.pow(dt/F.r,4)); h=h*(1-w)+F.h*w; }
+  return h;
+}
+/* the trodden path from the landing up to the spire */
+function islePathD(x,z){ return segDist(x,z,ISLE.land.x+6,ISLE.land.z,ISLE.spire.x-9,ISLE.spire.z+3); }
+function isleClear(x,z,pad){
+  pad=pad||0;
+  return Math.hypot(x-ISLE.land.x,z-ISLE.land.z)<15+pad||Math.hypot(x-ISLE.spire.x,z-ISLE.spire.z)<14+pad||islePathD(x,z)<3+pad;
+}
+var C_RUST=[0.50,0.29,0.12], C_AMBER=[0.62,0.45,0.17], C_OLIVE=[0.42,0.38,0.17];
+function isleCol(x,z,y){
+  var sl=Hn(x,z), g=fbm(x+77,z-13,2,0.05);
+  var col=mix3(C_RUST,C_AMBER,g);
+  col=mix3(col,C_OLIVE,smooth01((fbm(x-50,z+20,2,0.018)-0.52)/0.12)*0.8);       // patches of late green
+  col=mix3(col,C_PATH,(1-smooth01((islePathD(x,z)-0.9)/1.3))*(0.85+g*0.3));
+  col=mix3(col,C_PATH,(1-smooth01((Math.hypot(x-ISLE.land.x,z-ISLE.land.z)-5)/3))*0.8);
+  col=mix3(col,[0.52,0.50,0.46],(1-smooth01((Math.hypot(x-ISLE.spire.x,z-ISLE.spire.z)-8)/2))*0.7);   // old paving
+  col=mix3(col,C_DIRT,smooth01((sl-0.26)/0.16));
+  col=mix3(col,C_ROCK,smooth01((sl-0.48)/0.14));
+  var d=Math.hypot(x-ISLE.x,z-ISLE.z)/ISLE.R;
+  col=mix3(col,[0.76,0.66,0.48],smooth01((d-0.66)/0.08)*smooth01((2.2-y)/1.2));   // pale sand
+  return mix3(col,C_SAND,smooth01((WATER+0.9-y)/0.6));
+}
+
+/* ---------- building it ---------- */
+var ISLE3=null;
+function isleMesh(){
+  var m=new MB(), S=3, e=0.8, E=Math.ceil(ISLE.R*1.06/S)*S, X0=ISLE.x-E, Z0=ISLE.z-E, N=Math.round(E*2/S);
+  var P=[], NN=[], CC=[];
+  for(var i=0;i<=N;i++) for(var j=0;j<=N;j++){
+    var x=X0+i*S, z=Z0+j*S, y=H(x,z);
+    P.push([x,y,z]); NN.push(nrm([H(x-e,z)-H(x+e,z),2*e,H(x,z-e)-H(x,z+e)]));
+    var c=isleCol(x,z,y), t=(RNG()-0.5)*0.03;
+    CC.push([Math.max(0,c[0]+t),Math.max(0,c[1]+t),Math.max(0,c[2]+t)]);
+  }
+  function id(a,b){ return a*(N+1)+b; }
+  for(var a=0;a<N;a++) for(var b=0;b<N;b++){
+    var A=id(a,b), B=id(a+1,b), C=id(a+1,b+1), D=id(a,b+1);
+    if(P[A][1]<-6.5&&P[B][1]<-6.5&&P[C][1]<-6.5&&P[D][1]<-6.5) continue;      // open sea floor: hidden under the water anyway
+    m.triV(P[A],P[C],P[B],NN[A],NN[C],NN[B],CC[A],CC[C],CC[B]);
+    m.triV(P[A],P[D],P[C],NN[A],NN[D],NN[C],CC[A],CC[D],CC[C]);
+  }
+  var WE=260, n=26, s2=WE*2/n;                    // the sea, out to the horizon
+  for(var i2=0;i2<n;i2++) for(var j2=0;j2<n;j2++){ var wx=ISLE.x-WE+i2*s2, wz=ISLE.z-WE+j2*s2;
+    m.quad([wx,WATER,wz],[wx,WATER,wz+s2],[wx+s2,WATER,wz+s2],[wx+s2,WATER,wz],C_WATER,1); }
+  return m;
+}
+/* a white Sylvani boat, moored: a long hull, a mast and a furled sail */
+function buildBoat(m,x,z,ry){
+  var c=Math.cos(ry), s=Math.sin(ry);
+  addMesh(m,blobMesh([0.88,0.86,0.80],0,2),x,WATER+0.05,z,ry,1.25,0.75,3.6);
+  addMesh(m,blobMesh([0.52,0.40,0.26],0,1),x,WATER+0.42,z,ry,1.0,0.12,3.0);              // the deck
+  addMesh(m,blobMesh([0.80,0.62,0.22],0,1),x+s*3.3,WATER+0.75,z+c*3.3,ry,0.18,0.45,0.5);  // a gilded prow
+  addMesh(m,boxMesh([0.40,0.30,0.20]),x,WATER+0.4,z,ry,0.16,6.2,0.16);                   // mast
+  addMesh(m,boxMesh([0.92,0.90,0.84]),x+s*0.5,WATER+2.2,z+c*0.5,ry,0.35,3.4,0.35);        // the furled sail
+  addMesh(m,boxMesh([0.40,0.30,0.20]),x+s*0.5,WATER+2.0,z+c*0.5,ry,0.1,0.1,2.6);          // boom
+}
+/* a jetty from (x,z) running along angle a for len units, planks at WATER+0.9 */
+function buildJetty(m,x,z,a,len){
+  var ux=Math.cos(a), uz=Math.sin(a), tx=-uz, tz=ux, plank=[0.55,0.42,0.28], post=[0.32,0.24,0.16], n=Math.round(len/1.6);
+  for(var i=0;i<n;i++){ var px=x+ux*i*1.6, pz=z+uz*i*1.6;
+    addMesh(m,boxMesh(plank),px,WATER+0.9,pz,a+Math.PI/2,2.2,0.15,1.5);
+    if(i%2===0) for(var sd=-1;sd<=1;sd+=2) addMesh(m,boxMesh(post),px+tx*sd,WATER-2.5,pz+tz*sd,0,0.22,3.6,0.22); }
+}
+/* the home end: a white boat tied up beside Bram's cousin's jetty */
+function buildHomeBoat(m){
+  if(!SHORE.at) return;
+  var a=-0.05, ux=Math.cos(a), uz=Math.sin(a), d=WHALF*0.6;
+  while(d<WHALF*0.95&&H(ux*d,uz*d)>WATER+0.4) d+=0.5;
+  var sx=ux*d, sz=uz*d;
+  SHORE.pier={x:sx-ux*1.5,z:sz-uz*1.5};
+  SHORE.boat={x:sx+ux*3.5-uz*2.6,z:sz+uz*3.5+ux*2.6};
+  buildBoat(m,SHORE.boat.x,SHORE.boat.z,Math.PI/2+a);
+  addMesh(m,boxMesh([0.32,0.24,0.16]),SHORE.pier.x-uz*1.5,H(SHORE.pier.x,SHORE.pier.z)-0.1,SHORE.pier.z+ux*1.5,0,0.16,1.6,0.16);   // a mooring post
+}
+/* the landing: a jetty out into the sea, the boat, a lantern post, crates, a signpost */
+function buildLanding(m){
+  var L=ISLE.land, d=0;
+  while(d<40&&H(L.x-d,L.z)>WATER+0.4) d+=0.5;                    // walk west to the water's edge
+  var ex=L.x-d;
+  ISLE.pier={x:ex+1.5,z:L.z}; ISLE.boat={x:ex-3.5,z:L.z-2.6};
+  buildJetty(m,ex+3,L.z,Math.PI,12);
+  buildBoat(m,ISLE.boat.x,ISLE.boat.z,-Math.PI/2);
+  var y=H(L.x,L.z), wood=[0.40,0.28,0.16];
+  addMesh(m,boxMesh(wood),L.x-3,y-0.1,L.z+4.5,0,0.2,3.2,0.2);                              // lantern post
+  addMesh(m,boxMesh(wood),L.x-2.6,y+3.0,L.z+4.5,0,0.9,0.1,0.1);
+  addMesh(m,boxMesh([1.0,0.80,0.40]),L.x-2.2,y+2.4,L.z+4.5,0,0.35,0.5,0.35);
+  collCircle(L.x-3,L.z+4.5,0.3);
+  [[2.5,-4.5,0.3],[3.4,-3.6,0.9],[2.8,-5.6,0.6]].forEach(function(c,i){
+    addMesh(m,boxMesh([0.52,0.40,0.24]),L.x+c[0],y-0.05,L.z+c[1],c[2],0.9-i*0.1,0.9-i*0.1,0.9-i*0.1); if(i===0) collCircle(L.x+c[0],L.z+c[1],0.6); });
+  addMesh(m,boxMesh(wood),L.x+5.5,y-0.1,L.z+2.2,0,0.18,2.4,0.18); collCircle(L.x+5.5,L.z+2.2,0.25);   // signpost to the spire
+  addMesh(m,boxMesh([0.60,0.46,0.30]),L.x+5.9,y+1.8,L.z+1.9,-0.35,1.1,0.32,0.08);
+  LANDMARKS.push({x:L.x,z:L.z,r:10,name:'Emberleaf Landing',kind:'landing',isle:1});
+}
+/* the Sunken Spire: the stump of a Sylvani watchtower in a ring of broken pillars */
+function buildSpire(m){
+  var S=ISLE.spire, y=H(S.x,S.z), stone=[0.66,0.62,0.56], dark=[0.50,0.47,0.43], ivy=[0.62,0.20,0.10];
+  addMesh(m,coneMesh(stone,14,0.5,0.47),S.x,y-0.4,S.z,0,7.4,6.5,7.4);
+  addMesh(m,coneMesh(dark,14,0.5,0.46,true),S.x+0.3,y+6.0,S.z-0.2,0.3,6.6,3.0,6.6);
+  for(var k=0;k<9;k++){ var ka=k/9*6.283, kh=0.8+((k*37)%10)/10*3.2;                      // the broken crown
+    addMesh(m,boxMesh(stone,0.8),S.x+0.3+Math.cos(ka)*2.9,y+8.8,S.z-0.2+Math.sin(ka)*2.9,-ka,1.3,kh,0.7); }
+  for(var v=0;v<14;v++){ var va=v*0.9+0.4, vh=0.5+((v*53)%10)/10*5.5;                      // red ivy up the walls
+    addMesh(m,boxMesh(ivy),S.x+Math.cos(va)*3.62,y+vh,S.z+Math.sin(va)*3.62,-va,0.9,1.2+((v*7)%3)*0.5,0.12); }
+  addMesh(m,boxMesh([0.20,0.16,0.12]),S.x+Math.cos(2.6)*3.4,y-0.05,S.z+Math.sin(2.6)*3.4,-2.6+Math.PI/2,1.6,2.6,0.6);   // a dark doorway
+  collCircle(S.x,S.z,3.7);
+  for(var i=0;i<10;i++){ var a=i/10*6.283+0.15, px=S.x+Math.cos(a)*9.5, pz=S.z+Math.sin(a)*9.5, ph=i%3===0?5.2:(1.2+((i*29)%10)/10*2.6);
+    if(i===7) continue;                                                                   // the way in
+    addMesh(m,boxMesh(stone,0.85),px,H(px,pz)-0.3,pz,a,1.2,ph,1.2); collCircle(px,pz,0.7);
+    if(i%3===0) addMesh(m,boxMesh(dark),px,H(px,pz)+ph-0.3,pz,a,1.6,0.35,1.6); }
+  for(var f=0;f<3;f++){ var fa=f*2.1+1.0, fx=S.x+Math.cos(fa)*13, fz=S.z+Math.sin(fa)*13;    // fallen pillars
+    addMesh(m,boxMesh(dark),fx,H(fx,fz)-0.25,fz,fa+1.2,1.0,0.95,4.2); collBox(fx,fz,0.5,2.1,fa+1.2); }
+  for(var r=0;r<12;r++){ var ra=r*0.53, rd=4.6+(r%4)*1.1, rx=S.x+Math.cos(ra)*rd, rz=S.z+Math.sin(ra)*rd;
+    addMesh(m,ROCK,rx,H(rx,rz)-0.1,rz,r,0.35+(r%3)*0.15,0.25+(r%2)*0.15,0.4); }
+  var B={x:S.x+Math.cos(2.3)*6.4,z:S.z+Math.sin(2.3)*6.4}, by=H(B.x,B.z);                   // an ember brazier that never goes out
+  addMesh(m,coneMesh([0.24,0.22,0.22],8,0.3,0.55),B.x,by,B.z,0,1.3,1.1,1.3);
+  addMesh(m,blobMesh([1.0,0.52,0.14],0.1,1),B.x,by+1.15,B.z,0,0.55,0.35,0.55);
+  collCircle(B.x,B.z,0.6); ISLE.brazier=B;
+  LANDMARKS.push({x:S.x,z:S.z,r:12,name:'The Sunken Spire',kind:'spire',isle:1});
+}
+/* autumn props: Quaternius trees with their green swapped for rust, red and gold */
+var LEAF=[[0.80,0.38,0.10],[0.70,0.17,0.08],[0.85,0.63,0.16],[0.76,0.50,0.12]];
+function isleProp(name,x,y,z,ry,h,wk,leaf){
+  var C=chunkAt(x,z), P=NAT[name];
+  function put(ch,Q){ var b=ch.nv; addPropTo(ch,Q,x,y,z,ry,h,wk,null); if(!leaf) return;
+    for(var v=b;v<ch.nv;v++){ var r=ch.c[v*3], g=ch.c[v*3+1], bl=ch.c[v*3+2];
+      if(g>r*1.12&&g>bl*1.05){ var k=(r+g+bl)/0.9; ch.c[v*3]=leaf[0]*k; ch.c[v*3+1]=leaf[1]*k; ch.c[v*3+2]=leaf[2]*k; } } }
+  put(C.hi,P); put(C.lo,P.lo);
+  PROPTRIS+=P.i.length/3; PROPN[name]=(PROPN[name]||0)+1;
+}
+function scatterIsle(){
+  if(!NAT) return;
+  var r=mulberry(2024), TG={}, TMIN=4.4;
+  function room(x,z){ var ix=Math.floor(x/6), iz=Math.floor(z/6);
+    for(var i=ix-1;i<=ix+1;i++) for(var j=iz-1;j<=iz+1;j++){ var L=TG[i+','+j]; if(!L) continue;
+      for(var n=0;n<L.length;n++) if(Math.hypot(L[n][0]-x,L[n][1]-z)<TMIN) return false; }
+    return true; }
+  function mark(x,z){ var k=Math.floor(x/6)+','+Math.floor(z/6); (TG[k]||(TG[k]=[])).push([x,z]); }
+  for(var t=0;t<3400;t++){
+    var x=ISLE.x+(r()*2-1)*ISLE.R, z=ISLE.z+(r()*2-1)*ISLE.R, y=H(x,z), k=r();
+    if(y<WATER+0.9||Hn(x,z)>0.7) continue;
+    if(isleClear(x,z,k<0.5?1.5:0)) continue;
+    var sandy=Math.hypot(x-ISLE.x,z-ISLE.z)/ISLE.R>0.7;
+    if(k<0.5){                                                     // trees, in open stands
+      if(sandy||!room(x,z)||(fbm(x+800,z,2,0.03)>0.58&&r()<0.85)) continue;
+      mark(x,z);
+      var kind=r(), hh=5.4+r()*3.4, leaf=LEAF[(r()*LEAF.length)|0];
+      if(kind<0.12){ collCircle(x,z,0.32); isleProp(pick(r,['pine1','pine2','pine3']),x,y-0.1,z,r()*6.28,hh*1.15,1,[0.75,0.85,0.7]); }
+      else if(kind<0.30){ collCircle(x,z,0.32); isleProp('dead1',x,y-0.1,z,r()*6.28,hh*0.9,1,null); }
+      else if(kind<0.62){ collCircle(x,z,0.4); isleProp(pick(r,['oak1','oak2','oak3']),x,y-0.1,z,r()*6.28,hh,0.9+r()*0.25,leaf); }
+      else { collCircle(x,z,0.32); isleProp(pick(r,['birch1','birch2']),x,y-0.1,z,r()*6.28,hh,0.9+r()*0.2,LEAF[2]); }
+    } else if(k<0.64){                                             // rocks
+      var s=0.8+r()*2.4; if(s>1.3) collCircle(x,z,0.4*s,0.55*s);
+      var rn=pick(r,['rock1','rock2','rock3','rock4']); isleProp(rn,x,y-0.12*s,z,r()*6.28,s*1.25/NAT[rn].w*(0.8+r()*0.5),1,[0.50,0.40,0.20]);   // the moss has gone dry
+    } else if(k<0.70){                                             // stumps and logs
+      if(sandy) continue; collCircle(x,z,0.5,0.9);
+      isleProp(r()<0.5?'stump':'log',x,y-0.06,z,r()*6.28,0.9+r()*0.4,1,null);
+    } else if(!sandy){                                             // undergrowth, gone red
+      var u=r(), un=u<0.35?pick(r,['fern1','fern2']):(u<0.8?pick(r,['bush1','bush2']):'berry');
+      isleProp(un,x,y-0.05,z,r()*6.28,0.8+r()*0.6,1,LEAF[(r()*LEAF.length)|0]);
+    }
+  }
+}
+function buildIsle(homeMesh){
+  buildHomeBoat(homeMesh);
+  var m=isleMesh();
+  buildLanding(m); buildSpire(m); scatterIsle();
+  ISLE3=new THREE.Mesh(toGeom(m),WORLDMAT); ISLE3.frustumCulled=false;
+  ISLE3.castShadow=true; ISLE3.receiveShadow=true; ISLE3.visible=false;
+  SCENE.add(ISLE3);
+  return m.count()/3;
+}
+
+/* ---------- the light out there: a long amber afternoon ---------- */
+var ISLEENV=null;
+function setIsleEnv(on){
+  if(ISLEENV===on) return; ISLEENV=on; WILD.inIsle=on;
+  if(WILD.inCave) return;                        // the cave sets its own light
+  var c=on?ISLE_FOG:SKYCOL;
+  R3.setClearColor(new THREE.Color(c[0],c[1],c[2]),1);
+  SCENE.fog.color.setRGB(c[0],c[1],c[2]); SCENE.fog.near=on?30:38; SCENE.fog.far=on?118:133;
+  WORLD.visible=!on; if(HOUSE3) HOUSE3.visible=!on; if(ISLE3) ISLE3.visible=on;
+  if(SKY) SKY.material.color.setRGB(on?ISLE_TINT[0]:1,on?ISLE_TINT[1]:1,on?ISLE_TINT[2]:1);
+  if(SUN) SUN.color.setRGB(1.0,on?0.80:0.95,on?0.58:0.80);
+  if(HEMI) HEMI.color.setRGB(on?0.50:0.42,on?0.44:0.48,on?0.36:0.40);
+}
+
+/* ---------- getting there ---------- */
+function sailScreen(out){
+  menuOpen('talk'); sfx('click');
+  var p=G.player, html;
+  if(out){
+    var low=p.level<ISLE.level;
+    html='<h1>The White Boat</h1><p class="sub">Tied up at the end of the jetty</p>'+
+      '<p class="say">One of the old Sylvani boats, pale as a shell, with a gilded prow. It wasn\'t here last week. Out past the surf the mist has thinned, and for the first time anyone can remember there is land on the horizon: a low island, burning red and gold.</p>'+
+      '<div class="stat"><span>Across the water</span><b>the Emberleaf Isle</b></div>'+
+      '<div class="stat"><span>A hunt for</span><b>level '+ISLE.level+' or so — you are '+p.level+'</b></div>'+
+      '<p class="sub">Everything over there is tougher than in the wood, and pays better for it.'+(low?' You may want a few more levels first.':'')+'</p>'+
+      '<div class="opts"><button class="opt gold" data-o="go"><b>Cast off</b><small>Sail east to Emberleaf Landing'+(G.ents.some(function(e){ return e.kind==='ally'; })?', with your company':'')+'.</small></button></div>'+
+      '<button class="btn" id="leave">Not today</button>';
+  } else {
+    html='<h1>The White Boat</h1><p class="sub">Emberleaf Landing</p>'+
+      '<p class="say">The boat rocks at the jetty, patient. West, past the haze, a dark line of trees: the Elderwood.</p>'+
+      '<div class="opts"><button class="opt gold" data-o="go"><b>Sail home</b><small>Back to the Sunlit Shore.</small></button></div>'+
+      '<button class="btn" id="leave">Stay a while</button>';
+  }
+  show(html);
+  ui.querySelector('.opt[data-o="go"]').onclick=function(){ menuClose(); G.talk=null; sail(out); };
+  document.getElementById('leave').onclick=menuClose;
+}
+function sail(out){
+  var p=G.player;
+  if(out){
+    var L=ISLE.land; moveParty(L.x+2,L.z,Math.PI/2);
+    sfx('discover'); tip('The boat noses into the jetty. The air smells of woodsmoke and apples.');
+    if(!G.found['The Emberleaf Isle']){ G.found['The Emberleaf Isle']=1; loreGet('isle'); gainXp(120,p.x,p.y+3,p.z,'+120 XP — a new land'); }
+  } else {
+    var A=SHORE.pier||SHORE.at; moveParty(A.x-5,A.z,-Math.PI/2);
+    sfx('discover'); tip('Home again. The wood smells green after the isle.');
+  }
+  setTimeout(saveGame,60);
+}
+function isleTalk(p,list){
+  if(WILD.inCave) return;
+  if(!WILD.inIsle){
+    var Q=SHORE.pier; if(Q&&Math.hypot(Q.x-p.x,Q.z-p.z)<4.5)
+      list.push({x:SHORE.boat.x,y:WATER+1,z:SHORE.boat.z,lift:2.6,label:'the white boat',tap:'SAIL',open:function(){ sailScreen(true); }});
+  } else {
+    var R=ISLE.pier; if(R&&Math.hypot(R.x-p.x,R.z-p.z)<4.5)
+      list.push({x:ISLE.boat.x,y:WATER+1,z:ISLE.boat.z,lift:2.6,label:'sail home',tap:'SAIL',open:function(){ sailScreen(false); }});
+  }
+}
+/* the landing is safe ground, like the tavern yard: foes break off and you mend */
+function isleSafe(p){ return WILD.inIsle&&Math.hypot(p.x-ISLE.land.x,p.z-ISLE.land.z)<12; }
+function isleUpdate(dt){
+  var p=G.player;
+  setIsleEnv(inIsle(p.x,p.z));
+  if(!WILD.inIsle) return;
+  if(isleSafe(p)&&!p.dead&&p.hp<p.maxHp) p.hp=Math.min(p.maxHp,p.hp+p.maxHp*0.06*dt);
+  var B=ISLE.brazier;                            // the brazier's embers
+  if(B&&Math.random()<0.5&&Math.hypot(B.x-p.x,B.z-p.z)<60)
+    burst(B.x+(Math.random()-0.5)*0.6,H(B.x,B.z)+1.4,B.z+(Math.random()-0.5)*0.6,1,Math.random()<0.5?[1.0,0.62,0.18]:[1.0,0.38,0.10],{up:2,spread:0.3,size:0.09,life:0.8,grav:-2});
+}
+
+/* ---------- who lives there ----------
+   The wood's monsters, gone autumn-coloured and mean: ember spiders, ash
+   snakes, amber wasps and rust-capped grumps. */
+function isleFoe(x,z){
+  var r=Math.random(), e;
+  if(r<0.45){ spawnSpider(x,z,Math.random()<0.14); e=G.ents[G.ents.length-1];
+    e.look.body=e.big?[0.50,0.14,0.05]:[0.42,0.17,0.07]; e.look.eye=[1.0,0.62,0.15]; }
+  else if(r<0.68){ spawnSnake(x,z); e=G.ents[G.ents.length-1]; e.look.body=[0.32,0.27,0.24]; e.look.belly=[0.75,0.45,0.18]; }
+  else if(r<0.84){ spawnWasp(x,z); e=G.ents[G.ents.length-1]; e.look.stripe=[0.95,0.45,0.10]; }
+  else { spawnShroom(x,z); e=G.ents[G.ents.length-1]; e.look.cap=[0.78,0.36,0.10]; }
+  isleToughen(e);
+  return e;
+}
+function isleToughen(e){ e.isle=1; e.hp*=ISLE.tough; e.maxHp*=ISLE.tough; e.dmg*=ISLE.bite; e.aggro*=1.1; }
+function isleSpawnSpot(far){
+  var p=G.player;
+  for(var k=0;k<16;k++){ var a=Math.random()*6.283, d=Math.sqrt(Math.random())*ISLE.R*0.7, x=ISLE.x+Math.cos(a)*d, z=ISLE.z+Math.sin(a)*d;
+    if(H(x,z)<WATER+0.8||solidAt(x,z,0.5)) continue;
+    if(Math.hypot(x-ISLE.land.x,z-ISLE.land.z)<26) continue;
+    if(far&&Math.hypot(x-p.x,z-p.z)<far) continue;
+    return {x:x,z:z}; }
+  return null;
+}
+function isleSpawnPack(far){
+  var s=isleSpawnSpot(far); if(!s) return;
+  var n=2+((Math.random()*(DF()===DIFFS.easy?1.6:3))|0);
+  for(var i=0;i<n;i++){ var e=isleFoe(s.x+(Math.random()-0.5)*5,s.z+(Math.random()-0.5)*5);
+    if(i===0&&Math.random()<DF().champ*1.5) makeChampion(e); }
+}
+function populateIsle(){
+  var D=DF(), packs=Math.round(11*D.pop);
+  for(var i=0;i<packs;i++) isleSpawnPack(0);
+  var r=mulberry(616);
+  for(var c=0;c<6;c++){ var a=r()*6.283, d=16+r()*14, x=ISLE.spire.x+Math.cos(a)*d, z=ISLE.spire.z+Math.sin(a)*d;   // kin, strung up round the spire
+    if(H(x,z)>WATER+0.6&&!solidAt(x,z,0.5)) spawnCocoon(x,z); }
+  var LC=[[0.98,0.55,0.15],[0.95,0.80,0.25],[0.85,0.30,0.20],[0.98,0.92,0.80]];
+  for(var b=0;b<26;b++){ var q=isleSpawnSpot(0); if(!q) continue;                       // butterflies in the colours of the leaves
+    G.ents.push({kind:'critter',sub:'fly',x:q.x,y:H(q.x,q.z),z:q.z,home:{x:q.x,z:q.z},yaw:0,seed:r()*9,t:r()*20,col:LC[b%4],speed:0,scale:1}); }
+  var L=ISLE.land;
+  for(var g=0;g<4;g++) G.ents.push({kind:'critter',sub:'gull',x:L.x,y:10,z:L.z,home:{x:L.x-14-r()*10,z:L.z+(r()-0.5)*30},
+    yaw:0,seed:r()*9,t:r()*20,rr:6+r()*8,spd:(r()<0.5?-1:1)*(0.25+r()*0.2),scale:0.42,speed:0});
+}
+/* where foes stand on the isle (for the respawn pressure in game.js) */
+function isleRespawn(){
+  var n=0; for(var i=0;i<G.ents.length;i++){ var e=G.ents[i]; if(e.isle&&FOE[e.kind]) n++; }
+  if(n<Math.round(30*DF().pop)) isleSpawnPack(40);
+}
+
+</script>
+<script>
 /* ================= folk: quest givers, gathering, crafting and the eagles =================
    Wren the hedge-witch (gathering and her mentor's lost satchel), Tobin the tinker
    (lost parts, a delivery, a repair), and Ærtheldor the Great Eagle in his eyrie in
@@ -7764,9 +8114,9 @@ function addRes(k,n,x,y,z){
 }
 /* a dry spot near (x,z), out of the water and out of anything solid */
 function dryNear(x,z,minH){
-  if(!inBounds(x,z,3)&&!inCave(x,z)){ var k=(WHALF*PLAY_R-3)/Math.hypot(x,z); x*=k; z*=k; }   // never past the edge of the map
+  if(!inBounds(x,z,3)&&!offMap(x,z)){ var k=(WHALF*PLAY_R-3)/Math.hypot(x,z); x*=k; z*=k; }   // never past the edge of the map
   for(var r=0;r<14;r+=1.5) for(var a=0;a<6.28;a+=0.7){ var px=x+Math.cos(a)*r, pz=z+Math.sin(a)*r;
-    if(H(px,pz)>(minH===undefined?WATER+0.6:minH)&&!solidAt(px,pz,0.5)&&(inCave(px,pz)||(inBounds(px,pz,2)&&Hn(px,pz)<0.6))) return {x:px,z:pz}; }
+    if(H(px,pz)>(minH===undefined?WATER+0.6:minH)&&!solidAt(px,pz,0.5)&&(offMap(px,pz)||(inBounds(px,pz,2)&&Hn(px,pz)<0.6))) return {x:px,z:pz}; }
   return {x:x,z:z};
 }
 function spawnNodes(){
@@ -8826,7 +9176,7 @@ function zoneName(){
   var p=G.player; if(WILD.inCave) return 'The Glimmer Cave';
   var best=null,bd=1e9;
   for(var i=0;i<LANDMARKS.length;i++){ var l=LANDMARKS[i], d=Math.hypot(p.x-l.x,p.z-l.z); if(d<l.r+16&&d<bd&&G.found[l.name]){ bd=d; best=l.name; } }
-  return best||'The Elderwood';
+  return best||(WILD.inIsle?'The Emberleaf Isle':'The Elderwood');
 }
 function qPlain(q){
   var g=q.goal, pr=qProgress(q);
@@ -8912,7 +9262,7 @@ function cineMarkSeen(){ try{ localStorage.setItem('eh3_intro','1'); }catch(e){}
 function cineWorld(){
   G.build.race='elf'; G.build.cls='rogue';
   gearInit(null);
-  wildLoad(null); CAVEENV=null; WILD.inCave=false; setCaveEnv(false);
+  wildLoad(null); CAVEENV=null; ISLEENV=null; WILD.inCave=false; setCaveEnv(false); setIsleEnv(false);
   G.player=null; recalc();
   G.player=newPlayer(); G.msgs.length=0; G.bounty=null; FX.length=0; G.hitStop=0; G.shakeA=0; G.tipT=0;
   homeReset();
@@ -9272,6 +9622,7 @@ function buildWorld(){
   buildWaystones(m);
   buildFolkSites(m);
   buildShore(m);
+  var isleTris=buildIsle(m);          // the next land, across the sea (isle.js)
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
   WORLD.castShadow=true; WORLD.receiveShadow=true;
   SCENE.add(WORLD);
@@ -9280,7 +9631,7 @@ function buildWorld(){
   for(var i=0;i<PROPS3.length;i++){ SCENE.add(PROPS3[i].hi); SCENE.add(PROPS3[i].lo); }
   initCropParts(); buildCottage();
   buildCave();
-  WORLDTRIS=m.count()/3+PROPTRIS;
+  WORLDTRIS=m.count()/3+PROPTRIS+isleTris;
 }
 var WORLDTRIS=0, PROPS3=[];
 /* level of detail per chunk: full models near the camera, stand-ins further out,
@@ -9322,7 +9673,7 @@ function populate(){
   for(var f=0;f<Math.round(10*WS);f++){ var q3=randIn(r), fx=q3.x, fz=q3.z;
     if(H(fx,fz)<WATER+0.4) continue; spawnFairy(fx,fz); }
   spawnKeeper();
-  spawnCritters(); spawnGnomes(); populateCave();
+  spawnCritters(); spawnGnomes(); populateCave(); populateIsle();
   if(WILD.dragon.t<=0) spawnDragon();
   spawnMinis(); seedChampions();
   spawnFolk(); spawnNodes(); spawnQuestItems();
@@ -9550,7 +9901,7 @@ function hurtEnemy(e,d,quiet){
   e.hp-=d; e.hurtT=0.18;
   if(!quiet) msg(''+Math.round(d),'#fff1d0',e.x+(Math.random()-0.5)*0.6,e.y+2.0*(e.scale||1),e.z,13);
   if(e.hp<=0){
-    G.killed++; if(!e.boss) gainXp(50,e.x,e.y+2,e.z);
+    G.killed++; if(!e.boss) gainXp(e.isle?75:50,e.x,e.y+2,e.z);
     bountyTick(e.kind==='spider'?(e.big?['spider','giant']:['spider']):[e.kind]);
     stonesKill();
     if(e.boss) bossDown(e);
@@ -9561,12 +9912,12 @@ function hurtEnemy(e,d,quiet){
     // monsters burst in a puff of ichor and dust, no blood
     burst(e.x,e.y+(e.kind==='wasp'?aimH(e):0.7*(e.scale||1)),e.z,16,ICHOR[e.kind],{up:4,spread:4,size:0.16*(e.scale||1),life:0.9});
     // every kill pays a little; giants pay well
-    var cn=Math.round(((e.big?16:3)+((Math.random()*(3+G.player.level/3))|0))*DF().pay);
+    var cn=Math.round(((e.big?16:3)+((Math.random()*(3+G.player.level/3))|0))*DF().pay*(e.isle?ISLE.pay:1));
     G.player.coins+=cn; msg('+'+cn+' ◉','#ffe08a',e.x+0.6,e.y+1.6,e.z,13); sfx('coin'); logLine('+'+cn+' coins','#ffe08a');
     if(Math.random()<0.16){ G.player.potions++; msg('+potion','#ff9d9d',e.x,e.y+2,e.z); sfx('pickup'); }
     var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
     // leave a body that plays its death and sinks away
-    G.ents.push({kind:'corpse',of:e.kind,hover:e.hover,big:e.big,boss:e.boss,cave:e.cave,mini:e.mini,elite:e.elite,crown:e.crown,x:e.x,y:e.boss?H(e.x,e.z):e.y,z:e.z,yaw:e.yaw,scale:e.scale,
+    G.ents.push({kind:'corpse',of:e.kind,hover:e.hover,big:e.big,boss:e.boss,cave:e.cave,isle:e.isle,mini:e.mini,elite:e.elite,crown:e.crown,x:e.x,y:e.boss?H(e.x,e.z):e.y,z:e.z,yaw:e.yaw,scale:e.scale,
       look:e.look,t:0,deadT:0.001,speed:0,walkPhase:e.walkPhase,state:e.state,flyK:0});
   }
 }
@@ -9738,7 +10089,7 @@ function update(dt){
     if(Math.random()<dt*8) burst(p.x,p.y+1+Math.random(),p.z,1,[0.55,0.95,0.35],{up:1,spread:0.5,size:0.08,life:0.6,grav:-1}); }
   // bounds
   var bd=Math.hypot(p.x,p.z), lim=WHALF*0.95;
-  if(bd>lim&&!inCave(p.x,p.z)){ p.x*=lim/bd; p.z*=lim/bd; }
+  if(bd>lim&&!offMap(p.x,p.z)){ p.x*=lim/bd; p.z*=lim/bd; }
   collide(p,0.42*(p.scale||1));   // trunks, rocks and walls are solid
   if(inSea(p.x,p.z)&&H(p.x,p.z)<WATER-0.9){ p.x=ox0; p.z=oz0; }   // wade in the shallows, no further
   // gravity / jump
@@ -9800,7 +10151,7 @@ function update(dt){
   }
   wildUpdate(dt);
   homeUpdate(dt);
-  p.safe=p.atTavern||p.atHome;
+  p.safe=p.atTavern||p.atHome||isleSafe(p);
   G.saveT=(G.saveT||0)+dt; if(G.saveT>15){ G.saveT=0; saveGame(); }
   for(var i=0;i<LANDMARKS.length;i++){
     var lm=LANDMARKS[i], ld=Math.hypot(p.x-lm.x,p.z-lm.z);
@@ -9821,9 +10172,11 @@ function update(dt){
   G.spawnT-=dt;
   if(G.spawnT<=0){
     var DD=DF(); G.spawnT=DD.spawn;
-    var alive=0, caveN=0; for(var k=0;k<G.ents.length;k++){var e=G.ents[k]; if(FOE[e.kind]){ if(e.cave) caveN++; else alive++; }}
+    var alive=0, caveN=0; for(var k=0;k<G.ents.length;k++){var e=G.ents[k]; if(FOE[e.kind]){ if(e.cave) caveN++; else if(!e.isle) alive++; }}
     if(WILD.inCave){
       if(caveN<Math.round(16*DD.pop)){ var cs=caveSpawnSpot(16); if(cs) caveFoe(cs.x,cs.z); }
+    } else if(WILD.inIsle){
+      isleRespawn();
     } else if(alive<DD.cap){
       var a=Math.random()*6.28, d=46+Math.random()*26;
       var sx=p.x+Math.cos(a)*d, sz=p.z+Math.sin(a)*d, sd2=Math.hypot(sx,sz);
@@ -10457,6 +10810,12 @@ function mapIcon(kind,x,y,s,unknown){
     case 'cave':                         // a dark arch
       hx.fillStyle='#8a7a60'; hx.beginPath(); hx.arc(0,1.5,5,3.14,6.29); hx.lineTo(5,4); hx.lineTo(-5,4); hx.closePath(); hx.fill();
       hx.fillStyle='#0a0806'; hx.beginPath(); hx.arc(0,2.5,2.8,3.14,6.29); hx.lineTo(2.8,4); hx.lineTo(-2.8,4); hx.closePath(); hx.fill(); break;
+    case 'landing':                      // a white boat
+      hx.fillStyle='#f3efe4'; hx.beginPath(); hx.moveTo(-5.5,0.5); hx.lineTo(5.5,0.5); hx.lineTo(3.5,3.5); hx.lineTo(-3.5,3.5); hx.closePath(); hx.fill();
+      hx.fillStyle='#c9a64a'; hx.fillRect(-0.5,-5,1,5.5); hx.fillStyle='#f3efe4'; hx.beginPath(); hx.moveTo(0.6,-4.5); hx.lineTo(4,-0.3); hx.lineTo(0.6,-0.3); hx.closePath(); hx.fill(); break;
+    case 'spire':                        // a broken tower
+      hx.fillStyle='#b8aea0'; hx.beginPath(); hx.moveTo(-3.5,4.5); hx.lineTo(-3,-3); hx.lineTo(-1.5,-5); hx.lineTo(0,-3); hx.lineTo(1.5,-4.2); hx.lineTo(3,-2.5); hx.lineTo(3.5,4.5); hx.closePath(); hx.fill();
+      hx.fillStyle='#e0702e'; hx.fillRect(-1,0.5,2,4); break;
     case 'stones':                       // ring of stones
       hx.fillStyle='#b8b8c0';
       for(var q=0;q<6;q++){ var qa=q/6*6.283; hx.fillRect(Math.cos(qa)*4-1.2,Math.sin(qa)*4-1.2,2.4,2.4); } break;
@@ -10586,9 +10945,14 @@ function drawHUD(){
     var xq=rotPt((CAVE.exit.x-p.x)*sc,(CAVE.exit.z-p.z)*sc,G.cam.yaw);
     hx.fillStyle='#f6e7a8'; hx.beginPath(); hx.arc(mx+xq.x,my+xq.y,3.2,0,6.3); hx.fill();
   }
+  if(WILD.inIsle){                        // out on the isle the map shows its shoreline
+    var iq=rotPt((ISLE.x-p.x)*sc,(ISLE.z-p.z)*sc,G.cam.yaw);
+    hx.strokeStyle='rgba(143,208,232,.45)'; hx.lineWidth=2; hx.beginPath(); hx.arc(mx+iq.x,my+iq.y,ISLE.R*0.8*sc,0,6.3); hx.stroke();
+  }
   hx.restore();
   for(var L=0;L<LANDMARKS.length&&!WILD.inCave;L++){
-    var lm=LANDMARKS[L], dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
+    var lm=LANDMARKS[L]; if(!!lm.isle!==!!WILD.inIsle) continue;     // only this land's places
+    var dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
     var rot=rotPt(dx,dz,G.cam.yaw), rl=Math.hypot(rot.x,rot.y), edge=rl>mr-7;
     if(edge){ rot.x*=(mr-7)/rl; rot.y*=(mr-7)/rl; }
     mapIcon(lm.kind,mx+rot.x,my+rot.y,ms*(edge?0.85:1.1),!G.found[lm.name]);
@@ -10609,7 +10973,7 @@ function drawHUD(){
   if(SHOWKEY){
     var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['shroom','Mushroom grump'],['cocoon','Captive — free them'],
       ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
-      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['shore','The Sunlit Shore'],['cave','Glimmer Cave — bring a torch']];
+      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['shore','The Sunlit Shore — a boat east'],['cave','Glimmer Cave — bring a torch'],['landing','Emberleaf Landing — sail home'],['spire','The Sunken Spire']];
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
     hx.textAlign='left'; hx.font='600 '+(DESKTOP?11.5:10.5)+'px Georgia,serif';
@@ -10841,7 +11205,7 @@ function makeScreen(){
 function startRun(sv){
   if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; gearInit(sv.build); }
   else { G.build.skills={}; G.build.points=0; if(!G.build.diff) G.build.diff='normal'; gearInit(null); }
-  wildLoad(sv&&sv.wild); CAVEENV=null; WILD.lore.wood=1;
+  wildLoad(sv&&sv.wild); CAVEENV=null; ISLEENV=null; WILD.lore.wood=1;
   cineStop();
   G.player=null; recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
@@ -11036,7 +11400,7 @@ function gameOver(){
   G.state='dead';
   var p=G.player;
   if(p.level>G.best){ G.best=p.level; try{localStorage.setItem('eh3_best',G.best);}catch(e){} }
-  var lost=Math.min(40,Math.floor(p.coins*0.1)); p.coins-=lost; G.lost=lost;   // a gentle knock: a tenth of your purse, 40 at most
+  var DFL=DF(), lost=Math.min(DFL.fallMax||40,Math.floor(p.coins*(DFL.fall||0.1))); p.coins-=lost; G.lost=lost;   // a gentle knock: a tenth of your purse, 40 at most (Expert: a fifth, 150)
   var ws=wakeSpot();
   var dmgList=Object.keys(TELE.dmg).sort(function(a,b){return TELE.dmg[b]-TELE.dmg[a];})
     .map(function(k){return '<div class="stat"><span>'+k+'</span><b>'+TELE.dmg[k]+' dmg</b></div>';}).join('');
@@ -11064,7 +11428,7 @@ function wakeUp(){
   }
   for(var gi=G.ents.length-1;gi>=0;gi--) if(G.ents[gi].kind==='golem'){ G.ents.splice(gi,1); WILD.stone.c=1; WILD.stone.full=true; }
   G.cam.yaw=p.yaw; G.cam.x=p.x-Math.sin(p.yaw)*8; G.cam.z=p.z-Math.cos(p.yaw)*8; G.cam.y=p.y+5;
-  setCaveEnv(false);
+  setCaveEnv(false); setIsleEnv(false);
   hide(); G.state='play'; wantLock(); saveGame();
 }
 

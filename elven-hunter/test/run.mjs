@@ -62,13 +62,13 @@ section('World');
     })(),
   }));
   ok('world mesh builds', w.tris > 50000, `${w.tris} triangles in one draw call`);
-  ok('nine landmarks placed', w.landmarks.length === 9, w.landmarks.join(', '));
+  ok('eleven landmarks placed (nine in the wood, two on the isle)', w.landmarks.length === 11, w.landmarks.join(', '));
   ok('spawn is above water', w.spawnAboveWater);
   // the "objectives outside the map" bug: things were scattered over a square, but the
   // walkable land is a circle inside the mountains, so the corners were unreachable
   const reach = await page.evaluate(() => { startRun(); QUESTS.forEach((q) => { WILD.q[q.id] = { s: 'on', got: [] }; }); spawnQuestItems();
     const lim = WHALF * 0.95, bad = [];
-    G.ents.forEach((e) => { if (e.z > CAVE.z0 || e.kind === 'critter' || e.kind === 'eagle') return;
+    G.ents.forEach((e) => { if (e.z > CAVE.z0 || inIsle(e.x, e.z) || e.kind === 'critter' || e.kind === 'eagle') return;
       if (Math.hypot(e.x, e.z) > lim - 2 || Hn(e.x, e.z) > 0.9) bad.push(e.kind); });
     return { bad, n: G.ents.length, size: WSIZE }; });
   const marks = await page.evaluate(() => { const p = G.player; p.x = 0; p.z = 6; WILD.inCave = false;
@@ -663,7 +663,7 @@ section('Difficulty, bosses, the cave and the gnomes');
 {
   const page = await open(browser, LAPTOP);
   await page.click('#make');
-  ok('difficulty is chosen when you make a hunter', (await page.$$('.pick[data-kind="diff"]')).length === 3);
+  ok('difficulty is chosen when you make a hunter', (await page.$$('.pick[data-kind="diff"]')).length === 4);
   await page.click('.pick[data-kind="diff"][data-k="hard"]');
   await page.click('#go'); await page.waitForTimeout(300);
   const diff = await page.evaluate(() => {
@@ -784,6 +784,56 @@ section('Difficulty, bosses, the cave and the gnomes');
   await page.close();
 }
 
+/* ---------------- expert, and the next land ---------------- */
+section('Expert, and the Emberleaf Isle');
+{
+  const page = await open(browser, LAPTOP);
+  const ex = await page.evaluate(() => {
+    G.build.diff = 'hard'; startRun(); const p = G.player; G.ents = G.ents.filter((e) => !FOE[e.kind]);
+    spawnSpider(p.x + 30, p.z, false); const hHard = G.ents[G.ents.length - 1].maxHp;
+    G.build.diff = 'expert'; spawnSpider(p.x + 30, p.z, false); const hEx = G.ents[G.ents.length - 1].maxHp;
+    p.coins = 1000; gameOver(); const lost = G.lost;
+    G.build.diff = 'normal';
+    return { ratio: hEx / hHard, lost, order: DIFF_ORDER.join(' > '), cap: DIFFS.expert.cap > DIFFS.hard.cap, pay: DIFFS.expert.pay > DIFFS.hard.pay };
+  });
+  ok('Expert sits above Hard', ex.order === 'easy > normal > hard > expert' && ex.ratio > 1.2 && ex.cap && ex.pay, `${ex.order}; foes ×${ex.ratio.toFixed(2)} Hard's health`);
+  ok('on Expert a fall costs a fifth of your purse, up to 150', ex.lost === 150, `${ex.lost} of 1000 coins`);
+
+  await page.evaluate(() => { G.build.diff = 'normal'; startRun(); hide(); G.state = 'play'; });
+  const pier = await page.evaluate(() => new Promise((res) => {
+    const p = G.player, Q = SHORE.pier; G.ents = G.ents.filter((e) => !FOE[e.kind] || inIsle(e.x, e.z));
+    p.x = Q.x; p.z = Q.z; p.y = H(p.x, p.z);
+    const t0 = G.t; const tick = () => { if (G.t - t0 > 0.3) res({ tap: G.talk && G.talk.tap, dry: H(Q.x, Q.z) > WATER }); else requestAnimationFrame(tick); }; tick();
+  }));
+  ok('a white boat waits at the jetty on the Sunlit Shore', pier.tap === 'SAIL' && pier.dry, pier.tap || 'nothing to use');
+  await page.evaluate(() => { G.talk.open(); });
+  await page.click('.opt[data-o="go"]');
+  const isle = await page.evaluate(() => new Promise((res) => {
+    const t0 = G.t; const tick = () => { if (G.t - t0 > 0.4) {
+      const p = G.player;
+      res({ on: WILD.inIsle && inIsle(p.x, p.z), zone: zoneName(), dry: H(p.x, p.z) > WATER + 0.5, safe: p.safe, world: WORLD.visible, isle: ISLE3.visible,
+        foes: G.ents.filter((e) => e.isle && FOE[e.kind]).length, mini: G.ents.some((e) => e.mini === 'emberfang'), lore: !!WILD.lore.isle, state: G.state });
+    } else requestAnimationFrame(tick); }; tick();
+  }));
+  ok('sailing carries you to the Emberleaf Isle', isle.on && isle.dry && isle.state === 'play' && isle.lore, isle.zone);
+  ok('the isle has its own ground, and the wood is hidden', isle.isle && !isle.world);
+  ok('the landing is safe ground', isle.safe);
+  ok('the isle is full of foes, and Emberfang guards the spire', isle.foes > 15 && isle.mini, `${isle.foes} foes`);
+  const tough = await page.evaluate(() => { const p = G.player; G.build.diff = 'normal'; G.ents = G.ents.filter((e) => !FOE[e.kind]);
+    spawnSpider(p.x + 30, p.z, false); const a = G.ents[G.ents.length - 1].maxHp;
+    let b; do { G.ents = G.ents.filter((e) => !e.isle); b = isleFoe(p.x + 30, p.z); } while (b.kind !== 'spider' || b.big);
+    return { r: b.maxHp / a, isle: b.isle }; });
+  ok("isle foes are tougher than the wood's", tough.isle === 1 && tough.r > 1.2, `×${tough.r.toFixed(2)} health`);
+  const ground = await page.evaluate(() => { let bad = 0; const L = ISLE.land, S = ISLE.spire;
+    for (let t = 0; t <= 1; t += 0.05) { const x = L.x + (S.x - L.x) * t, z = L.z + (S.z - L.z) * t; if (H(x, z) < WATER + 0.3) bad++; }
+    return { bad, spire: H(S.x, S.z) > H(L.x, L.z) + 5 }; });
+  ok('you can walk from the landing up to the spire', ground.bad === 0 && ground.spire);
+  const home = await page.evaluate(() => { sail(false); const p = G.player; return { on: WILD.inIsle, wood: !inIsle(p.x, p.z) && inBounds(p.x, p.z, 0), world: WORLD.visible, isle: ISLE3.visible }; });
+  ok('and the boat sails you home again', !home.on && home.wood && home.world && !home.isle);
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.join(' | '));
+  await page.close();
+}
+
 /* ---------------- legends: lore, mini-bosses, champions, armour ---------------- */
 section('Lore, mini-bosses, champions and armour');
 {
@@ -792,7 +842,7 @@ section('Lore, mini-bosses, champions and armour');
   await page.waitForTimeout(300);
   const start = await page.evaluate(() => ({ minis: G.ents.filter((e) => e.mini).map((e) => e.mini), champs: G.ents.filter((e) => e.elite).length,
     pages: loreCount(), total: LORE.length }));
-  ok('five mini-bosses guard their homes', start.minis.length === 5, start.minis.join(', '));
+  ok('six mini-bosses guard their homes', start.minis.length === 6, start.minis.join(', '));
   ok('golden champions roam on Normal', start.champs >= 4, `${start.champs} champions`);
   const easy = await page.evaluate(() => { G.build.diff = 'easy'; startRun(); const n = G.ents.filter((e) => e.elite).length; G.build.diff = 'normal'; startRun(); return n; });
   ok('but not on Easy', easy === 0);

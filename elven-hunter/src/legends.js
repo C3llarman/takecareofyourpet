@@ -85,6 +85,14 @@ var LORE=[
   {id:'way5',sec:'Waystones',t:"The Meadow Stone",h:"In the meadow west of the glade.",
    x:"HERE THE LAST SINGER DANCED. The grass round the stone grows in a perfect ring, and the grumps will not step inside it."}
 ];
+LORE.push(
+  {id:'isle',sec:'The Emberleaf Isle',t:"The Emberleaf Isle",h:"Take the white boat from the Sunlit Shore.",
+   x:"The Sylvani called it Aelfhaven, the trading isle, where the leaves turned in autumn and then simply forgot to turn back. When the Long Weaving came the mist came with it, and for a hundred years there was nothing past the surf but grey. Now the mist has thinned, and a white boat waits at the jetty as if someone sent it. Whatever lives over there has had a century without anyone to keep it small."},
+  {id:'spire',sec:'The Emberleaf Isle',t:"The Sunken Spire",h:"The ruined tower on the isle's one hill.",
+   x:"A Sylvani watchtower, sunk to its shoulders in the hill. Its keepers lit a beacon in the brazier every night so the white boats could find their way home. The brazier is still burning. Nobody has been up there to light it."},
+  {id:'emberfang',sec:'Foes of note',t:"Emberfang, Warden of the Spire",h:"She nests in the ruins on the isle's hill.",
+   x:"A spider the colour of a banked fire, grown fat on a century of warmth from the beacon. She keeps the spire as her own and strings up anyone who climbs the hill. Bram, told about her, poured himself a very large drink."}
+);
 var LORE_BY={}; LORE.forEach(function(l){ LORE_BY[l.id]=l; });
 function loreCount(){ var n=0; for(var k in WILD.lore) if(WILD.lore[k]&&LORE_BY[k]) n++; return n; }
 function loreGet(id,quiet){
@@ -129,7 +137,7 @@ function waystoneScreen(w){
     (fresh?'<p class="sub">✎ Written in your journal.</p>':'')+'<button class="btn" id="leave">Walk on</button>');
   document.getElementById('leave').onclick=menuClose;
 }
-var LANDLORE={shore:'shore',eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
+var LANDLORE={landing:'isle',spire:'spire',shore:'shore',eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
 
 /* ---------- mini-bosses ----------
    Named monsters with a home they guard and a trick of their own. Beaten, they
@@ -140,7 +148,8 @@ var MINIS=[
   {id:'mother',kind:'wasp',   name:'The Hive Mother',            at:function(){ return {x:LM.hive.x+3,z:LM.hive.z-2}; }, scale:2.0, hp:520, dmg:11, tricks:['volley','swarm']},
   {id:'coil',  kind:'snake',  name:'Old Coil, the River Adder',  at:function(){ return dryNear(40*WS,61*WS); },  scale:2.6, hp:650, dmg:19, tricks:['lunge']},
   {id:'puffcap',kind:'shroom',name:'King Puffcap',               at:function(){ return dryNear(-56*WS,-34*WS); }, scale:2.6, hp:560, dmg:13, cap:[0.70,0.20,0.62], tricks:['spores','court']},
-  {id:'matron',kind:'spider', name:'The Pale Matron',            at:function(){ return {x:CAVE.x-4,z:CAVE.z+24}; }, scale:2.3, hp:860, dmg:17, tint:[0.82,0.82,0.86], cave:1, tricks:['brood','web']}
+  {id:'matron',kind:'spider', name:'The Pale Matron',            at:function(){ return {x:CAVE.x-4,z:CAVE.z+24}; }, scale:2.3, hp:860, dmg:17, tint:[0.82,0.82,0.86], cave:1, tricks:['brood','web']},
+  {id:'emberfang',kind:'spider',name:'Emberfang, Warden of the Spire', at:function(){ return {x:ISLE.spire.x-11,z:ISLE.spire.z+5}; }, scale:2.5, hp:1150, dmg:21, tint:[0.58,0.18,0.05], isle:1, tricks:['brood','web']}
 ];
 var MINI_BY={}; MINIS.forEach(function(m){ MINI_BY[m.id]=m; });
 function spawnMini(def){
@@ -156,6 +165,7 @@ function spawnMini(def){
   if(def.tint) e.look.body=def.tint.slice();
   if(def.cap){ e.look.cap=def.cap; e.crown=1; }
   if(def.cave){ e.cave=1; e.look.eye=[0.6,0.9,1.0]; }
+  if(def.isle){ e.isle=1; e.look.eye=[1.0,0.62,0.15]; e.dmg*=ISLE.bite; }
   if(def.kind==='wasp') e.hover=1.25;
   return e;
 }
@@ -193,9 +203,9 @@ function miniAct(e,dt,tgt,tdist){
   }
   if(T.indexOf('brood')>=0&&e.ab2<=0&&minionCount(e.mini)<6){  // her children come running
     e.ab2=8*D.cd; msg('Children!','#d9a0ff',e.x,e.y+3*e.scale,e.z,16);
-    for(var b=0;b<2+(D===DIFFS.hard?1:0);b++){ var a=Math.random()*6.28;
+    for(var b=0;b<2+(D.brood||0);b++){ var a=Math.random()*6.28;
       spawnSpider(e.x+Math.cos(a)*3,e.z+Math.sin(a)*3,false); var s=G.ents[G.ents.length-1];
-      s.scale=0.5; s.hp=s.maxHp=lvlHp(10)*D.hp; s.minion=e.mini; s.aggro=30; if(e.cave){ s.cave=1; s.look.body=[0.62,0.62,0.68]; } }
+      s.scale=0.5; s.hp=s.maxHp=lvlHp(10)*D.hp; s.minion=e.mini; s.aggro=30; if(e.cave){ s.cave=1; s.look.body=[0.62,0.62,0.68]; } if(e.isle){ s.isle=1; s.look.body=[0.42,0.17,0.07]; } }
   }
   if(T.indexOf('volley')>=0&&e.abT<=0&&tdist<24){              // a fan of five stings
     e.abT=4.2*D.cd; e.atkT=0.4; e.atkDur=0.4; sfx('sting',e.x,e.z);
@@ -232,7 +242,7 @@ function miniDown(e){
   tip(e.name+' is slain!'); sfx('levelup'); shake(0.4);
   burst(e.x,e.y+1.5,e.z,40,[1.0,0.86,0.42],{up:5,spread:4,size:0.16,life:1.3,grav:-1});
   loreGet(e.mini);
-  if(e.mini==='queen'||e.mini==='matron') for(var i=G.ents.length-1;i>=0;i--) if(G.ents[i].minion===e.mini) G.ents[i].aggro=8;
+  if(e.mini==='queen'||e.mini==='matron'||e.mini==='emberfang') for(var i=G.ents.length-1;i>=0;i--) if(G.ents[i].minion===e.mini) G.ents[i].aggro=8;
   setTimeout(saveGame,80);
 }
 

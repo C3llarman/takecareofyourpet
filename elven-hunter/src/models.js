@@ -128,7 +128,7 @@ function actorSpec(e){
   if(e.kind==='npc')                  // the innkeeper: a barbarian with a mug, in warm tones
     return {model:'barbarian', weapons:['Mug'], beard:true, tint:[1.0,0.88,0.74], key:'keeper'};
   var ck=e.kind==='corpse'?e.of:e.kind;
-  if(ck==='spider') return {model:'spider', weapons:[], tint:e.look&&e.look.body, key:(e.cave?'cave':'')+(e.mini?'mini'+e.mini:'')+(e.elite?'elite':'')+(e.big?'bigspider':'spider')};
+  if(ck==='spider') return {model:'spider', weapons:[], tint:e.look&&e.look.body, key:(e.cave?'cave':'')+(e.isle?'isle':'')+(e.mini?'mini'+e.mini:'')+(e.elite?'elite':'')+(e.big?'bigspider':'spider')};
   if(ck==='snake'||ck==='wasp') return {model:ck, weapons:[], key:ck};
   var K=ALLYKIND[e.ak]||ALLYKIND[0];
   switch(K.k){

@@ -36,7 +36,7 @@ function cineMarkSeen(){ try{ localStorage.setItem('eh3_intro','1'); }catch(e){}
 function cineWorld(){
   G.build.race='elf'; G.build.cls='rogue';
   gearInit(null);
-  wildLoad(null); CAVEENV=null; WILD.inCave=false; setCaveEnv(false);
+  wildLoad(null); CAVEENV=null; ISLEENV=null; WILD.inCave=false; setCaveEnv(false); setIsleEnv(false);
   G.player=null; recalc();
   G.player=newPlayer(); G.msgs.length=0; G.bounty=null; FX.length=0; G.hitStop=0; G.shakeA=0; G.tipT=0;
   homeReset();

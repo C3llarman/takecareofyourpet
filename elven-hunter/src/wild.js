@@ -7,22 +7,26 @@
 
 /* ---------- difficulty ----------
    Easy is the wood as it used to be. Normal and Hard bring more monsters, hitting
-   harder and more often, and pay a little better for the trouble. */
+   harder and more often, and pay a little better for the trouble. Expert is for
+   hunters who have beaten Hard: everything above, again, with sharper teeth —
+   mini-bosses call more help, and a fall costs a fifth of your purse. */
 var DIFFS={
   easy:  {n:'Easy',  hp:1.0, dmg:1.0, spawn:7.0, cap:46, aggro:1.0,  spd:1.0,  cd:1.0,  pop:0.8, pay:1.0, elites:0, champ:0, abCd:0.75,
           d:'The gentle wood. Fewer foes, and they forgive mistakes.'},
   normal:{n:'Normal',hp:1.35,dmg:1.55,spawn:4.0, cap:64, aggro:1.18, spd:1.08, cd:0.82, pop:1.15,pay:1.2, elites:5, champ:0.12, abCd:1,
           d:'A proper hunt. Foes come in numbers and bite hard.'},
-  hard:  {n:'Hard',  hp:1.8, dmg:2.2, spawn:2.6, cap:84, aggro:1.35, spd:1.16, cd:0.68, pop:1.5, pay:1.5, elites:10, champ:0.24, abCd:1,
-          d:'The wood wants you dead. Half again the pay, if you live.'}
+  hard:  {n:'Hard',  hp:1.8, dmg:2.2, spawn:2.6, cap:84, aggro:1.35, spd:1.16, cd:0.68, pop:1.5, pay:1.5, elites:10, champ:0.24, abCd:1, brood:1,
+          d:'The wood wants you dead. Half again the pay, if you live.'},
+  expert:{n:'Expert',hp:2.4, dmg:3.0, spawn:1.9, cap:100,aggro:1.5,  spd:1.24, cd:0.56, pop:1.85,pay:2.0, elites:16, champ:0.36, abCd:1, brood:2, fall:0.2, fallMax:150,
+          d:'Beaten Hard? Foes in droves, bosses call more help, and a fall costs a fifth of your purse. Double pay.'}
 };
-var DIFF_ORDER=['easy','normal','hard'];
+var DIFF_ORDER=['easy','normal','hard','expert'];
 function DF(){ return DIFFS[G.build.diff]||DIFFS.normal; }
 
 /* ---------- the wild state, saved with your hunter ---------- */
 var WILD=null;
 function wildReset(){
-  WILD={torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0,
+  WILD={inIsle:false, torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0,
     q:{}, inv:{}, recipes:{}, charms:{}, compass:0, eagle:0};
 }
 wildReset();
@@ -374,9 +378,10 @@ function moveParty(x,z,yaw){
   var n=0;
   for(var i=0;i<G.ents.length;i++){ var e=G.ents[i];
     if(e.kind==='ally'){ e.x=x+Math.cos(n*2.1)*2.2-Math.sin(yaw)*2; e.z=z+Math.sin(n*2.1)*2.2-Math.cos(yaw)*2; e.y=H(e.x,e.z); collide(e,0.42); n++; }
+    if(e.kind==='eagle'&&e.sub==='pet'){ e.x=x; e.z=z; e.y=H(x,z)+6; }
     if(e.kind==='shot'||e.kind==='eshot') e.life=0; }
   G.cam.yaw=yaw; G.cam.x=x-Math.sin(yaw)*6; G.cam.z=z-Math.cos(yaw)*6; G.cam.y=p.y+4; G.cam.cd=undefined;
-  setCaveEnv(inCave(x,z));
+  setCaveEnv(inCave(x,z)); setIsleEnv(inIsle(x,z));
 }
 function chestScreen(){
   menuOpen('talk'); sfx('click');
@@ -505,7 +510,7 @@ function bounceCheck(p){
 
 /* ---------- what you can walk up to and use ---------- */
 function wildTalk(p,list){
-  legendTalk(p,list); folkTalk(p,list);
+  legendTalk(p,list); folkTalk(p,list); isleTalk(p,list);
   var g=findKind('golem');
   if(!WILD.inCave){
     if(!g&&Math.hypot(STONES.x-p.x,STONES.z-p.z)<3.6)
@@ -527,6 +532,7 @@ function wildTalk(p,list){
 function wildUpdate(dt){
   var p=G.player;
   setCaveEnv(inCave(p.x,p.z));
+  isleUpdate(dt);
   torchUpdate();
   stonesUpdate(dt);
   minisTick(dt);

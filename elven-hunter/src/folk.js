@@ -25,9 +25,9 @@ function addRes(k,n,x,y,z){
 }
 /* a dry spot near (x,z), out of the water and out of anything solid */
 function dryNear(x,z,minH){
-  if(!inBounds(x,z,3)&&!inCave(x,z)){ var k=(WHALF*PLAY_R-3)/Math.hypot(x,z); x*=k; z*=k; }   // never past the edge of the map
+  if(!inBounds(x,z,3)&&!offMap(x,z)){ var k=(WHALF*PLAY_R-3)/Math.hypot(x,z); x*=k; z*=k; }   // never past the edge of the map
   for(var r=0;r<14;r+=1.5) for(var a=0;a<6.28;a+=0.7){ var px=x+Math.cos(a)*r, pz=z+Math.sin(a)*r;
-    if(H(px,pz)>(minH===undefined?WATER+0.6:minH)&&!solidAt(px,pz,0.5)&&(inCave(px,pz)||(inBounds(px,pz,2)&&Hn(px,pz)<0.6))) return {x:px,z:pz}; }
+    if(H(px,pz)>(minH===undefined?WATER+0.6:minH)&&!solidAt(px,pz,0.5)&&(offMap(px,pz)||(inBounds(px,pz,2)&&Hn(px,pz)<0.6))) return {x:px,z:pz}; }
   return {x:x,z:z};
 }
 function spawnNodes(){

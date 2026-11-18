@@ -20,13 +20,16 @@ their hive, cross little mushrooms hop about the meadows, and your kin hang in c
 waiting to be cut down. Free them and they follow you and fight. Bram keeps the tavern;
 from level 10 an abandoned cottage can be bought, fixed up and farmed. The standing stones
 wake while you hunt and can call up a boss; a dragon sleeps on the Dragon's Crag; and the
-Glimmer Cave under it opens to anyone with a torch. Five named mini-bosses guard their
-homes, golden champions roam on Normal and Hard, and a journal fills with the wood's story
+Glimmer Cave under it opens to anyone with a torch. Six named mini-bosses guard their
+homes, golden champions roam on Normal and up, and a journal fills with the wood's story
 as you explore. Wren the hedge-witch and Tobin the tinker have quests that aren't about
 killing: gathering, finding lost things, a delivery, a repair; what you gather crafts into
 potions, tonics and lasting charms. Far in the south, Ærtheldor the Great Eagle has a quest
 chain of his own, and at its end an eaglet, Aelfrend, follows you and flies you back to
-the quest givers. Pick Easy, Normal or Hard. Progress is saved in the browser.
+the quest givers. And across the sea from the beach lies the next land, the **Emberleaf
+Isle**: an autumn island with tougher foes, a ruined spire and a mini-boss of its own, reached
+by a white boat at the jetty. Pick Easy, Normal, Hard or Expert. Progress is saved in the
+browser.
 
 ---
 
@@ -107,8 +110,10 @@ src/
   home.js     the cottage, its farm, and saving / continuing
   wild.js     difficulty, mushroom grumps, the Stone Warden, the dragon, the Glimmer
               Cave and its torch, butterflies, rabbits, toadstools and gnomes
-  legends.js  the journal (36 pages of lore), waystones, Bram's tales, the five
+  legends.js  the journal (43 pages of lore), waystones, Bram's tales, the six
               mini-bosses and the golden champions
+  isle.js     the Emberleaf Isle: its ground, autumn trees, the landing and the Sunken
+              Spire, the white boat, its light, and the foes that live there
   abilities.js three abilities per calling, unlocked at levels 2, 4 and 7
   gear.js     five gear slots, five rarities, loot bags, the bag and character
               sheet, Bram's cousin's forge
@@ -201,14 +206,20 @@ live at the top of `src/home.js`.
 ### The wilder wood (`src/wild.js`)
 
 - **Difficulty.** Chosen when you make a hunter, and changeable any time from the skills
-  screen. Easy is the wood as it was. Normal and Hard bring more monsters, in packs, more
-  often, tougher, quicker to notice you and quicker to strike, and they pay better:
+  screen. Easy is the wood as it was. Normal, Hard and Expert bring more monsters, in packs,
+  more often, tougher, quicker to notice you and quicker to strike, and they pay better:
 
   | | Foe health | Foe damage | New pack every | Foes at once | Pay |
   |---|---|---|---|---|---|
   | Easy | ×1 | ×1 | 7 s | 46 | ×1 |
   | Normal | ×1.35 | ×1.55 | 4 s | 64 | ×1.2 |
   | Hard | ×1.8 | ×2.2 | 2.6 s | 84 | ×1.5 |
+  | Expert | ×2.4 | ×3.0 | 1.9 s | 100 | ×2 |
+
+  **Expert** is for hunters who have beaten Hard. On top of the table, foes move quicker
+  still and notice you from further off, sixteen champions roam from the start, mini-bosses
+  call two extra minions instead of one, and a fall costs a fifth of your purse (up to 150
+  coins) instead of a tenth (up to 40).
 
 - **Mushroom grumps.** Cross toadstools that live in clans in the meadows and hop after you.
   Weak alone, annoying in a crowd.
@@ -237,9 +248,40 @@ live at the top of `src/home.js`.
   pays a little and has something to say; find all seven for a bonus from Bram. Your
   count is on the skills screen.
 
+### The Emberleaf Isle (`src/isle.js`)
+
+The next land. Across the sea from the Sunlit Shore lies the island the Sylvani called
+Aelfhaven, where the leaves turned one autumn and never turned back. For a hundred years the
+mist hid it; now it has thinned, and a white Sylvani boat is tied up beside the jetty.
+
+- **Getting there.** Walk to the foot of the jetty on the Sunlit Shore and `E` / **SAIL**.
+  The boat carries you and your company to **Emberleaf Landing** on the isle's west shore;
+  the same boat sails you home. Like the Glimmer Cave, the isle sits far off the map
+  (everything east of `ISLE.x0`), so sailing moves you there and the light changes over: a
+  long amber afternoon, warm haze instead of blue sky, the sun low and golden.
+- **The land.** A round island about 230 units across: a ring of pale sand, rolling rust and
+  amber meadows, stands of oaks and birches in red, orange and gold (the same Quaternius
+  trees as the wood, their green swapped for autumn colours as they are planted), dead trees
+  and dry-mossed rocks. A trodden path climbs from the landing to the one real hill.
+- **The Sunken Spire.** On that hill, the stump of a Sylvani watchtower in a ring of broken
+  pillars, red ivy up its walls and a beacon brazier that is still burning.
+- **A harder hunt**, meant for level 12 or so (the boat says so before you cast off, but
+  doesn't stop you). Everything that lives there is the wood's monsters gone autumn-coloured
+  and mean: ember spiders, ash snakes, amber wasps and rust-capped grumps, with ×1.6 health
+  and ×1.35 damage on top of the difficulty. They pay ×1.6 coins and 75 XP a kill, and
+  champions turn up half again as often. Six of your kin hang in cocoons round the spire.
+- **Emberfang, Warden of the Spire**, a mini-boss: a fire-coloured giant spider who nests in
+  the ruins, spits webs and calls her brood.
+- **The landing is safe ground**, like the tavern yard: foes break off and you slowly mend.
+- **Tuning** lives in the `ISLE` object at the top of `src/isle.js`: where it is, how big,
+  `tough`, `bite`, `pay` and the recommended `level`.
+
+This is the first part of the isle. Still to come: folk and quests of its own, gathering
+and recipes, more places to find, gnomes, and a boss of its own.
+
 ### Legends (`src/legends.js`)
 
-- **The journal** (`L`, or from the skills screen). Thirty-one pages: the story of the
+- **The journal** (`L`, or from the skills screen). Forty-three pages: the story of the
   Elderwood and the Long Weaving, every landmark, every named foe, Bram's tales and five
   carved **waystones** set about the wood (walk up and `E` / **READ**). Pages fill as you
   discover, read, listen and kill; empty pages carry a hint where to look.
@@ -253,10 +295,11 @@ live at the top of `src/home.js`.
   | Old Coil, the River Adder | the river's far bank | strikes from 12 units away; his bite burns |
   | King Puffcap | the meadow west of the glade | stinging spore clouds; calls his court |
   | The Pale Matron | the deepest den of the Glimmer Cave | webs and brood, in the dark |
+  | Emberfang, Warden of the Spire | the Sunken Spire, on the Emberleaf Isle | webs and brood, and she hits like the isle |
 
   Run far enough and they go home and heal.
 - **Champions.** Golden, 40% bigger, three times the health and harder-hitting, named over
-  their health bar. Five roam from the start on Normal (ten on Hard, none on Easy), and new
+  their health bar. Five roam from the start on Normal (ten on Hard, sixteen on Expert, none on Easy), and new
   packs may bring one along. They pay extra and often drop a potion.
 - **The dragon, rebuilt.** Cinderwing now has obsidian scales with ember-lit belly seams, a
   long S-curved neck, a horned head with teeth and a jaw that opens (his throat glows before

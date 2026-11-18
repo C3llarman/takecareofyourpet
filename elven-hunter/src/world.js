@@ -92,6 +92,7 @@ function cragZone(x,z){
 /* world height */
 function H(x,z){
   if(z>CAVE.z0) return caveH(x,z);
+  if(x>ISLE.x0) return isleH(x,z);          // the Emberleaf Isle (isle.js)
   var h=Hraw(x,z);
   // level the tavern yard and the cottage's plot
   for(var i=0;i<FLATS.length;i++){ var F=FLATS[i], dt=Math.hypot(x-F.x,z-F.z);

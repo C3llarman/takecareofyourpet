@@ -263,7 +263,7 @@ function zoneName(){
   var p=G.player; if(WILD.inCave) return 'The Glimmer Cave';
   var best=null,bd=1e9;
   for(var i=0;i<LANDMARKS.length;i++){ var l=LANDMARKS[i], d=Math.hypot(p.x-l.x,p.z-l.z); if(d<l.r+16&&d<bd&&G.found[l.name]){ bd=d; best=l.name; } }
-  return best||'The Elderwood';
+  return best||(WILD.inIsle?'The Emberleaf Isle':'The Elderwood');
 }
 function qPlain(q){
   var g=q.goal, pr=qProgress(q);

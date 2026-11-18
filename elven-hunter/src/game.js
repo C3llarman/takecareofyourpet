@@ -202,6 +202,7 @@ function buildWorld(){
   buildWaystones(m);
   buildFolkSites(m);
   buildShore(m);
+  var isleTris=buildIsle(m);          // the next land, across the sea (isle.js)
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
   WORLD.castShadow=true; WORLD.receiveShadow=true;
   SCENE.add(WORLD);
@@ -210,7 +211,7 @@ function buildWorld(){
   for(var i=0;i<PROPS3.length;i++){ SCENE.add(PROPS3[i].hi); SCENE.add(PROPS3[i].lo); }
   initCropParts(); buildCottage();
   buildCave();
-  WORLDTRIS=m.count()/3+PROPTRIS;
+  WORLDTRIS=m.count()/3+PROPTRIS+isleTris;
 }
 var WORLDTRIS=0, PROPS3=[];
 /* level of detail per chunk: full models near the camera, stand-ins further out,
@@ -252,7 +253,7 @@ function populate(){
   for(var f=0;f<Math.round(10*WS);f++){ var q3=randIn(r), fx=q3.x, fz=q3.z;
     if(H(fx,fz)<WATER+0.4) continue; spawnFairy(fx,fz); }
   spawnKeeper();
-  spawnCritters(); spawnGnomes(); populateCave();
+  spawnCritters(); spawnGnomes(); populateCave(); populateIsle();
   if(WILD.dragon.t<=0) spawnDragon();
   spawnMinis(); seedChampions();
   spawnFolk(); spawnNodes(); spawnQuestItems();
@@ -480,7 +481,7 @@ function hurtEnemy(e,d,quiet){
   e.hp-=d; e.hurtT=0.18;
   if(!quiet) msg(''+Math.round(d),'#fff1d0',e.x+(Math.random()-0.5)*0.6,e.y+2.0*(e.scale||1),e.z,13);
   if(e.hp<=0){
-    G.killed++; if(!e.boss) gainXp(50,e.x,e.y+2,e.z);
+    G.killed++; if(!e.boss) gainXp(e.isle?75:50,e.x,e.y+2,e.z);
     bountyTick(e.kind==='spider'?(e.big?['spider','giant']:['spider']):[e.kind]);
     stonesKill();
     if(e.boss) bossDown(e);
@@ -491,12 +492,12 @@ function hurtEnemy(e,d,quiet){
     // monsters burst in a puff of ichor and dust, no blood
     burst(e.x,e.y+(e.kind==='wasp'?aimH(e):0.7*(e.scale||1)),e.z,16,ICHOR[e.kind],{up:4,spread:4,size:0.16*(e.scale||1),life:0.9});
     // every kill pays a little; giants pay well
-    var cn=Math.round(((e.big?16:3)+((Math.random()*(3+G.player.level/3))|0))*DF().pay);
+    var cn=Math.round(((e.big?16:3)+((Math.random()*(3+G.player.level/3))|0))*DF().pay*(e.isle?ISLE.pay:1));
     G.player.coins+=cn; msg('+'+cn+' ◉','#ffe08a',e.x+0.6,e.y+1.6,e.z,13); sfx('coin'); logLine('+'+cn+' coins','#ffe08a');
     if(Math.random()<0.16){ G.player.potions++; msg('+potion','#ff9d9d',e.x,e.y+2,e.z); sfx('pickup'); }
     var i=G.ents.indexOf(e); if(i>=0) G.ents.splice(i,1);
     // leave a body that plays its death and sinks away
-    G.ents.push({kind:'corpse',of:e.kind,hover:e.hover,big:e.big,boss:e.boss,cave:e.cave,mini:e.mini,elite:e.elite,crown:e.crown,x:e.x,y:e.boss?H(e.x,e.z):e.y,z:e.z,yaw:e.yaw,scale:e.scale,
+    G.ents.push({kind:'corpse',of:e.kind,hover:e.hover,big:e.big,boss:e.boss,cave:e.cave,isle:e.isle,mini:e.mini,elite:e.elite,crown:e.crown,x:e.x,y:e.boss?H(e.x,e.z):e.y,z:e.z,yaw:e.yaw,scale:e.scale,
       look:e.look,t:0,deadT:0.001,speed:0,walkPhase:e.walkPhase,state:e.state,flyK:0});
   }
 }
@@ -668,7 +669,7 @@ function update(dt){
     if(Math.random()<dt*8) burst(p.x,p.y+1+Math.random(),p.z,1,[0.55,0.95,0.35],{up:1,spread:0.5,size:0.08,life:0.6,grav:-1}); }
   // bounds
   var bd=Math.hypot(p.x,p.z), lim=WHALF*0.95;
-  if(bd>lim&&!inCave(p.x,p.z)){ p.x*=lim/bd; p.z*=lim/bd; }
+  if(bd>lim&&!offMap(p.x,p.z)){ p.x*=lim/bd; p.z*=lim/bd; }
   collide(p,0.42*(p.scale||1));   // trunks, rocks and walls are solid
   if(inSea(p.x,p.z)&&H(p.x,p.z)<WATER-0.9){ p.x=ox0; p.z=oz0; }   // wade in the shallows, no further
   // gravity / jump
@@ -730,7 +731,7 @@ function update(dt){
   }
   wildUpdate(dt);
   homeUpdate(dt);
-  p.safe=p.atTavern||p.atHome;
+  p.safe=p.atTavern||p.atHome||isleSafe(p);
   G.saveT=(G.saveT||0)+dt; if(G.saveT>15){ G.saveT=0; saveGame(); }
   for(var i=0;i<LANDMARKS.length;i++){
     var lm=LANDMARKS[i], ld=Math.hypot(p.x-lm.x,p.z-lm.z);
@@ -751,9 +752,11 @@ function update(dt){
   G.spawnT-=dt;
   if(G.spawnT<=0){
     var DD=DF(); G.spawnT=DD.spawn;
-    var alive=0, caveN=0; for(var k=0;k<G.ents.length;k++){var e=G.ents[k]; if(FOE[e.kind]){ if(e.cave) caveN++; else alive++; }}
+    var alive=0, caveN=0; for(var k=0;k<G.ents.length;k++){var e=G.ents[k]; if(FOE[e.kind]){ if(e.cave) caveN++; else if(!e.isle) alive++; }}
     if(WILD.inCave){
       if(caveN<Math.round(16*DD.pop)){ var cs=caveSpawnSpot(16); if(cs) caveFoe(cs.x,cs.z); }
+    } else if(WILD.inIsle){
+      isleRespawn();
     } else if(alive<DD.cap){
       var a=Math.random()*6.28, d=46+Math.random()*26;
       var sx=p.x+Math.cos(a)*d, sz=p.z+Math.sin(a)*d, sd2=Math.hypot(sx,sz);
@@ -1387,6 +1390,12 @@ function mapIcon(kind,x,y,s,unknown){
     case 'cave':                         // a dark arch
       hx.fillStyle='#8a7a60'; hx.beginPath(); hx.arc(0,1.5,5,3.14,6.29); hx.lineTo(5,4); hx.lineTo(-5,4); hx.closePath(); hx.fill();
       hx.fillStyle='#0a0806'; hx.beginPath(); hx.arc(0,2.5,2.8,3.14,6.29); hx.lineTo(2.8,4); hx.lineTo(-2.8,4); hx.closePath(); hx.fill(); break;
+    case 'landing':                      // a white boat
+      hx.fillStyle='#f3efe4'; hx.beginPath(); hx.moveTo(-5.5,0.5); hx.lineTo(5.5,0.5); hx.lineTo(3.5,3.5); hx.lineTo(-3.5,3.5); hx.closePath(); hx.fill();
+      hx.fillStyle='#c9a64a'; hx.fillRect(-0.5,-5,1,5.5); hx.fillStyle='#f3efe4'; hx.beginPath(); hx.moveTo(0.6,-4.5); hx.lineTo(4,-0.3); hx.lineTo(0.6,-0.3); hx.closePath(); hx.fill(); break;
+    case 'spire':                        // a broken tower
+      hx.fillStyle='#b8aea0'; hx.beginPath(); hx.moveTo(-3.5,4.5); hx.lineTo(-3,-3); hx.lineTo(-1.5,-5); hx.lineTo(0,-3); hx.lineTo(1.5,-4.2); hx.lineTo(3,-2.5); hx.lineTo(3.5,4.5); hx.closePath(); hx.fill();
+      hx.fillStyle='#e0702e'; hx.fillRect(-1,0.5,2,4); break;
     case 'stones':                       // ring of stones
       hx.fillStyle='#b8b8c0';
       for(var q=0;q<6;q++){ var qa=q/6*6.283; hx.fillRect(Math.cos(qa)*4-1.2,Math.sin(qa)*4-1.2,2.4,2.4); } break;
@@ -1516,9 +1525,14 @@ function drawHUD(){
     var xq=rotPt((CAVE.exit.x-p.x)*sc,(CAVE.exit.z-p.z)*sc,G.cam.yaw);
     hx.fillStyle='#f6e7a8'; hx.beginPath(); hx.arc(mx+xq.x,my+xq.y,3.2,0,6.3); hx.fill();
   }
+  if(WILD.inIsle){                        // out on the isle the map shows its shoreline
+    var iq=rotPt((ISLE.x-p.x)*sc,(ISLE.z-p.z)*sc,G.cam.yaw);
+    hx.strokeStyle='rgba(143,208,232,.45)'; hx.lineWidth=2; hx.beginPath(); hx.arc(mx+iq.x,my+iq.y,ISLE.R*0.8*sc,0,6.3); hx.stroke();
+  }
   hx.restore();
   for(var L=0;L<LANDMARKS.length&&!WILD.inCave;L++){
-    var lm=LANDMARKS[L], dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
+    var lm=LANDMARKS[L]; if(!!lm.isle!==!!WILD.inIsle) continue;     // only this land's places
+    var dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
     var rot=rotPt(dx,dz,G.cam.yaw), rl=Math.hypot(rot.x,rot.y), edge=rl>mr-7;
     if(edge){ rot.x*=(mr-7)/rl; rot.y*=(mr-7)/rl; }
     mapIcon(lm.kind,mx+rot.x,my+rot.y,ms*(edge?0.85:1.1),!G.found[lm.name]);
@@ -1539,7 +1553,7 @@ function drawHUD(){
   if(SHOWKEY){
     var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['shroom','Mushroom grump'],['cocoon','Captive — free them'],
       ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
-      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['shore','The Sunlit Shore'],['cave','Glimmer Cave — bring a torch']];
+      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['shore','The Sunlit Shore — a boat east'],['cave','Glimmer Cave — bring a torch'],['landing','Emberleaf Landing — sail home'],['spire','The Sunken Spire']];
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
     hx.textAlign='left'; hx.font='600 '+(DESKTOP?11.5:10.5)+'px Georgia,serif';
@@ -1750,7 +1764,7 @@ function makeScreen(){
   show('<h1>Make your hunter</h1>'+
     '<h3>Race</h3><div class="picks">'+opts('race',RACES)+'</div>'+
     '<h3>Calling</h3><div class="picks">'+opts('cls',CLASSES)+'</div>'+
-    '<h3>Difficulty</h3><div class="picks">'+DIFF_ORDER.map(function(k){ var v=DIFFS[k];
+    '<h3>Difficulty</h3><div class="picks two">'+DIFF_ORDER.map(function(k){ var v=DIFFS[k];
       return '<div class="pick'+((b.diff||'normal')===k?' on':'')+'" data-kind="diff" data-k="'+k+'"><b>'+v.n+'</b><small>'+v.d+'</small></div>'; }).join('')+'</div>'+
     '<div class="stat"><span>Health</span><b>'+G.S.maxHp+'</b></div>'+
     '<div class="stat"><span>Melee / ranged</span><b>'+Math.round(G.S.melee*100)+'% / '+Math.round(G.S.ranged*100)+'%</b></div>'+
@@ -1771,7 +1785,7 @@ function makeScreen(){
 function startRun(sv){
   if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; gearInit(sv.build); }
   else { G.build.skills={}; G.build.points=0; if(!G.build.diff) G.build.diff='normal'; gearInit(null); }
-  wildLoad(sv&&sv.wild); CAVEENV=null; WILD.lore.wood=1;
+  wildLoad(sv&&sv.wild); CAVEENV=null; ISLEENV=null; WILD.lore.wood=1;
   cineStop();
   G.player=null; recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;
@@ -1966,7 +1980,7 @@ function gameOver(){
   G.state='dead';
   var p=G.player;
   if(p.level>G.best){ G.best=p.level; try{localStorage.setItem('eh3_best',G.best);}catch(e){} }
-  var lost=Math.min(40,Math.floor(p.coins*0.1)); p.coins-=lost; G.lost=lost;   // a gentle knock: a tenth of your purse, 40 at most
+  var DFL=DF(), lost=Math.min(DFL.fallMax||40,Math.floor(p.coins*(DFL.fall||0.1))); p.coins-=lost; G.lost=lost;   // a gentle knock: a tenth of your purse, 40 at most (Expert: a fifth, 150)
   var ws=wakeSpot();
   var dmgList=Object.keys(TELE.dmg).sort(function(a,b){return TELE.dmg[b]-TELE.dmg[a];})
     .map(function(k){return '<div class="stat"><span>'+k+'</span><b>'+TELE.dmg[k]+' dmg</b></div>';}).join('');
@@ -1994,7 +2008,7 @@ function wakeUp(){
   }
   for(var gi=G.ents.length-1;gi>=0;gi--) if(G.ents[gi].kind==='golem'){ G.ents.splice(gi,1); WILD.stone.c=1; WILD.stone.full=true; }
   G.cam.yaw=p.yaw; G.cam.x=p.x-Math.sin(p.yaw)*8; G.cam.z=p.z-Math.cos(p.yaw)*8; G.cam.y=p.y+5;
-  setCaveEnv(false);
+  setCaveEnv(false); setIsleEnv(false);
   hide(); G.state='play'; wantLock(); saveGame();
 }
 
