@@ -11,6 +11,7 @@ The home of Elk Leaf Arcade at [elkleafarcade.com](https://elkleafarcade.com): a
 | Cluck Patrol | elkleafarcade.com/cluck-patrol/ | `cluck-patrol/` |
 | Acorn Run | elkleafarcade.com/acorn-run/ | `acorn-run/` |
 | Build a House | elkleafarcade.com/build-a-house/ | `build-a-house/` |
+| Flick Archery | elkleafarcade.com/flick-archery/ | `flick-archery/` |
 
 **Take Care of Your Pet** is a 3D pet care game. Feed, pet and train your pets, explore a big city, walk into shops, visit the vet, go down forest trails, and make friends with woodland animals.
 
@@ -21,6 +22,8 @@ The home of Elk Leaf Arcade at [elkleafarcade.com](https://elkleafarcade.com): a
 **Acorn Run** is an endless runner: race a squirrel across floating islands, backflip over wide gaps, throw acorns to break crates and knock out grumpy skunks, and say hi to the friendly skunks in hats. It runs straight from `acorn-run/` with no build step. To make a single self-contained HTML file instead, run `python3 tools/build.py` inside `acorn-run/`.
 
 **Build a House** is a 3D block-building game: place blocks, craft new materials from real-life recipes, open and close doors, and dress up your builder. It has its own README in `build-a-house/`.
+
+**Flick Archery** is a pass-the-phone archery game for 1 to 6 players. Flick up to shoot: flick speed sets the power, the flick's angle aims, and a curved swipe bends the arrow against the wind. Three rounds (15 m calm, 25 m breezy, 35 m gusty with a moving target), everyone gets the same wind, and the highest accuracy wins. Everything is inside `flick-archery/index.html`.
 
 ## Play locally
 
@@ -41,6 +44,8 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 | `cluck-patrol/cover.jpg` | Cluck Patrol's picture on the arcade menu |
 | `acorn-run/` | Acorn Run: `index.html`, code in `src/`, sprite atlas in `assets/`, original art sheet in `assets/source/`, optional bundler in `tools/` |
 | `acorn-run/cover.jpg` | Acorn Run's picture on the arcade menu |
+| `flick-archery/index.html` | Flick Archery: one self-contained page |
+| `flick-archery/cover.jpg` | Flick Archery's picture on the arcade menu |
 | `build-a-house/` | Build a House: `index.html`, styles in `css/`, code in `js/`, and `cover.jpg` |
 | `netlify.toml` | Netlify hosting settings (no build step) |
 
