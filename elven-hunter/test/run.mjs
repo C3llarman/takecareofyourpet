@@ -846,7 +846,7 @@ section('Expert, and the Emberleaf Isle');
   ok('slay Ashwing, and Elowen is free', freed.st === 2 && freed.coins && freed.lore, JSON.stringify(freed));
   ok('she gives you her favour, and waits for you at the Greenleaf', freed.fav && freed.atTavern);
   ok('Ashwing comes back in time, but the princess stays free', freed.back);
-  const home = await page.evaluate(() => { sail(false); const p = G.player; return { on: WILD.inIsle, wood: !inIsle(p.x, p.z) && inBounds(p.x, p.z, 0), world: WORLD.visible, isle: ISLE3.visible }; });
+  const home = await page.evaluate(() => { sail(false); const p = G.player; return { on: WILD.inIsle, wood: !inIsle(p.x, p.z) && Math.hypot(p.x, p.z) < WHALF && H(p.x, p.z) > WATER, world: WORLD.visible, isle: ISLE3.visible }; });
   ok('and the boat sails you home again', !home.on && home.wood && home.world && !home.isle);
   ok('no runtime errors', page.__errors.length === 0, page.__errors.join(' | '));
   await page.close();

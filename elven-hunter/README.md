@@ -111,7 +111,7 @@ src/
   home.js     the cottage, its farm, and saving / continuing
   wild.js     difficulty, mushroom grumps, the Stone Warden, the dragon, the Glimmer
               Cave and its torch, butterflies, rabbits, toadstools and gnomes
-  legends.js  the journal (47 pages of lore), waystones, Bram's tales, the six
+  legends.js  the journal (44 pages of lore), waystones, Bram's tales, the six
               mini-bosses and the golden champions
   isle.js     the Emberleaf Isle: its ground, autumn trees, the landing, the Sunken
               Spire and Caer Aelfhaven, the white boat, its light, its foes, Ashwing
@@ -296,7 +296,7 @@ and recipes, more places to find, and gnomes.
 
 ### Legends (`src/legends.js`)
 
-- **The journal** (`L`, or from the skills screen). Forty-seven pages: the story of the
+- **The journal** (`L`, or from the skills screen). Forty-four pages: the story of the
   Elderwood and the Long Weaving, every landmark, every named foe, Bram's tales and five
   carved **waystones** set about the wood (walk up and `E` / **READ**). Pages fill as you
   discover, read, listen and kill; empty pages carry a hint where to look.
@@ -527,7 +527,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-192 assertions run the actual game in headless Chromium with software WebGL and check
+222 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames
