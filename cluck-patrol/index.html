@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#4fb3ec">
 <title>Cluck Patrol</title>
-<meta name="description" content="Cluck Patrol: hop across a tropical island and stomp or egg the raccoons and foxes. Easy, medium and hard.">
+<meta name="description" content="Cluck Patrol: hop across five tropical levels and stomp or egg the raccoons and foxes. Easy, medium and hard.">
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;
     -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
@@ -88,30 +88,178 @@ addEventListener('resize',resize);
 addEventListener('orientationchange',()=>setTimeout(resize,120));
 resize();
 
-/* ================= level ============ */
-const GROUND_Y=468, LEVEL_W=4600, DEEP=GROUND_Y+240;
-const SEGS=[[0,775],[915,1575],[1715,2445],[2585,3275],[3415,4600]];
-const PITS=SEGS.slice(1).map((s,i)=>[SEGS[i][1],s[0]]);
+/* ================= levels ============ */
+const GROUND_Y=468, DEEP=GROUND_Y+240;
+/* Three tiers: low ledges 76 above the ground, high ledges 70 above those,
+   top ledges 70 above those, never more than ~90 apart sideways, so every
+   hop is an easy one. A jump tops out about 125 up and 190 across. */
+const LOW=392, HIGH=322, TOP=252;
 
-/* Two tiers: low ledges 76 above the ground, high ledges 70 above those,
-   never more than ~90 apart sideways, so every hop is an easy one. */
-const LOW=392, HIGH=322;
-const STATIC=[
-  {x:330,y:HIGH,w:112},{x:480,y:LOW,w:168},
-  {x:1000,y:HIGH,w:112},{x:1170,y:LOW,w:168},{x:1420,y:350,w:112},
-  {x:1600,y:LOW,w:112},
-  {x:1800,y:LOW,w:168},{x:2030,y:HIGH,w:112},{x:2200,y:LOW,w:112},
-  {x:2680,y:LOW,w:112},{x:2860,y:HIGH,w:168},{x:3100,y:LOW,w:112},
-  {x:3290,y:LOW,w:112},
-  {x:3500,y:LOW,w:112},{x:3670,y:HIGH,w:168},{x:3920,y:LOW,w:112},
-  {x:4110,y:330,w:112},{x:4380,y:LOW,w:168},
+/* Level 1 is the original island, kept exactly as it was. */
+const ISLAND={
+  name:'Palm Beach', tip:'Foxes charge when they see you.', W:4600, time:1, look:'day',
+  segs:[[0,775],[915,1575],[1715,2445],[2585,3275],[3415,4600]],
+  plats:[
+    {x:330,y:HIGH,w:112},{x:480,y:LOW,w:168},
+    {x:1000,y:HIGH,w:112},{x:1170,y:LOW,w:168},{x:1420,y:350,w:112},
+    {x:1600,y:LOW,w:112},
+    {x:1800,y:LOW,w:168},{x:2030,y:HIGH,w:112},{x:2200,y:LOW,w:112},
+    {x:2680,y:LOW,w:112},{x:2860,y:HIGH,w:168},{x:3100,y:LOW,w:112},
+    {x:3290,y:LOW,w:112},
+    {x:3500,y:LOW,w:112},{x:3670,y:HIGH,w:168},{x:3920,y:LOW,w:112},
+    {x:4110,y:330,w:112},{x:4380,y:LOW,w:168},
+  ],
+  movers:[
+    {x:790,y:404,w:112,lo:778,hi:860,sp:50},
+    {x:2460,y:400,w:112,lo:2448,hi:2530,sp:55},
+    {x:1250,y:310,w:112,lo:1236,hi:1316,sp:55},
+  ],
+  hearts:[{x:1056,y:HIGH},{x:2086,y:HIGH},{x:2944,y:HIGH},{x:4166,y:330}],
+  crates:[240,1130,2150,3620],
+  decor:[
+    {t:'bush',x:430},{t:'barrel',x:620},{t:'bush',x:980},{t:'barrel',x:1320},{t:'fence',x:1480},
+    {t:'rock',x:1900},{t:'fence',x:2000},{t:'bush',x:2350},{t:'barrel',x:2800},{t:'rock',x:3050},
+    {t:'bush',x:3200},{t:'barrel',x:3880},{t:'rock',x:4100},{t:'bush',x:4300},{t:'fence',x:4500},
+  ],
+  palms:[90,520,1040,1380,1860,2260,2720,3140,3560,3990,4340,4560],
+  foes:[
+    ['raccoon',180,GROUND_Y,120,300],['fox',560,GROUND_Y,400,740],
+    ['raccoon',560,LOW,484,604],
+    ['fox',1100,GROUND_Y,950,1540],['raccoon',1240,LOW,1174,1294],
+    ['raccoon',1050,HIGH,1004,1068],['fox',1440,350,1424,1486],
+    ['raccoon',1850,LOW,1804,1924],['fox',2060,HIGH,2034,2096],
+    ['raccoon',2240,LOW,2204,2268],['fox',1900,GROUND_Y,1750,2420],
+    ['raccoon',2200,GROUND_Y,1760,2300],
+    ['fox',2900,GROUND_Y,2620,3250],['raccoon',2900,HIGH,2864,2984],
+    ['fox',3140,LOW,3104,3166],['raccoon',2720,LOW,2684,2748],
+    ['fox',3600,GROUND_Y,3440,4000],['raccoon',3740,HIGH,3674,3794],
+    ['fox',3960,LOW,3924,3986],['raccoon',4150,330,4114,4178],
+    ['fox',4300,GROUND_Y,4050,4590],['raccoon',4440,LOW,4384,4504],
+  ],
+};
+
+/* The newer levels are written compactly and filled in by makeLevel:
+   ground: [type,x] patrols ~130 either way on its stretch of sand
+   onPlat: [type,platIndex] patrols that whole ledge
+   hearts: platform indexes, a heart floats over each
+   c:true  a cracked ledge that crumbles a moment after you land on it
+   lifts:  platforms that ride up and down between TOP and LOW */
+const lift=x=>({x,y:LOW,w:96,lo:TOP+10,hi:LOW,sp:58,axis:'y'});
+const R='raccoon', F='fox';
+const MORE=[
+  { name:'Coconut Cove', tip:'Ride the drifting ledges over the wide water.', W:5200, time:1.05, look:'warm',
+    segs:[[0,720],[870,1520],[1670,2240],[2500,3120],[3270,3920],[4180,5200]],
+    plats:[
+      {x:300,y:LOW,w:168},{x:520,y:HIGH,w:112},
+      {x:960,y:LOW,w:112},{x:1120,y:HIGH,w:168},{x:1340,y:LOW,w:112},
+      {x:1760,y:LOW,w:168},{x:1960,y:HIGH,w:112},{x:2120,y:TOP,w:112},
+      {x:2600,y:LOW,w:112},{x:2780,y:HIGH,w:168},{x:2990,y:LOW,w:112},
+      {x:3360,y:LOW,w:168},{x:3580,y:HIGH,w:112},{x:3760,y:LOW,w:112},
+      {x:4280,y:LOW,w:112},{x:4450,y:HIGH,w:168},{x:4680,y:TOP,w:112},{x:4860,y:LOW,w:168},
+    ],
+    movers:[{x:2250,y:404,w:112,lo:2244,hi:2384,sp:60},{x:3930,y:404,w:112,lo:3924,hi:4064,sp:65}],
+    hearts:[1,7,12,16], crates:[200,1250,2900,4620],
+    ground:[[R,200],[F,560],[F,1100],[R,1300],[F,1900],[R,2100],[F,2700],[R,3000],
+            [F,3500],[R,3800],[F,4400],[R,4700],[F,5000]],
+    onPlat:[[R,0],[F,1],[R,2],[F,3],[R,5],[F,6],[R,9],[F,11],[R,13],[F,15],[R,17]],
+  },
+  { name:'Sunset Cliffs', tip:'Hop on a lift to reach the cliff tops.', W:5400, time:1.1, look:'sunset',
+    segs:[[0,800],[960,1700],[1860,2500],[2800,3500],[3660,4300],[4560,5400]],
+    plats:[
+      {x:250,y:LOW,w:168},{x:440,y:HIGH,w:112},{x:740,y:TOP,w:168},
+      {x:1050,y:LOW,w:112},{x:1220,y:HIGH,w:168},{x:1450,y:LOW,w:112},
+      {x:1960,y:LOW,w:168},{x:2340,y:TOP,w:168},
+      {x:2900,y:LOW,w:112},{x:3220,y:TOP,w:112},{x:3380,y:HIGH,w:112},
+      {x:3760,y:LOW,w:168},{x:3980,y:HIGH,w:112},{x:4150,y:LOW,w:112},
+      {x:4660,y:LOW,w:112},{x:4960,y:TOP,w:168},{x:5200,y:LOW,w:112},
+    ],
+    movers:[{x:2510,y:404,w:112,lo:2504,hi:2684,sp:70},{x:4310,y:404,w:112,lo:4304,hi:4444,sp:70},
+            lift(600),lift(2200),lift(3080),lift(4820)],
+    hearts:[2,7,9,15], crates:[160,1350,3000,4000],
+    ground:[[R,200],[F,600],[F,1100],[R,1400],[F,2000],[R,2350],[F,2950],[R,3300],
+            [F,3800],[R,4100],[F,4700],[R,5000],[F,5250]],
+    onPlat:[[R,0],[F,1],[R,2],[F,4],[R,6],[F,7],[R,8],[R,9],[F,10],[R,11],[F,13],[R,15],[F,16]],
+  },
+  { name:'Moonlit Lagoon', tip:'Cracked ledges crumble under you. Keep moving!', W:5600, time:1.15, look:'night',
+    segs:[[0,760],[920,1500],[1800,2400],[2560,3150],[3450,4100],[4260,4800],[5060,5600]],
+    plats:[
+      {x:280,y:LOW,w:168},{x:500,y:HIGH,w:112,c:1},{x:660,y:TOP,w:112},
+      {x:1000,y:LOW,w:168},{x:1230,y:HIGH,w:112},{x:1390,y:LOW,w:112},
+      {x:1530,y:420,w:96,c:1},{x:1660,y:420,w:96,c:1},
+      {x:1900,y:LOW,w:112},{x:2070,y:HIGH,w:112,c:1},{x:2230,y:TOP,w:112},
+      {x:2650,y:LOW,w:168},{x:2880,y:HIGH,w:112},{x:3040,y:LOW,w:112},
+      {x:3550,y:LOW,w:112},{x:3720,y:HIGH,w:168,c:1},{x:3950,y:TOP,w:112},
+      {x:4350,y:LOW,w:168},{x:4580,y:HIGH,w:112},
+      {x:4830,y:420,w:96,c:1},{x:4960,y:420,w:96,c:1},
+      {x:5180,y:LOW,w:112},{x:5350,y:HIGH,w:168},
+    ],
+    movers:[{x:3160,y:404,w:112,lo:3154,hi:3330,sp:75}],
+    hearts:[2,10,16,22], crates:[180,1150,2500,3300,4450],
+    ground:[[R,200],[F,600],[F,1100],[R,1350],[F,2000],[R,2300],[F,2700],[R,3050],
+            [F,3600],[R,3950],[F,4400],[R,4700],[F,5200],[R,5450]],
+    onPlat:[[R,0],[F,2],[R,3],[F,4],[R,8],[F,10],[R,11],[F,12],[R,14],[F,16],[R,17],[F,18],[R,21],[F,22]],
+  },
+  { name:'Fox Den Peak', tip:'Lifts, rafts and crumbly ledges. Clear the den!', W:6000, time:1.25, look:'dusk',
+    segs:[[0,700],[860,1450],[1750,2350],[2510,3100],[3400,4000],[4160,4750],[5050,6000]],
+    plats:[
+      {x:220,y:LOW,w:168},{x:600,y:TOP,w:168},
+      {x:950,y:LOW,w:112},{x:1110,y:HIGH,w:112,c:1},{x:1270,y:TOP,w:112},
+      {x:1850,y:LOW,w:168},{x:2220,y:TOP,w:112},
+      {x:2600,y:LOW,w:112},{x:2770,y:HIGH,w:168},{x:2980,y:LOW,w:112},
+      {x:3130,y:420,w:96,c:1},{x:3262,y:420,w:96,c:1},
+      {x:3480,y:LOW,w:168},{x:3840,y:TOP,w:112},
+      {x:4250,y:LOW,w:112},{x:4410,y:HIGH,w:168,c:1},{x:4620,y:LOW,w:112},
+      {x:5150,y:LOW,w:168},{x:5520,y:TOP,w:168},{x:5760,y:HIGH,w:112},{x:5880,y:LOW,w:112},
+    ],
+    movers:[{x:1460,y:404,w:112,lo:1454,hi:1630,sp:80},{x:4760,y:404,w:112,lo:4754,hi:4930,sp:85},
+            lift(460),lift(2080),lift(3700),lift(5380)],
+    hearts:[1,6,13,18], crates:[140,1380,2450,3950,5300],
+    ground:[[R,180],[F,560],[F,1000],[R,1300],[F,1900],[R,2250],[F,2650],[R,2950],
+            [F,3550],[R,3900],[F,4300],[R,4650],[F,5200],[R,5500],[F,5800]],
+    onPlat:[[R,0],[F,1],[R,2],[F,4],[R,5],[F,6],[R,7],[F,8],[R,9],[F,12],[R,13],
+            [F,14],[R,16],[F,17],[R,18],[F,19],[R,20]],
+  },
 ];
-const MOVERS=[
-  {x:790,y:404,w:112,lo:778,hi:860,sp:50},
-  {x:2460,y:400,w:112,lo:2448,hi:2530,sp:55},
-  {x:1250,y:310,w:112,lo:1236,hi:1316,sp:55},
-];
-const HEARTS=[{x:1056,y:HIGH},{x:2086,y:HIGH},{x:2944,y:HIGH},{x:4166,y:330}];
+const DECOR_KINDS=['bush','barrel','rock','fence'];
+function makeLevel(o){
+  const fw=t=>t===F?42:40;
+  o.foes=[
+    ...o.ground.map(([t,x])=>[t,x,GROUND_Y,x-130,x+130]),
+    ...o.onPlat.map(([t,i])=>{ const p=o.plats[i], w=fw(t);
+      return [t,p.x+p.w/2-w/2,p.y,p.x+4,p.x+p.w-w-4]; }),
+  ];
+  o.hearts=o.hearts.map(i=>({x:o.plats[i].x+o.plats[i].w/2,y:o.plats[i].y}));
+  // props and palms sprinkled along the sand, clear of the crates and the water
+  o.decor=[]; o.palms=[];
+  o.segs.forEach(([a,b],si)=>{
+    for(let x=a+110,k=si;x<b-70;x+=260+((x*7)%90),k++)
+      if(!o.crates.some(c=>Math.abs(c-x)<70)) o.decor.push({t:DECOR_KINDS[k%4],x});
+    for(let x=a+70;x<b-40;x+=380+((x*3)%110)) o.palms.push(x);
+  });
+  return o;
+}
+const LEVELS=[ISLAND,...MORE.map(makeLevel)];
+const LOOKS={
+  day:   null,
+  warm:  {sky:'#ffe2b0',wash:'rgba(255,170,70,.07)'},
+  sunset:{sky:'#ffa070',wash:'rgba(255,110,50,.12)',sea:['#f7a46b','#7d4a6e']},
+  night: {sky:'#34407a',wash:'rgba(16,24,72,.30)',sea:['#2f5f8f','#0d2341'],moon:1},
+  dusk:  {sky:'#b98ad6',wash:'rgba(110,50,140,.14)',sea:['#8b7fd0','#3a2a66']},
+};
+
+let lvIdx=0, unlocked=0;
+try{
+  unlocked=Math.min(LEVELS.length-1,Math.max(0,+localStorage.getItem('cluckUnlocked')||0));
+  lvIdx=Math.min(unlocked,Math.max(0,+localStorage.getItem('cluckLevel')||0));
+}catch(_){}
+let LV=LEVELS[lvIdx], LEVEL_W, SEGS, PITS;
+function useLevel(i){
+  lvIdx=i; LV=LEVELS[i]; LEVEL_W=LV.W; SEGS=LV.segs;
+  PITS=SEGS.slice(1).map((s,j)=>[SEGS[j][1],s[0]]);
+  try{ localStorage.setItem('cluckLevel',i); }catch(_){}
+}
+useLevel(lvIdx);
+
 const DIFFS={
   easy:  {label:'EASY',  hearts:5,time:240,speed:.75,sight:230,eggs:Infinity,cool:.28,col:'#7bd45c'},
   medium:{label:'MEDIUM',hearts:4,time:190,speed:.92,sight:300,eggs:30,cool:.4,col:'#ffd85c'},
@@ -121,31 +269,13 @@ const DIFF_KEYS=['easy','medium','hard'];
 let diffKey='medium';
 try{ const d=localStorage.getItem('cluckDiff'); if(DIFFS[d]) diffKey=d; }catch(_){}
 let D=DIFFS[diffKey];
-const CRATES=[{x:240},{x:1130},{x:2150},{x:3620}];
-const DECOR=[
-  {t:'bush',x:430},{t:'barrel',x:620},{t:'bush',x:980},{t:'barrel',x:1320},{t:'fence',x:1480},
-  {t:'rock',x:1900},{t:'fence',x:2000},{t:'bush',x:2350},{t:'barrel',x:2800},{t:'rock',x:3050},
-  {t:'bush',x:3200},{t:'barrel',x:3880},{t:'rock',x:4100},{t:'bush',x:4300},{t:'fence',x:4500},
-];
-const PALMS=[],FARPALMS=[];
-[90,520,1040,1380,1860,2260,2720,3140,3560,3990,4340,4560].forEach((x,i)=>
-  PALMS.push({x,h:150+((i*37)%60)}));
-for(let i=0;i<26;i++) FARPALMS.push({x:60+i*190+((i*53)%70),h:78+((i*29)%34)});
-
-const ENEMY_DEFS=[
-  ['raccoon',180,GROUND_Y,120,300],['fox',560,GROUND_Y,400,740],
-  ['raccoon',560,LOW,484,604],
-  ['fox',1100,GROUND_Y,950,1540],['raccoon',1240,LOW,1174,1294],
-  ['raccoon',1050,HIGH,1004,1068],['fox',1440,350,1424,1486],
-  ['raccoon',1850,LOW,1804,1924],['fox',2060,HIGH,2034,2096],
-  ['raccoon',2240,LOW,2204,2268],['fox',1900,GROUND_Y,1750,2420],
-  ['raccoon',2200,GROUND_Y,1760,2300],
-  ['fox',2900,GROUND_Y,2620,3250],['raccoon',2900,HIGH,2864,2984],
-  ['fox',3140,LOW,3104,3166],['raccoon',2720,LOW,2684,2748],
-  ['fox',3600,GROUND_Y,3440,4000],['raccoon',3740,HIGH,3674,3794],
-  ['fox',3960,LOW,3924,3986],['raccoon',4150,330,4114,4178],
-  ['fox',4300,GROUND_Y,4050,4590],['raccoon',4440,LOW,4384,4504],
-];
+const levelTime=()=>Math.round(D.time*LV.time/5)*5;
+let PALMS=[],FARPALMS=[];
+function scenery(){
+  PALMS=LV.palms.map((x,i)=>({x,h:150+((i*37)%60)}));
+  FARPALMS=[];
+  for(let i=0;i<Math.max(26,Math.ceil(LEVEL_W/177));i++) FARPALMS.push({x:60+i*190+((i*53)%70),h:78+((i*29)%34)});
+}
 
 /* ================= state ============ */
 const GRAV=2400, MOVE=300, ACC=2500, FRIC=2100, JUMP_V=-775;
@@ -154,16 +284,17 @@ let jumpBuffer=0,coyote=0,eggCool=0;
 const player={x:60,y:GROUND_Y-48,w:32,h:48,vx:0,vy:0,onGround:false,face:1,
   hearts:D.hearts,inv:0,anim:0,riding:null,safe:{x:60,y:GROUND_Y-48},eggs:D.eggs,throwT:0};
 let solids=[],movers=[],enemies=[],puffs=[],eggs=[],pickups=[],titleBtns=[];
-let camX=0,camY=0,state='title',t=0,shake=0,clock=D.time,combo=0,comboT=0,best=0;
+let camX=0,camY=0,state='title',t=0,shake=0,clock=0,combo=0,comboT=0,best=0,banner=0;
 
 function buildLevel(){
-  movers=MOVERS.map(m=>({...m,dir:1,dx:0,h:26,kind:'move'}));
+  scenery();
+  movers=LV.movers.map(m=>({...m,dir:m.axis==='y'?-1:1,dx:0,dy:0,h:26,kind:'move'}));
   solids=[];
   for(const [a,b] of SEGS) solids.push({x:a,y:GROUND_Y,w:b-a,h:260,kind:'ground'});
-  for(const p of STATIC) solids.push({x:p.x,y:p.y,w:p.w,h:26,kind:'plat'});
-  for(const c of CRATES) solids.push({x:c.x-26,y:GROUND_Y-52,w:52,h:52,kind:'crate'});
+  for(const p of LV.plats) solids.push({x:p.x,y:p.y,w:p.w,h:26,kind:'plat',crumble:!!p.c,crack:0,gone:0});
+  for(const c of LV.crates) solids.push({x:c-26,y:GROUND_Y-52,w:52,h:52,kind:'crate'});
   solids=solids.concat(movers);
-  enemies=ENEMY_DEFS.map(([type,x,gy,lo,hi])=>{
+  enemies=LV.foes.map(([type,x,gy,lo,hi])=>{
     const h=type==='fox'?36:34, w=type==='fox'?42:40;
     let clo=lo, chi=hi;
     if(gy===GROUND_Y){
@@ -175,23 +306,35 @@ function buildLevel(){
     return {type,x,y:gy-h,w,h,vx:(type==='fox'?118:96)*D.speed*(Math.random()<.5?-1:1),
             lo,hi,clo,chi,alive:true,t:Math.random()*9,chase:0};
   });
-  pickups=HEARTS.map(h=>({x:h.x,y:h.y-34,got:false}));
+  pickups=LV.hearts.map(h=>({x:h.x,y:h.y-34,got:false}));
 }
 function setDiff(k){
   diffKey=k; D=DIFFS[k];
   try{ localStorage.setItem('cluckDiff',k); }catch(_){}
 }
-function reset(){
-  buildLevel();
+function reset(i){
+  if(i!=null) useLevel(i);
+  buildLevel(); banner=2.6;
   player.x=60;player.y=GROUND_Y-48;player.vx=0;player.vy=0;
   player.hearts=D.hearts;player.inv=0;player.riding=null;player.eggs=D.eggs;
   player.safe={x:60,y:GROUND_Y-48};
-  puffs=[];eggs=[];eggCool=0;clock=D.time;combo=0;best=0;camX=0;state='play';
+  puffs=[];eggs=[];eggCool=0;clock=levelTime();combo=0;best=0;camX=0;state='play';
 }
 
 /* ================= input ============ */
+/* leaving a title or end screen: a cleared level moves on to the next one */
+function go(){
+  if(state==='won'){
+    if(lvIdx+1<LEVELS.length) reset(lvIdx+1);
+    else { pickLevel(0); state='title'; }
+  } else reset();
+}
+function pickLevel(i){
+  if(i<0||i>=LEVELS.length||i>unlocked) return;
+  useLevel(i); buildLevel();
+}
 function pressJump(){
-  if(state!=='play'){ reset(); return; }
+  if(state!=='play'){ go(); return; }
   keys.jump=true; jumpBuffer=.12;
 }
 function throwEgg(){
@@ -203,13 +346,13 @@ function throwEgg(){
 }
 addEventListener('keydown',e=>{
   if(e.code==='ArrowLeft'){keys.left=true;e.preventDefault();
-    if(state==='title') setDiff(DIFF_KEYS[Math.max(0,DIFF_KEYS.indexOf(diffKey)-1)]);}
+    if(state==='title') pickLevel(lvIdx-1);}
   if(e.code==='ArrowRight'){keys.right=true;e.preventDefault();
-    if(state==='title') setDiff(DIFF_KEYS[Math.min(2,DIFF_KEYS.indexOf(diffKey)+1)]);}
+    if(state==='title') pickLevel(lvIdx+1);}
   if(e.code==='Space'||e.code==='ArrowUp'){pressJump();e.preventDefault();}
   if((e.code==='KeyX'||e.code==='KeyZ'||e.code==='KeyF')&&!e.repeat) throwEgg();
   if(state!=='play'&&['Digit1','Digit2','Digit3'].includes(e.code)){
-    setDiff(DIFF_KEYS[+e.code.slice(5)-1]); reset();
+    setDiff(DIFF_KEYS[+e.code.slice(5)-1]); go();
   }
   if(e.code==='KeyR'&&state==='play') reset();
   if(e.code==='Escape'&&state!=='play') state='title';
@@ -235,8 +378,11 @@ cv.addEventListener('pointerdown',e=>{
   e.preventDefault();
   if(state==='play') return;
   const b=titleBtns.find(b=>e.clientX>=b.x&&e.clientX<=b.x+b.w&&e.clientY>=b.y&&e.clientY<=b.y+b.h);
+  if(b&&b.lv!=null){ if(state==='title') pickLevel(b.lv); return; }
+  if(b&&b.menu){ state='title'; return; }
+  if(b&&b.lock) return;
   if(b) setDiff(b.k);
-  reset();
+  go();
 });
 document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
 document.addEventListener('gesturestart',e=>e.preventDefault());
@@ -252,7 +398,7 @@ document.addEventListener('fullscreenchange',()=>{
 if(!rfs) bF.style.display='none';
 const buzz=p=>{ if(navigator.vibrate) navigator.vibrate(p); };
 
-const hit=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+const hit=(a,b)=>!(b.gone>0)&&a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 function puff(x,y,c,n=14){
   for(let i=0;i<n;i++) puffs.push({x,y,vx:(Math.random()-.5)*280,
     vy:-Math.random()*300-40,r:3+Math.random()*5,life:1,c});
@@ -278,12 +424,23 @@ function update(dt){
 
   // moving platforms
   for(const m of movers){
-    const nx=m.x+m.sp*m.dir*dt;
-    m.dx=nx-m.x; m.x=nx;
-    if(m.x<m.lo){m.x=m.lo;m.dir=1;m.dx=0;}
-    if(m.x>m.hi){m.x=m.hi;m.dir=-1;m.dx=0;}
+    const k=m.axis==='y'?'y':'x', was=m[k];
+    m[k]+=m.sp*m.dir*dt;
+    if(m[k]<m.lo){m[k]=m.lo;m.dir=1;}
+    if(m[k]>m.hi){m[k]=m.hi;m.dir=-1;}
+    const d=m[k]-was;
+    m.dx=k==='x'?d:0; m.dy=k==='y'?d:0;
   }
-  if(player.riding) player.x+=player.riding.dx;
+  if(player.riding){ player.x+=player.riding.dx; player.y+=player.riding.dy; }
+
+  // cracked ledges: shake, drop, then grow back
+  for(const s of solids){
+    if(!s.crumble) continue;
+    if(s.crack>0){ s.crack-=dt;
+      if(s.crack<=0){ s.gone=3.2; puff(s.x+s.w/2,s.y+12,'#8a6a42',16); puff(s.x+s.w/2,s.y+6,'#6fb84a',8); } }
+    else if(s.gone>0){ s.gone-=dt;
+      if(s.gone<=0){ s.gone=0; if(hit(player,s)) s.gone=.3; } }
+  }
 
   const dir=(keys.right?1:0)-(keys.left?1:0);
   if(dir){ player.vx+=dir*ACC*dt; player.face=dir; }
@@ -296,7 +453,8 @@ function update(dt){
   player.vy=Math.min(1250,player.vy+GRAV*dt);
 
   player.x+=player.vx*dt;
-  for(const s of solids) if(hit(player,s)){
+  for(const s of solids) if(hit(player,s)&&player.y+player.h-s.y>8){
+    // feet just inside a ledge top (a lift rising under you) is not a wall
     player.x=player.vx>0?s.x-player.w:s.x+s.w; player.vx=0;
   }
   player.x=Math.max(0,Math.min(LEVEL_W-player.w,player.x));
@@ -308,6 +466,7 @@ function update(dt){
     if(player.vy>0){
       player.y=s.y-player.h; player.vy=0; player.onGround=true;
       if(s.kind==='move') player.riding=s;
+      if(s.crumble&&!(s.crack>0)) { s.crack=.55; buzz(8); }
     } else if(player.vy<0){ player.y=s.y+s.h; player.vy=60; }
   }
   if(player.onGround){
@@ -327,7 +486,7 @@ function update(dt){
     if(hit(player,{x:p.x-14,y:p.y-14,w:28,h:28})){
       p.got=true; puff(p.x,p.y,'#ff8a8a',14); buzz(15);
       if(player.hearts<D.hearts) player.hearts++;
-      else clock=Math.min(clock+15,D.time);
+      else clock=Math.min(clock+15,levelTime());
     }
   }
 
@@ -386,7 +545,13 @@ function update(dt){
   }
   eggs=eggs.filter(g=>!g.dead);
 
-  if(enemies.every(e=>!e.alive)) state='won';
+  if(enemies.every(e=>!e.alive)){
+    state='won';
+    if(lvIdx+1>unlocked&&lvIdx+1<LEVELS.length){
+      unlocked=lvIdx+1; try{ localStorage.setItem('cluckUnlocked',unlocked); }catch(_){}
+    }
+  }
+  if(banner>0) banner-=dt;
 
   const tx=Math.max(0,Math.min(LEVEL_W-VIS_W,player.x+player.w/2-VIS_W/2));
   camX+=(tx-camX)*Math.min(1,dt*6);
@@ -408,12 +573,34 @@ function drawBackdrop(L,R,T,B){
     ctx.restore();
   }
   ctx.fillStyle='#cfe9f7'; ctx.fillRect(L,GROUND_Y+68,R-L,B-(GROUND_Y+68));
+  const lk=LOOKS[LV.look];
+  if(!lk) return;
+  ctx.save();
+  ctx.globalCompositeOperation='multiply'; ctx.fillStyle=lk.sky; ctx.fillRect(L,T,R-L,B-T);
+  ctx.restore();
+  if(lk.moon){
+    // stars and a moon hang far away, so they barely drift as you run
+    ctx.fillStyle='#fdf6e3';
+    for(let i=0;i<70;i++){
+      const sx=L+(((i*197+camX*.04)%(R-L+40))+R-L+40)%(R-L+40)-20;
+      const sy=T+((i*113)%Math.max(60,GROUND_Y-150-T));
+      ctx.globalAlpha=.35+.45*Math.abs(Math.sin(t*1.3+i));
+      ctx.fillRect(sx,sy,2,2);
+    }
+    ctx.globalAlpha=1;
+    const mx=camX+VIS_W*.78, my=Math.max(T+90,GROUND_Y-330);
+    ctx.fillStyle='rgba(253,246,227,.18)'; ctx.beginPath(); ctx.arc(mx,my,52,0,7); ctx.fill();
+    ctx.fillStyle='#fff6d6'; ctx.beginPath(); ctx.arc(mx,my,30,0,7); ctx.fill();
+    ctx.fillStyle='rgba(200,190,160,.5)';
+    ctx.beginPath(); ctx.arc(mx-9,my-6,6,0,7); ctx.arc(mx+10,my+8,4,0,7); ctx.fill();
+  }
 }
 function drawWater(L,R,B){
   for(const [a,b] of PITS){
     if(b<L-40||a>R+40) continue;
     const g=ctx.createLinearGradient(0,GROUND_Y,0,GROUND_Y+220);
-    g.addColorStop(0,'#59cbe8'); g.addColorStop(1,'#166f96');
+    const sea=(LOOKS[LV.look]||{}).sea||['#59cbe8','#166f96'];
+    g.addColorStop(0,sea[0]); g.addColorStop(1,sea[1]);
     ctx.fillStyle=g; ctx.fillRect(a,GROUND_Y+4,b-a,B-GROUND_Y);
     ctx.strokeStyle='rgba(255,255,255,.75)'; ctx.lineWidth=3.5; ctx.lineCap='round';
     for(let x=a+8;x<b-8;x+=34){
@@ -439,10 +626,26 @@ function drawGround(L,R,B){
 }
 function drawPlat(p){
   const T=56;
+  if(p.gone>0) return;
   ctx.save();
+  if(p.crack>0) ctx.translate((Math.random()-.5)*4,(.55-p.crack)*6);
   ctx.beginPath(); ctx.rect(p.x,p.y-6,p.w,54); ctx.clip();
   for(let x=p.x;x<p.x+p.w;x+=T) spr('grass_small',x+T/2,p.y+34,34);
+  if(p.crumble){
+    // cracked ledges: dark zig-zag splits through the soil
+    ctx.strokeStyle='rgba(45,25,10,.85)'; ctx.lineWidth=2.2; ctx.lineJoin='round';
+    for(let x=p.x+18;x<p.x+p.w-10;x+=30){
+      ctx.beginPath(); ctx.moveTo(x,p.y+9); ctx.lineTo(x+5,p.y+15); ctx.lineTo(x-2,p.y+21); ctx.lineTo(x+4,p.y+29);
+      ctx.stroke();
+    }
+  }
   ctx.restore();
+}
+function drawLiftTrack(m){
+  const cx=m.x+m.w/2;
+  ctx.strokeStyle='rgba(90,60,30,.45)'; ctx.lineWidth=3; ctx.setLineDash([6,8]);
+  ctx.beginPath(); ctx.moveTo(cx,m.lo+8); ctx.lineTo(cx,m.hi+26); ctx.stroke();
+  ctx.setLineDash([]);
 }
 function frameFor(){
   if(!player.onGround) return player.vy<-60?'jump':'land';
@@ -463,7 +666,7 @@ function draw(){
   // props are planted a few px into the turf and drawn before it, so the
   // grass tufts overlap their feet and they sit on the ground, not above it
   const SINK=9;
-  for(const d of DECOR){
+  for(const d of LV.decor){
     if(d.x<L-90||d.x>R+90) continue;
     const h={bush:42,rock:46,barrel:56,fence:48}[d.t];
     contact(d.x,GROUND_Y+4,{bush:20,rock:22,barrel:20,fence:30}[d.t]);
@@ -475,6 +678,7 @@ function draw(){
     spr('crate',s.x+26,GROUND_Y+SINK,52+SINK);
   }
 
+  for(const m of movers) if(m.axis==='y'&&m.x<R+90&&m.x+m.w>L-90) drawLiftTrack(m);
   drawGround(L,R,B);
   for(const s of solids){
     if(s.x>R+90||s.x+s.w<L-90) continue;
@@ -516,6 +720,8 @@ function draw(){
     ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill();
   }
   ctx.globalAlpha=1;
+  const lk=LOOKS[LV.look];
+  if(lk){ ctx.fillStyle=lk.wash; ctx.fillRect(L,T,R-L,B-T); }
   hud();
 }
 
@@ -545,8 +751,8 @@ function diffRow(cy){
   // three difficulty buttons, centred; rects kept in CSS px for tap testing
   const gap=12, bw=Math.min(132,(vw-48-gap*2)/3), bh=Math.min(50,Math.max(38,vh*.085));
   const x0=vw/2-(bw*3+gap*2)/2;
-  titleBtns=[];
   ctx.textAlign='center'; ctx.textBaseline='middle';
+  const tm=D=>{ const s=Math.round(D.time*LV.time/5)*5; return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
   DIFF_KEYS.forEach((k,i)=>{
     const d=DIFFS[k], x=x0+i*(bw+gap), y=cy-bh/2, on=k===diffKey;
     titleBtns.push({k,x,y,w:bw,h:bh});
@@ -557,40 +763,74 @@ function diffRow(cy){
     ctx.font=`700 ${Math.min(19,bw*.15)}px "Trebuchet MS",sans-serif`;
     ctx.fillText(d.label,x+bw/2,y+bh*.36);
     ctx.font=`600 ${Math.min(12.5,bw*.1)}px "Trebuchet MS",sans-serif`;
-    ctx.fillText(`${d.hearts} lives · ${Math.floor(d.time/60)}:${String(d.time%60).padStart(2,'0')}`,x+bw/2,y+bh*.72);
+    ctx.fillText(`${d.hearts} lives · ${tm(d)}`,x+bw/2,y+bh*.72);
   });
   return bh;
+}
+function lock(cx,cy,c){
+  ctx.fillStyle=c; ctx.strokeStyle=c; ctx.lineWidth=2.4;
+  ctx.beginPath(); ctx.arc(cx,cy-3,5,Math.PI,0); ctx.stroke();
+  ctx.beginPath(); ctx.roundRect(cx-7.5,cy-3,15,12,3); ctx.fill();
+}
+function levelRow(cy){
+  // one numbered button per level; locked ones show a padlock
+  const n=LEVELS.length, gap=10, bs=Math.min(52,(vw-48-gap*(n-1))/n, Math.max(36,vh*.075));
+  const x0=vw/2-(bs*n+gap*(n-1))/2;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<n;i++){
+    const x=x0+i*(bs+gap), y=cy-bs/2, on=i===lvIdx, open=i<=unlocked;
+    titleBtns.push(open?{lv:i,x,y,w:bs,h:bs}:{lock:1,x,y,w:bs,h:bs});
+    ctx.fillStyle=on?'#ffd85c':open?'rgba(253,246,227,.16)':'rgba(253,246,227,.05)';
+    ctx.beginPath(); ctx.roundRect(x,y,bs,bs,12); ctx.fill();
+    ctx.lineWidth=on?3:2; ctx.strokeStyle=on?'#fdf6e3':open?'rgba(253,246,227,.5)':'rgba(253,246,227,.18)';
+    ctx.stroke();
+    if(open){
+      ctx.fillStyle=on?'#2a1c10':'#fdf6e3';
+      ctx.font=`700 ${bs*.46}px "Trebuchet MS",sans-serif`;
+      ctx.fillText(String(i+1),x+bs/2,y+bs/2+1);
+    } else lock(x+bs/2,y+bs/2,'rgba(253,246,227,.4)');
+  }
+  return bs;
 }
 function hud(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.textBaseline='middle';
+  titleBtns=[];
+  const desk=matchMedia('(hover:hover) and (pointer:fine)').matches;
   if(state==='title'){
     ctx.fillStyle='rgba(12,40,52,.74)'; ctx.fillRect(0,0,vw,vh);
-    const hh=Math.min(vh*.3,230), top=vh*.06;
+    const hh=Math.min(vh*.22,200), top=vh*.04;
     const s=SP.hero, w=hh*s[2]/s[3];
     ctx.drawImage(atlas,s[0],s[1],s[2],s[3],vw/2-w/2,top,w,hh);
-    let y=top+hh+Math.min(36,vh*.07);
+    let y=top+hh+Math.min(32,vh*.06);
     ctx.textAlign='center'; ctx.fillStyle='#fdf6e3';
-    ctx.font=`700 ${Math.min(50,vw*.1,vh*.09)}px "Trebuchet MS",sans-serif`;
+    ctx.font=`700 ${Math.min(50,vw*.1,vh*.085)}px "Trebuchet MS",sans-serif`;
     ctx.fillText('CLUCK PATROL',vw/2,y);
     const small=Math.min(17,vw*.038,vh*.036);
+    y+=Math.min(46,vh*.085);
+    const bs=levelRow(y);
+    y+=bs/2+Math.min(24,vh*.05);
+    ctx.font=`700 ${small*1.1}px "Trebuchet MS",sans-serif`; ctx.fillStyle='#ffd85c';
+    ctx.fillText(`LEVEL ${lvIdx+1} · ${LV.name.toUpperCase()}`,vw/2,y);
+    y+=small*1.45;
     ctx.font=`400 ${small}px "Trebuchet MS",sans-serif`;
     ctx.fillStyle='rgba(253,246,227,.85)';
-    y+=Math.min(36,vh*.07);
-    ctx.fillText('Stomp or egg all 22 raccoons and foxes. Foxes charge when they see you.',vw/2,y);
-    y+=small*1.5;
-    ctx.fillText(matchMedia('(hover:hover) and (pointer:fine)').matches
-      ?'Arrows move · Space jumps · X throws an egg'
-      :'◀ ▶ move · JUMP to hop · EGG to throw',vw/2,y);
-    y+=Math.min(50,vh*.1);
+    const goal=`Stomp or egg all ${LV.foes.length} raccoons and foxes.`;
+    if(ctx.measureText(goal+' '+LV.tip).width>vw-24){
+      ctx.fillText(goal,vw/2,y,vw-24); y+=small*1.35; ctx.fillText(LV.tip,vw/2,y,vw-24);
+    } else ctx.fillText(goal+' '+LV.tip,vw/2,y);
+    y+=small*1.45;
+    ctx.fillText(desk
+      ?'← → pick a level · 1 2 3 or Space to start · Space jumps · X throws an egg'
+      :'◀ ▶ move · JUMP to hop · EGG to throw',vw/2,y,vw-24);
+    y+=Math.min(44,vh*.09);
     const bh=diffRow(y);
-    y+=bh/2+Math.min(28,vh*.06);
+    y+=bh/2+Math.min(26,vh*.055);
     ctx.font=`700 ${Math.min(19,vw*.045,vh*.04)}px "Trebuchet MS",sans-serif`;
     ctx.fillStyle='#7bd45c'; ctx.textAlign='center';
-    ctx.fillText('TAP A LEVEL TO START',vw/2,y);
+    ctx.fillText('TAP A DIFFICULTY TO START',vw/2,y);
     return;
   }
-  titleBtns=[];
   const y=Math.max(14,vh*.025), x=14;
   const pw=Math.max(196,24+D.hearts*25+86);
   pill(x,y,pw,46);
@@ -626,29 +866,59 @@ function hud(){
     ctx.font='700 26px "Trebuchet MS",sans-serif';
     ctx.fillText(`${combo}x chain!`,vw/2,y+(vw<640?100:30));
   }
-  if(state==='play') return;
+  if(state==='play'){
+    if(banner>0){
+      // the level's name drifts in at the start
+      const a=Math.min(1,banner/.5,(2.6-banner)/.3);
+      ctx.globalAlpha=Math.max(0,a); ctx.textAlign='center';
+      const by=vh*.3;
+      ctx.fillStyle='#ffd85c'; ctx.font=`700 ${Math.min(18,vw*.045)}px "Trebuchet MS",sans-serif`;
+      ctx.fillText(`LEVEL ${lvIdx+1} OF ${LEVELS.length}`,vw/2,by);
+      ctx.fillStyle='#fdf6e3'; ctx.font=`700 ${Math.min(40,vw*.09)}px "Trebuchet MS",sans-serif`;
+      ctx.lineWidth=5; ctx.strokeStyle='rgba(40,28,18,.6)';
+      ctx.strokeText(LV.name.toUpperCase(),vw/2,by+Math.min(40,vw*.09));
+      ctx.fillText(LV.name.toUpperCase(),vw/2,by+Math.min(40,vw*.09));
+      ctx.globalAlpha=1;
+    }
+    return;
+  }
 
   ctx.fillStyle='rgba(12,40,52,.86)'; ctx.fillRect(0,0,vw,vh);
-  const won=state==='won';
-  const hh=Math.min(vh*.22,170), sp=SP.hero, w=hh*sp[2]/sp[3], top=vh*.08;
+  const won=state==='won', last=lvIdx===LEVELS.length-1;
+  const hh=Math.min(vh*.2,160), sp=SP.hero, w=hh*sp[2]/sp[3], top=vh*.06;
   ctx.save(); if(!won) ctx.globalAlpha=.5;
   ctx.drawImage(atlas,sp[0],sp[1],sp[2],sp[3],vw/2-w/2,top,w,hh); ctx.restore();
-  let yy=top+hh+Math.min(40,vh*.075);
-  ctx.textAlign='center'; ctx.fillStyle='#fdf6e3';
+  let yy=top+hh+Math.min(30,vh*.06);
+  ctx.textAlign='center';
+  ctx.font=`700 ${Math.min(17,vw*.042,vh*.036)}px "Trebuchet MS",sans-serif`; ctx.fillStyle='#ffd85c';
+  ctx.fillText(`LEVEL ${lvIdx+1} · ${LV.name.toUpperCase()}`,vw/2,yy);
+  yy+=Math.min(40,vh*.075);
+  ctx.fillStyle='#fdf6e3';
   ctx.font=`700 ${Math.min(44,vw*.09,vh*.085)}px "Trebuchet MS",sans-serif`;
-  ctx.fillText(won?'ISLAND CLEARED':(clock<=0?"TIME'S UP":'THE FLOCK IS DOWN'),vw/2,yy);
+  ctx.fillText(won?(last?'EVERY ISLAND IS SAFE!':'CLEARED!'):(clock<=0?"TIME'S UP":'THE FLOCK IS DOWN'),vw/2,yy,vw-24);
   yy+=Math.min(36,vh*.07);
   ctx.font=`400 ${Math.min(18,vw*.042,vh*.038)}px "Trebuchet MS",sans-serif`;
   ctx.fillStyle='rgba(253,246,227,.85)';
   const cleared=enemies.filter(e=>!e.alive).length;
   ctx.fillText((won?`${Math.floor(clock)}s to spare`:`${cleared} of ${enemies.length} cleared`)
-    +` · best chain ${best}x · ${D.label.toLowerCase()}`,vw/2,yy);
+    +` · best chain ${best}x · ${D.label.toLowerCase()}`,vw/2,yy,vw-24);
   yy+=Math.min(52,vh*.1);
   const bh=diffRow(yy);
   yy+=bh/2+Math.min(28,vh*.06);
   ctx.font=`700 ${Math.min(18,vw*.042,vh*.04)}px "Trebuchet MS",sans-serif`;
   ctx.fillStyle='#7bd45c'; ctx.textAlign='center';
-  ctx.fillText('Tap a level, or anywhere to play again',vw/2,yy);
+  ctx.fillText(won?(last?'Tap to go back to the levels'
+                        :`Tap for level ${lvIdx+2}: ${LEVELS[lvIdx+1].name}`)
+                  :'Tap a difficulty, or anywhere to try again',vw/2,yy,vw-24);
+  // a small way back to the level picker
+  yy+=Math.min(44,vh*.08);
+  const mw=140, mh=36, mx=vw/2-mw/2, my=yy-mh/2;
+  if(my+mh<vh-4&&!(won&&last)){
+    titleBtns.push({menu:1,x:mx,y:my,w:mw,h:mh});
+    pill(mx,my,mw,mh);
+    ctx.fillStyle='#fdf6e3'; ctx.font='700 15px "Trebuchet MS",sans-serif';
+    ctx.fillText('ALL LEVELS',vw/2,yy+1);
+  }
 }
 
 /* ================= loop ============ */
