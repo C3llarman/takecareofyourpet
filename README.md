@@ -34,6 +34,7 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 | File | What it is |
 |---|---|
 | `index.html` | The arcade menu page |
+| `about/index.html` | The About page (elkleafarcade.com/about/), linked from the menu's footer |
 | `icon.svg` | The arcade's elk leaf icon |
 | `mascot.svg` | The arcade mascot, a little elk made of leaves (shown on the menu page) |
 | `pet/index.html` | Take Care of Your Pet: page, styles and code |
