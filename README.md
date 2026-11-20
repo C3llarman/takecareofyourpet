@@ -34,6 +34,8 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 | File | What it is |
 |---|---|
 | `index.html` | The arcade menu page |
+| `turns/index.html` | The turn timer page (elkleafarcade.com/turns/): players, time limits, pause, skip and the grown-up PIN |
+| `turns.js` | The turn timer itself, loaded by every page and game: timer bubble, chimes, sending players home and the "pass it on" screen |
 | `about/index.html` | The About page (elkleafarcade.com/about/), linked from the menu's footer |
 | `site.css` | Shared look for the menu and About pages (colours, top bar, sky-and-pines header, cards) |
 | `logo.webp`, `logo-360.webp` | The Elk Leaf Arcade logo, full size and small |
@@ -62,6 +64,12 @@ Upload new games into their own folder, not the top of the repo, or they will re
 1. Put the game in its own folder, for example `newgame/index.html`.
 2. Add a card for it in the `games` section of `index.html` (copy the pet game card).
 3. Add a link back to the menu in the game, using the arcade badge as its picture: `<a href="../" aria-label="Back to Elk Leaf Arcade"><img src="../badge.webp" width="52" height="52" alt=""></a>`. Put it in a corner the game's own controls and score don't use.
+
+## Turn timer
+
+Players share one device fairly: on the Turn timer page each player gets a nickname and a time limit. A timer bubble shows whose turn it is on every page and in every game (drag it if it's in the way). With one minute left a soft chime plays; when time runs out a loud chime rings, the game gets a few seconds to save, and the player is sent back to the home screen, which asks them to pass the device to the next player. Games stay locked until the next player taps to start. An optional 4-digit grown-up PIN protects pause, extra time, skipping, ending the timer and changing players. Everything is stored in the browser on that device.
+
+New games need one line before `</body>` to join in: `<script src="../turns.js" data-game defer></script>`. Use `data-pos` (`top`, `bottom`, `top-left`, `top-right`, `bottom-left`, `bottom-right`), `data-offset` (pixels from that edge) and `data-narrow` (for example `top:90`, used on phones held upright) to keep the bubble clear of the game's own buttons.
 
 ## Hosting on Netlify
 

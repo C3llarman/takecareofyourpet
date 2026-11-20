@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Turn Timer · Elk Leaf Arcade</title>
+<meta name="description" content="Take turns fairly: give each player a nickname and a time limit, and Elk Leaf Arcade chimes when it's time to pass the device on.">
+<meta name="theme-color" content="#13261a">
+<meta property="og:title" content="Elk Leaf Arcade Turn Timer">
+<meta property="og:description" content="Fair turns for every player, with a chime when it's time to pass the device on.">
+<meta property="og:image" content="https://elkleafarcade.com/og-image.jpg">
+<meta property="og:url" content="https://elkleafarcade.com/turns/">
+<link rel="icon" href="../favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800;900&display=swap">
+<link rel="stylesheet" href="../site.css">
+<style>
+.hero.small { padding: 28px 16px 120px; }
+.hero.small .tagline { margin-top: 0; }
+.hero .clock { font-size: 64px; line-height: 1; margin-bottom: 10px; filter: drop-shadow(0 5px 0 rgba(10,30,18,.3)); }
+.wrap { width: min(780px, 100%); margin: 0 auto; display: grid; gap: 26px; }
+.panel .lead { font-size: 17px; }
+
+/* now playing */
+.now { text-align: center; justify-items: center; }
+.now .who { display: flex; align-items: center; gap: 14px; justify-content: center; flex-wrap: wrap; }
+.av { width: 64px; height: 64px; border-radius: 50%; border: 4px solid var(--outline); display: grid; place-items: center;
+  font-family: var(--font-display); font-size: 32px; color: var(--cream); box-shadow: 0 4px 0 rgba(0,0,0,.25); flex: none; }
+.now .name { font-family: var(--font-display); font-size: 40px; color: var(--ink); line-height: 1; }
+.now .count { font-family: var(--font-display); font-size: clamp(64px, 18vw, 104px); line-height: 1; color: var(--pine); font-variant-numeric: tabular-nums; }
+.now .count.warn { color: #c4601c; }
+.now .state { font-weight: 900; color: var(--muted); }
+.row-btns { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.btn.sm { font-size: 19px; padding: 9px 16px; box-shadow: 0 4px 0 var(--outline); }
+.btn.danger { background: #f3c7bb; }
+button.btn { cursor: pointer; }
+.upnext { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.upnext li { display: flex; align-items: center; gap: 6px; background: #e3efe2; border-radius: 999px; padding: 4px 12px 4px 4px; font-weight: 900; color: var(--ink); }
+.upnext li i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--outline); }
+.upnext li.on { background: var(--sun); }
+
+/* players */
+.players { display: grid; gap: 10px; }
+.prow { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; }
+.prow .av { width: 44px; height: 44px; font-size: 22px; border-width: 3px; box-shadow: none; }
+.prow input, .prow select, .pin input {
+  font: inherit; font-weight: 800; font-size: 18px; color: var(--ink); background: #fff;
+  border: 3px solid rgba(19,38,26,.25); border-radius: 14px; padding: 9px 12px; min-width: 0; width: 100%;
+}
+.prow select { width: auto; padding-right: 8px; }
+.prow input:focus, .prow select:focus, .pin input:focus { outline: none; border-color: var(--pine); box-shadow: 0 0 0 3px rgba(47,107,69,.25); }
+.prow .rm { width: 44px; height: 44px; border-radius: 12px; border: 3px solid rgba(19,38,26,.2); background: #f6efe2; color: var(--muted); font-size: 22px; font-weight: 900; cursor: pointer; }
+.prow .rm:hover { background: #f3c7bb; color: var(--ink); }
+.prow .rm:disabled { opacity: .35; cursor: default; background: #f6efe2; }
+@media (max-width: 460px) {
+  .prow { grid-template-columns: auto 1fr auto; }
+  .prow select { grid-column: 2; justify-self: start; }
+  .prow .rm { grid-row: 1; grid-column: 3; }
+}
+.actions-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 6px; }
+.addp { background: none; border: 3px dashed rgba(19,38,26,.3); border-radius: 14px; padding: 10px 16px; font: inherit; font-weight: 900; font-size: 17px; color: var(--pine); cursor: pointer; }
+.addp:hover { border-color: var(--pine); }
+.addp:disabled { opacity: .4; cursor: default; }
+.note { font-size: 15px !important; }
+.msg { font-weight: 900; color: #c4601c; min-height: 1.2em; margin: 0; }
+
+.pin { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pin input { width: 150px; letter-spacing: .3em; text-align: center; }
+
+.how { margin: 0; padding-left: 22px; display: grid; gap: 8px; color: var(--muted); font-weight: 700; line-height: 1.5; font-size: 17px; }
+.how b { color: var(--ink); }
+
+dialog { border: 4px solid var(--outline); border-radius: 22px; padding: 22px; background: var(--cream); color: var(--ink); width: min(340px, calc(100% - 32px)); box-shadow: 0 9px 0 rgba(0,0,0,.4); }
+dialog::backdrop { background: rgba(10, 22, 15, .7); }
+dialog h3 { font-family: var(--font-display); font-weight: 400; font-size: 26px; margin: 0 0 6px; color: #c4601c; }
+dialog p { margin: 0 0 12px; font-weight: 700; color: var(--muted); }
+dialog input { font: inherit; font-weight: 900; font-size: 26px; letter-spacing: .4em; text-align: center; width: 100%; padding: 8px; border: 3px solid rgba(19,38,26,.25); border-radius: 14px; }
+dialog .row-btns { margin-top: 14px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="inner">
+    <a class="brand" href="../" aria-label="Elk Leaf Arcade home"><img src="../logo-360.webp" width="46" height="46" alt=""><span>Elk Leaf <b>Arcade</b></span></a>
+    <nav class="nav" aria-label="Main">
+      <a href="../#games">Games</a>
+      <a href="./" aria-current="page">Timer</a>
+      <a class="about-link" href="../about/">About</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero small">
+  <span class="cloud" style="top:50px; animation-duration:80s; animation-delay:-30s; --s:.8" aria-hidden="true"></span>
+  <div class="clock" aria-hidden="true">⏱️</div>
+  <div><h1 class="tagline">Turn timer</h1></div>
+  <div class="trees" aria-hidden="true"><i class="far"></i><i class="mid"></i><i class="near"></i></div>
+</section>
+
+<main>
+  <div class="wrap">
+
+    <section class="panel now" id="now" hidden aria-labelledby="now-title">
+      <h2 id="now-title">Now playing</h2>
+      <div class="who"><div class="av" id="nowAv"></div><div class="name" id="nowName"></div></div>
+      <div class="count" id="nowCount" role="timer">0:00</div>
+      <div class="state" id="nowState"></div>
+      <div class="row-btns">
+        <button class="btn sm" type="button" id="bPause">Pause</button>
+        <button class="btn sm alt" type="button" id="bAdd">+5 min</button>
+        <button class="btn sm alt" type="button" id="bSkip">Next player</button>
+        <button class="btn sm danger" type="button" id="bEnd">End timer</button>
+      </div>
+      <ul class="upnext" id="order" aria-label="Turn order"></ul>
+    </section>
+
+    <section class="panel" aria-labelledby="players-title">
+      <h2 id="players-title">Who's playing?</h2>
+      <p class="lead">Give each player a nickname and a time limit. When time runs out, a loud chime rings, the game saves, and everyone goes back to the arcade home screen to pass the device to the next player.</p>
+      <div class="players" id="players"></div>
+      <div class="actions-row">
+        <button class="addp" type="button" id="addP">+ Add player</button>
+      </div>
+      <p class="msg" id="msg" role="status"></p>
+      <div class="actions-row">
+        <button class="btn" type="button" id="bStart">Start turns ▸</button>
+        <button class="btn alt sm" type="button" id="bTest">🔔 Test the chime</button>
+      </div>
+      <p class="note">Turn up the volume so everyone can hear the chime. The timer keeps counting while you pick a game on the home screen.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="pin-title">
+      <h2 id="pin-title">Grown-up lock</h2>
+      <p id="pinText">Set a 4-digit PIN so only a grown-up can pause, add time, skip a turn, end the timer or change the players.</p>
+      <div class="pin" id="pinSet">
+        <input id="pinIn" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••" aria-label="New 4-digit PIN">
+        <button class="btn sm" type="button" id="bPin">Set PIN</button>
+      </div>
+      <div class="pin" id="pinOn" hidden>
+        <button class="btn sm alt" type="button" id="bPinOff">Remove the PIN</button>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="how-title">
+      <h2 id="how-title">How it works</h2>
+      <ol class="how">
+        <li><b>Pick players and times</b>, then press Start turns. The first player goes first.</li>
+        <li>A <b>timer bubble</b> with the player's name shows on every page and in every game. Drag it if it's in the way.</li>
+        <li>With <b>one minute left</b>, a soft chime gives a heads-up to find a good place to stop.</li>
+        <li>When <b>time's up</b>, a loud chime rings, the game saves, and it's back to the home screen.</li>
+        <li>The home screen says <b>who's next</b>. Games stay locked until the next player taps to start their turn.</li>
+      </ol>
+      <p class="note">Everything stays on this device. Turns are shared across all the games here, but not with other phones or computers.</p>
+    </section>
+
+  </div>
+</main>
+
+<dialog id="pinDlg">
+  <form method="dialog" id="pinForm">
+    <h3>Grown-up PIN</h3>
+    <p>Enter the PIN to make this change.</p>
+    <input id="pinAsk" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-label="PIN">
+    <p class="msg" id="pinMsg"></p>
+    <div class="row-btns">
+      <button class="btn sm alt" value="cancel" type="button" id="pinCancel">Cancel</button>
+      <button class="btn sm" value="ok" id="pinOk">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<footer class="foot">
+  <nav aria-label="Footer"><a href="../#games">Games</a><a href="./">Turn timer</a><a href="../about/">About</a></nav>
+  <div>&copy; <span id="year">2026</span> Elk Leaf Arcade</div>
+</footer>
+
+<script src="../turns.js" data-nopill></script>
+<script>
+(function () {
+  var T = window.ElkTurns, $ = function (id) { return document.getElementById(id); };
+  var MINUTES = [1, 5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
+  var MAX = 8;
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  /* ----- grown-up PIN ----- */
+  function needPin() {
+    var pin = T.get().pin;
+    if (!pin) return Promise.resolve(true);
+    var d = $('pinDlg'), inp = $('pinAsk');
+    inp.value = ''; $('pinMsg').textContent = '';
+    if (!d.showModal) return Promise.resolve(window.prompt('Grown-up PIN') === pin);
+    return new Promise(function (res) {
+      function done(v) { $('pinForm').onsubmit = null; $('pinCancel').onclick = null; d.onclose = null; if (d.open) d.close(); res(v); }
+      $('pinForm').onsubmit = function (e) {
+        e.preventDefault();
+        if (inp.value === pin) done(true);
+        else { $('pinMsg').textContent = 'That PIN isn’t right.'; inp.value = ''; inp.focus(); }
+      };
+      $('pinCancel').onclick = function () { done(false); };
+      d.onclose = function () { res(false); };
+      d.showModal(); inp.focus();
+    });
+  }
+  function guarded(fn) { return function () { needPin().then(function (ok) { if (ok) fn(); }); }; }
+
+  /* ----- players editor ----- */
+  var rows = [];
+  function initial(n) { return (Array.from(String(n).trim())[0] || '?').toUpperCase(); }
+  function drawPlayers() {
+    var box = $('players'); box.innerHTML = '';
+    rows.forEach(function (p, i) {
+      var r = document.createElement('div'); r.className = 'prow';
+      var av = document.createElement('div'); av.className = 'av'; av.style.background = T.colorOf(i); av.textContent = initial(p.name || String(i + 1));
+      var inp = document.createElement('input'); inp.value = p.name; inp.maxLength = 16; inp.placeholder = 'Player ' + (i + 1) + ' nickname';
+      inp.setAttribute('aria-label', 'Player ' + (i + 1) + ' nickname'); inp.autocomplete = 'off';
+      inp.addEventListener('input', function () { p.name = inp.value; av.textContent = initial(inp.value || String(i + 1)); });
+      var sel = document.createElement('select'); sel.setAttribute('aria-label', 'Time limit for player ' + (i + 1));
+      MINUTES.forEach(function (m) { var o = document.createElement('option'); o.value = m; o.textContent = m + ' min'; sel.appendChild(o); });
+      if (MINUTES.indexOf(p.min) < 0) { var o = document.createElement('option'); o.value = p.min; o.textContent = p.min + ' min'; sel.appendChild(o); }
+      sel.value = p.min; sel.addEventListener('change', function () { p.min = +sel.value; });
+      var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'rm'; rm.textContent = '×';
+      rm.setAttribute('aria-label', 'Remove player ' + (i + 1)); rm.disabled = rows.length <= 1;
+      rm.addEventListener('click', function () { rows.splice(i, 1); drawPlayers(); });
+      r.append(av, inp, sel, rm); box.appendChild(r);
+    });
+    $('addP').disabled = rows.length >= MAX;
+  }
+  $('addP').addEventListener('click', function () {
+    if (rows.length >= MAX) return;
+    rows.push({ name: '', min: rows.length ? rows[rows.length - 1].min : 15 }); drawPlayers();
+    var ins = $('players').querySelectorAll('input'); ins[ins.length - 1].focus();
+  });
+
+  function cleaned() {
+    return rows.map(function (p, i) { return { name: (p.name || '').trim().slice(0, 16) || 'Player ' + (i + 1), min: Math.max(1, Math.min(240, +p.min || 15)) }; });
+  }
+
+  $('bStart').addEventListener('click', function () {
+    var s = T.get();
+    var go = function () {
+      T.unlockAudio();
+      T.setPlayers(cleaned()); T.start(0);
+      location.href = T.home;   // off to the games
+    };
+    if (s.phase !== 'off') needPin().then(function (ok) { if (ok) go(); });
+    else go();
+  });
+  $('bTest').addEventListener('click', function () { T.chime(); });
+
+  /* ----- now playing ----- */
+  $('bPause').addEventListener('click', guarded(function () { var s = T.get(); if (s.phase === 'paused') T.resume(); else T.pause(); draw(); }));
+  $('bAdd').addEventListener('click', guarded(function () { T.addTime(5); draw(); }));
+  $('bSkip').addEventListener('click', guarded(function () { T.skip(); draw(); }));
+  $('bEnd').addEventListener('click', guarded(function () { T.end(); draw(); }));
+
+  function draw() {
+    var s = T.get(), on = s.phase === 'running' || s.phase === 'paused';
+    $('now').hidden = !on;
+    $('bStart').textContent = s.phase === 'off' ? 'Start turns ▸' : 'Restart with these players ▸';
+    if (on) {
+      var c = s.players[s.idx], left = T.timeLeft(s);
+      $('nowAv').style.background = T.colorOf(s.idx); $('nowAv').textContent = initial(c.name);
+      $('nowName').textContent = c.name;
+      $('nowCount').textContent = T.fmt(left);
+      $('nowCount').classList.toggle('warn', left <= 60000);
+      $('nowState').textContent = s.phase === 'paused' ? 'Paused' : left <= 60000 ? 'Almost time to pass it on!' : 'left in this turn';
+      $('bPause').textContent = s.phase === 'paused' ? 'Resume' : 'Pause';
+      var ol = $('order'); ol.innerHTML = '';
+      s.players.forEach(function (p, i) {
+        var li = document.createElement('li'); if (i === s.idx) li.className = 'on';
+        var dot = document.createElement('i'); dot.style.background = T.colorOf(i);
+        li.append(dot, document.createTextNode(p.name + ' · ' + p.min + ' min')); ol.appendChild(li);
+      });
+    }
+    var pin = !!s.pin;
+    $('pinSet').hidden = pin; $('pinOn').hidden = !pin;
+    $('pinText').textContent = pin
+      ? 'A PIN is set. A grown-up needs it to pause, add time, skip a turn, end the timer or change the players.'
+      : 'Set a 4-digit PIN so only a grown-up can pause, add time, skip a turn, end the timer or change the players.';
+  }
+
+  $('bPin').addEventListener('click', function () {
+    var v = $('pinIn').value.trim();
+    if (!/^\d{4}$/.test(v)) { $('msg').textContent = ''; $('pinIn').focus(); $('pinIn').style.borderColor = '#c4601c'; return; }
+    $('pinIn').style.borderColor = ''; $('pinIn').value = ''; T.setPin(v); draw();
+  });
+  $('bPinOff').addEventListener('click', guarded(function () { T.setPin(''); draw(); }));
+
+  // start with the saved players, or two blank ones
+  var saved = T.get().players;
+  rows = saved.length ? saved.map(function (p) { return { name: p.name, min: p.min }; }) : [{ name: '', min: 15 }, { name: '', min: 15 }];
+  drawPlayers(); draw();
+  setInterval(draw, 500);
+  window.addEventListener('storage', draw);
+})();
+</script>
+</body>
+</html>

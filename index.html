@@ -36,6 +36,7 @@
     <a class="brand" href="./" aria-label="Elk Leaf Arcade home"><img src="logo-360.webp" width="46" height="46" alt=""><span>Elk Leaf <b>Arcade</b></span></a>
     <nav class="nav" aria-label="Main">
       <a href="#games" aria-current="page">Games</a>
+      <a href="turns/">Timer</a>
       <a class="about-link" href="about/">About</a>
     </nav>
   </div>
@@ -124,6 +125,15 @@
     </div>
   </section>
 
+  <section class="panel teaser timer-teaser" aria-labelledby="timer-title">
+    <div class="seal clock" aria-hidden="true">⏱️</div>
+    <div class="copy">
+      <h2 id="timer-title">Take turns, fair and square</h2>
+      <p>Sharing one device? Give each player a nickname and a time limit. When a turn ends, a chime rings, the game saves, and the arcade says who's up next.</p>
+      <a class="btn" href="turns/">Set up the turn timer</a>
+    </div>
+  </section>
+
   <section class="panel teaser" aria-labelledby="about-title">
     <img class="seal" src="logo-360.webp" width="150" height="150" alt="">
     <div class="copy">
@@ -141,9 +151,10 @@
 </main>
 
 <footer class="foot">
-  <nav aria-label="Footer"><a href="#games">Games</a><a href="about/">About</a></nav>
+  <nav aria-label="Footer"><a href="#games">Games</a><a href="turns/">Turn timer</a><a href="about/">About</a></nav>
   <div>&copy; <span id="year">2026</span> Elk Leaf Arcade</div>
 </footer>
+<script src="turns.js" defer></script>
 <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>

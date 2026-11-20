@@ -88,7 +88,8 @@ a { color: inherit; }
 }
 @media (max-width: 480px) {
   .brand span { display: none; }
-  .nav a { font-size: 17px; padding: 7px 12px; }
+  .nav { gap: 4px; }
+  .nav a { font-size: 17px; padding: 7px 10px; }
 }
 
 /* ---------- hero: sky, sun rays, clouds, three rows of pines ---------- */
@@ -245,6 +246,7 @@ a.card:hover .cover::after { transform: translateX(100%); }
 .promises li:nth-child(4) b::before { background: #4e9a3a; }
 
 .teaser { grid-template-columns: auto 1fr; align-items: center; gap: 22px 30px; }
+.teaser .seal.clock { width: 150px; font-size: 96px; line-height: 1; text-align: center; transform: rotate(6deg); }
 .teaser .seal { width: 150px; height: auto; transform: rotate(-6deg); filter: drop-shadow(0 6px 0 rgba(0,0,0,.18)); }
 .teaser .copy { display: grid; gap: 12px; }
 .teaser .btn { justify-self: start; margin-top: 4px; }

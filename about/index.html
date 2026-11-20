@@ -39,6 +39,7 @@
     <a class="brand" href="../" aria-label="Elk Leaf Arcade home"><img src="../logo-360.webp" width="46" height="46" alt=""><span>Elk Leaf <b>Arcade</b></span></a>
     <nav class="nav" aria-label="Main">
       <a href="../#games">Games</a>
+      <a href="../turns/">Timer</a>
       <a class="about-link" href="./" aria-current="page">About</a>
     </nav>
   </div>
@@ -70,6 +71,11 @@
       </ul>
     </section>
 
+    <section class="panel" aria-labelledby="fair">
+      <h2 id="fair">Fair play and healthy habits</h2>
+      <p>Games are better when everyone gets a turn and everyone knows when to stop. The <a href="../turns/">turn timer</a> gives each player a nickname and a time limit. When a turn ends, a chime rings, the game saves, and the arcade asks the player to pass the device on. Grown-ups can lock it with a PIN.</p>
+    </section>
+
     <section class="panel" aria-labelledby="saves">
       <h2 id="saves">Where your progress goes</h2>
       <p>Games that remember your progress save it in your own browser, on your own device. It never gets sent to us. That also means progress doesn't follow you to another phone or computer, and clearing your browser's site data will reset it.</p>
@@ -85,9 +91,10 @@
 </main>
 
 <footer class="foot">
-  <nav aria-label="Footer"><a href="../#games">Games</a><a href="./">About</a></nav>
+  <nav aria-label="Footer"><a href="../#games">Games</a><a href="../turns/">Turn timer</a><a href="./">About</a></nav>
   <div>&copy; <span id="year">2026</span> Elk Leaf Arcade</div>
 </footer>
+<script src="../turns.js" defer></script>
 <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>
