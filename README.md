@@ -35,8 +35,12 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 |---|---|
 | `index.html` | The arcade menu page |
 | `about/index.html` | The About page (elkleafarcade.com/about/), linked from the menu's footer |
-| `icon.svg` | The arcade's elk leaf icon |
-| `mascot.svg` | The arcade mascot, a little elk made of leaves (shown on the menu page) |
+| `site.css` | Shared look for the menu and About pages (colours, top bar, sky-and-pines header, cards) |
+| `logo.webp`, `logo-360.webp` | The Elk Leaf Arcade logo, full size and small |
+| `favicon.png`, `apple-touch-icon.png` | Browser tab and home-screen icons made from the logo |
+| `og-image.jpg` | The picture shown when the site is shared in chats and social posts |
+| `icon.svg` | The older elk leaf icon (Acorn Run's tab icon and the pet game's home-screen icon still use it) |
+| `mascot.svg` | The older mascot drawing (no longer shown on the site) |
 | `pet/index.html` | Take Care of Your Pet: page, styles and code |
 | `pet/cover.jpg` | The game's picture on the arcade menu |
 | `pet/manifest.webmanifest`, `pet/icon.svg` | Lets phones and tablets add the pet game to the home screen |

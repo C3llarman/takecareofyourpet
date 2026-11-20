@@ -5,120 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Elk Leaf Arcade</title>
 <meta name="description" content="Elk Leaf Arcade: free games you can play right in your browser.">
-<meta name="theme-color" content="#16301f">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#13261a">
+<meta property="og:title" content="Elk Leaf Arcade">
+<meta property="og:description" content="Free games you can play right in your browser.">
+<meta property="og:image" content="https://elkleafarcade.com/og-image.jpg">
+<meta property="og:url" content="https://elkleafarcade.com/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" as="image" href="logo.webp">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chewy&family=Nunito:wght@600;800;900&display=swap">
-<style>
-/* Layout: arcade sign at the top, a grid of game cards, small footer */
-:root {
-  --night: #16301f;
-  --night-2: #1f3d2c;
-  --moss: #2f6b45;
-  --leaf: #f2994a;
-  --leaf-edge: #c86d22;
-  --sun: #ffc93c;
-  --cream: #fff8ec;
-  --ink: #2b2540;
-  --muted: #6d6785;
-  --font-display: "Chewy", "Comic Sans MS", "Trebuchet MS", system-ui, sans-serif;
-  --font-body: "Nunito", "Avenir Next", system-ui, -apple-system, sans-serif;
-  color-scheme: dark;
-}
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html { min-height: 100%; background: var(--night); }
-body {
-  margin: 0; min-height: 100vh; color: var(--cream); font-family: var(--font-body);
-  background:
-    radial-gradient(1200px 600px at 50% -10%, #2c5a3d 0%, transparent 70%),
-    linear-gradient(180deg, var(--night-2), var(--night));
-  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  display: flex; flex-direction: column; align-items: center;
-  overflow-x: hidden;
-}
-
-/* falling leaves in the background */
-.leaves { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
-.leaves span {
-  position: absolute; top: -40px; width: 18px; height: 18px; opacity: .55;
-  background: var(--leaf); border-radius: 0 70% 0 70%;
-  animation: fall linear infinite;
-}
-.leaves span:nth-child(3n) { background: var(--sun); }
-.leaves span:nth-child(4n) { background: #d9573b; }
-@keyframes fall {
-  0%   { transform: translate(0, -40px) rotate(0deg); }
-  50%  { transform: translate(40px, 50vh) rotate(180deg); }
-  100% { transform: translate(-20px, 105vh) rotate(360deg); }
-}
-@media (prefers-reduced-motion: reduce) { .leaves { display: none; } }
-
-main { position: relative; z-index: 1; width: min(1040px, 100%); display: grid; gap: 32px; }
-
-/* the arcade sign */
-.sign { text-align: center; display: grid; justify-items: center; gap: 10px; padding-top: 12px; }
-.sign .mascot {
-  width: clamp(120px, 30vw, 150px); height: auto; transform-origin: 50% 92%;
-  filter: drop-shadow(0 6px 0 rgba(0,0,0,.25));
-  animation: sway 4s ease-in-out infinite;
-}
-@keyframes sway { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg) translateY(-2px); } }
-@media (prefers-reduced-motion: reduce) { .sign .mascot { animation: none; } }
-.sign h1 {
-  font-family: var(--font-display); font-weight: 400; margin: 0;
-  font-size: clamp(48px, 11vw, 88px); line-height: .95; letter-spacing: .01em;
-  color: var(--cream); text-shadow: 0 5px 0 rgba(0,0,0,.3);
-}
-.sign h1 .accent { color: var(--leaf); }
-.sign p { margin: 0; font-weight: 800; font-size: 18px; color: #cfe3d4; }
-
-.section-title {
-  font-family: var(--font-display); font-weight: 400; font-size: 30px; margin: 0;
-  display: flex; align-items: center; gap: 12px; color: var(--sun);
-}
-.section-title::after { content: ""; flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.12); }
-
-/* game cards */
-.games { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; }
-.card {
-  background: var(--cream); color: var(--ink); border-radius: 26px; overflow: hidden;
-  display: flex; flex-direction: column; text-decoration: none;
-  box-shadow: 0 8px 0 rgba(0,0,0,.28);
-  transition: transform .15s ease, box-shadow .15s ease;
-}
-a.card:hover, a.card:focus-visible { transform: translateY(-4px); box-shadow: 0 12px 0 rgba(0,0,0,.28); }
-a.card:active { transform: translateY(2px); box-shadow: 0 4px 0 rgba(0,0,0,.28); }
-a.card:focus-visible { outline: 4px solid var(--sun); outline-offset: 4px; }
-.card .cover { aspect-ratio: 16 / 10; background: #bfe6ff center / cover no-repeat; position: relative; }
-.card .badge {
-  position: absolute; top: 12px; left: 12px; background: var(--ink); color: var(--sun);
-  font-weight: 900; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
-  padding: 4px 10px; border-radius: 999px;
-}
-.card .body { padding: 18px 20px 20px; display: grid; gap: 10px; flex: 1; align-content: start; }
-.card h3 { font-family: var(--font-display); font-weight: 400; font-size: 30px; margin: 0; line-height: 1; }
-.card h3 .eh { color: #4e8a3a; }
-.card h3 .d { color: #ec7f2f; } .card h3 .c { color: #7e5ff0; } .card h3 .b { color: #e2508c; }
-.card p { margin: 0; font-weight: 700; color: var(--muted); line-height: 1.45; }
-.tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.tags span { background: #ece8f6; border-radius: 999px; padding: 3px 10px; font-weight: 800; font-size: 13px; color: var(--ink); }
-.play {
-  margin-top: 6px; justify-self: start; background: var(--sun); box-shadow: 0 4px 0 #e0a514;
-  border-radius: 16px; padding: 10px 26px; font-family: var(--font-display); font-size: 24px; color: var(--ink);
-}
-
-.card.soon { background: rgba(255,255,255,.06); color: var(--cream); box-shadow: none; border: 3px dashed rgba(255,255,255,.2); }
-.card.soon { justify-content: center; text-align: center; }
-.card.soon .cover { aspect-ratio: auto; background: transparent; display: grid; place-items: center; padding-top: 28px; }
-.card.soon .cover svg { width: 72px; height: 72px; opacity: .5; }
-.card.soon .body { flex: 0 0 auto; justify-items: center; padding-bottom: 28px; }
-.card.soon p { color: #cfe3d4; }
-
-footer { position: relative; z-index: 1; margin-top: 40px; font-weight: 800; font-size: 14px; color: #9fbca8; text-align: center; }
-footer a { color: var(--sun); }
-</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800;900&display=swap">
+<link rel="stylesheet" href="site.css">
 </head>
 <body>
 <div class="leaves" aria-hidden="true">
@@ -132,16 +31,35 @@ footer a { color: var(--sun); }
   <span style="left:93%; animation-duration:21s; animation-delay:-16s"></span>
 </div>
 
-<main>
-  <header class="sign">
-    <img class="mascot" src="mascot.svg" width="150" height="150" alt="Elk Leaf Arcade mascot: a little elk made of autumn leaves">
-    <h1>Elk Leaf <span class="accent">Arcade</span></h1>
-    <p>Free games you can play right in your browser.</p>
-  </header>
+<header class="topbar">
+  <div class="inner">
+    <a class="brand" href="./" aria-label="Elk Leaf Arcade home"><img src="logo-360.webp" width="46" height="46" alt=""><span>Elk Leaf <b>Arcade</b></span></a>
+    <nav class="nav" aria-label="Main">
+      <a href="#games" aria-current="page">Games</a>
+      <a class="about-link" href="about/">About</a>
+    </nav>
+  </div>
+</header>
 
-  <section aria-labelledby="games-title">
-    <h2 class="section-title" id="games-title">Pick a game</h2>
-    <div class="games" style="margin-top:18px">
+<section class="hero">
+  <span class="cloud" style="top:60px;  animation-duration:70s; animation-delay:-10s; --s:.9" aria-hidden="true"></span>
+  <span class="cloud" style="top:170px; animation-duration:95s; animation-delay:-55s; --s:.7" aria-hidden="true"></span>
+  <span class="cloud" style="top:110px; animation-duration:80s; animation-delay:-38s; --s:1.1" aria-hidden="true"></span>
+  <div class="logo-wrap">
+    <h1><img class="logo" src="logo.webp" width="400" height="400" alt="Elk Leaf Arcade"></h1>
+  </div>
+  <div><p class="tagline">Free games you can play right in your browser</p></div>
+  <div class="actions">
+    <a class="btn" href="#games">Play now ▾</a>
+    <a class="btn alt" href="about/">About the arcade</a>
+  </div>
+  <div class="trees" aria-hidden="true"><i class="far"></i><i class="mid"></i><i class="near"></i></div>
+</section>
+
+<main>
+  <section id="games" aria-labelledby="games-title">
+    <h2 class="plank-title sunny" id="games-title"><span>Pick a game</span></h2>
+    <div class="games">
 
       <a class="card" href="flick-archery/">
         <div class="cover" style="background-image:url('flick-archery/cover.jpg')"><span class="badge">New</span></div>
@@ -205,9 +123,27 @@ footer a { color: var(--sun); }
 
     </div>
   </section>
+
+  <section class="panel teaser" aria-labelledby="about-title">
+    <img class="seal" src="logo-360.webp" width="150" height="150" alt="">
+    <div class="copy">
+      <h2 id="about-title">What is Elk Leaf Arcade?</h2>
+      <p>A little arcade of games that run right in your browser, on a phone, tablet or laptop. Nothing to download, nothing to sign up for.</p>
+      <ul class="promises">
+        <li><b>Free</b>Every game, all of it.</li>
+        <li><b>No ads</b>Nothing pops up.</li>
+        <li><b>No accounts</b>Just press play.</li>
+        <li><b>No tracking</b>Your saves stay on your device.</li>
+      </ul>
+      <a class="btn leafy" href="about/">Read more about us</a>
+    </div>
+  </section>
 </main>
 
-<footer>&copy; <span id="year">2026</span> Elk Leaf Arcade · <a href="about/">About</a></footer>
+<footer class="foot">
+  <nav aria-label="Footer"><a href="#games">Games</a><a href="about/">About</a></nav>
+  <div>&copy; <span id="year">2026</span> Elk Leaf Arcade</div>
+</footer>
 <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>
