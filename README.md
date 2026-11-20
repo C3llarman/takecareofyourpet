@@ -41,6 +41,7 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 | `logo.webp`, `logo-360.webp` | The Elk Leaf Arcade logo, full size and small |
 | `badge.webp` | The small arcade badge used as the "back to the arcade" button in Acorn Run, Build a House and the pet game (Cluck Patrol, Flick Archery and Elven Hunter carry an embedded copy so they stay single files) |
 | `favicon.png`, `apple-touch-icon.png` | Browser tab and home-screen icons made from the logo |
+| `covers/` | Smaller WebP copies of each game's `cover.jpg`, used on the menu page (make a new one here when a game's cover changes) |
 | `og-image.jpg` | The picture shown when the site is shared in chats and social posts |
 | `icon.svg` | The older elk leaf icon (Acorn Run's tab icon and the pet game's home-screen icon still use it) |
 | `mascot.svg` | The older mascot drawing (no longer shown on the site) |
@@ -62,7 +63,7 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 Upload new games into their own folder, not the top of the repo, or they will replace the menu page.
 
 1. Put the game in its own folder, for example `newgame/index.html`.
-2. Add a card for it in the `games` section of `index.html` (copy the pet game card).
+2. Add a card for it in the `games` section of `index.html` (copy the pet game card), with its picture saved as a WebP in `covers/`.
 3. Add a link back to the menu in the game, using the arcade badge as its picture: `<a href="../" aria-label="Back to Elk Leaf Arcade"><img src="../badge.webp" width="52" height="52" alt=""></a>`. Put it in a corner the game's own controls and score don't use.
 
 ## Turn timer

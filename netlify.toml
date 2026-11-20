@@ -66,6 +66,34 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
+# Pictures change rarely: let phones keep them for a day (and use the old copy while
+# fetching a new one for a week), so repeat visits on a weak signal don't re-check each one.
+# If you replace one of these pictures, give it a new file name to show it straight away.
+[[headers]]
+  for = "/covers/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
+[[headers]]
+  for = "/logo.webp"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
+[[headers]]
+  for = "/logo-360.webp"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
+[[headers]]
+  for = "/badge.webp"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
+[[headers]]
+  for = "/favicon.png"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
 [[headers]]
   for = "/*"
   [headers.values]

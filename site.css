@@ -196,7 +196,8 @@ main { position: relative; z-index: 1; width: min(1100px, 100%); margin: 0 auto;
 a.card:hover, a.card:focus-visible { transform: translateY(-6px) rotate(-.6deg); box-shadow: 0 15px 0 rgba(0,0,0,.4); }
 .games a.card:nth-child(even):hover { transform: translateY(-6px) rotate(.6deg); }
 a.card:active { transform: translateY(2px); box-shadow: 0 5px 0 rgba(0,0,0,.4); }
-.card .cover { aspect-ratio: 16 / 10; background: #bfe6ff center / cover no-repeat; position: relative; border-bottom: 4px solid var(--outline); }
+.card .cover { aspect-ratio: 16 / 10; background: #bfe6ff; position: relative; overflow: hidden; border-bottom: 4px solid var(--outline); }
+.card .cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .card .cover::after { /* shine on hover */
   content: ""; position: absolute; inset: 0;
   background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.35) 45%, transparent 60%);

@@ -13,7 +13,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="preload" as="image" href="logo.webp">
+<link rel="preload" as="image" href="logo.webp" fetchpriority="high">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800;900&display=swap">
@@ -33,7 +33,7 @@
 
 <header class="topbar">
   <div class="inner">
-    <a class="brand" href="./" aria-label="Elk Leaf Arcade home"><img src="logo-360.webp" width="46" height="46" alt=""><span>Elk Leaf <b>Arcade</b></span></a>
+    <a class="brand" href="./" aria-label="Elk Leaf Arcade home"><img src="badge.webp" width="46" height="46" alt=""><span>Elk Leaf <b>Arcade</b></span></a>
     <nav class="nav" aria-label="Main">
       <a href="#games" aria-current="page">Games</a>
       <a href="turns/">Timer</a>
@@ -47,7 +47,7 @@
   <span class="cloud" style="top:170px; animation-duration:95s; animation-delay:-55s; --s:.7" aria-hidden="true"></span>
   <span class="cloud" style="top:110px; animation-duration:80s; animation-delay:-38s; --s:1.1" aria-hidden="true"></span>
   <div class="logo-wrap">
-    <h1><img class="logo" src="logo.webp" width="400" height="400" alt="Elk Leaf Arcade"></h1>
+    <h1><img class="logo" src="logo.webp" width="400" height="400" alt="Elk Leaf Arcade" fetchpriority="high"></h1>
   </div>
   <div><p class="tagline">Free games you can play right in your browser</p></div>
   <div class="actions">
@@ -63,7 +63,7 @@
     <div class="games">
 
       <a class="card" href="flick-archery/">
-        <div class="cover" style="background-image:url('flick-archery/cover.jpg')"><span class="badge">New</span></div>
+        <div class="cover"><img src="covers/flick-archery.webp" width="800" height="500" alt="" loading="lazy" decoding="async"><span class="badge">New</span></div>
         <div class="body">
           <h3>Flick <span class="d">Archery</span></h3>
           <p>Flick up to loose an arrow, curve your swipe to beat the wind, then pass the phone. Three rounds, up to six archers, and the most accurate shot wins.</p>
@@ -73,7 +73,7 @@
       </a>
 
       <a class="card" href="build-a-house/">
-        <div class="cover" style="background-image:url('build-a-house/cover.jpg')"><span class="badge">New</span></div>
+        <div class="cover"><img src="covers/build-a-house.webp" width="960" height="600" alt="" loading="lazy" decoding="async"><span class="badge">New</span></div>
         <div class="body">
           <h3>Build a <span class="d">House</span></h3>
           <p>Stack blocks on a little island, craft bricks, glass and roof tiles from real-life recipes, add doors and dress up your builder.</p>
@@ -83,7 +83,7 @@
       </a>
 
       <a class="card" href="acorn-run/">
-        <div class="cover" style="background-image:url('acorn-run/cover.jpg')"><span class="badge">New</span></div>
+        <div class="cover"><img src="covers/acorn-run.webp" width="800" height="500" alt="" loading="lazy" decoding="async"><span class="badge">New</span></div>
         <div class="body">
           <h3>Acorn <span class="d">Run</span></h3>
           <p>Pick one of six squirrels and dash across floating islands. Glide on leaves, collect acorns, high-five the hoodie skunks and dodge the grumpy ones.</p>
@@ -93,7 +93,7 @@
       </a>
 
       <a class="card" href="cluck-patrol/">
-        <div class="cover" style="background-image:url('cluck-patrol/cover.jpg')"><span class="badge">New</span></div>
+        <div class="cover"><img src="covers/cluck-patrol.webp" width="960" height="600" alt="" loading="lazy" decoding="async"><span class="badge">New</span></div>
         <div class="body">
           <h3>Cluck <span class="d">Patrol</span></h3>
           <p>Hop across five tropical levels as a bandana-wearing chicken and stomp every raccoon and fox before the clock runs out.</p>
@@ -103,7 +103,7 @@
       </a>
 
       <a class="card" href="elven-hunter/">
-        <div class="cover" style="background-image:url('elven-hunter/cover.jpg')"><span class="badge">New</span></div>
+        <div class="cover"><img src="covers/elven-hunter.webp" width="960" height="600" alt="" loading="lazy" decoding="async"><span class="badge">New</span></div>
         <div class="body">
           <h3>Elven <span class="eh">Hunter</span></h3>
           <p>Roam an open forest, fight spiders, snakes and cross mushrooms, cut your kin free from their cocoons, and take on the dragon asleep on his crag.</p>
@@ -113,7 +113,7 @@
       </a>
 
       <a class="card" href="pet/">
-        <div class="cover" style="background-image:url('pet/cover.jpg')"></div>
+        <div class="cover"><img src="covers/pet.webp" width="960" height="600" alt="" loading="lazy" decoding="async"></div>
         <div class="body">
           <h3>Take Care of Your <span class="d">P</span><span class="c">e</span><span class="b">t</span></h3>
           <p>Feed, pet and train your pets, explore a big city, visit the shops and make friends on the forest trails.</p>
@@ -135,7 +135,7 @@
   </section>
 
   <section class="panel teaser" aria-labelledby="about-title">
-    <img class="seal" src="logo-360.webp" width="150" height="150" alt="">
+    <img class="seal" src="logo-360.webp" width="150" height="150" alt="" loading="lazy" decoding="async">
     <div class="copy">
       <h2 id="about-title">What is Elk Leaf Arcade?</h2>
       <p>A little arcade of games that run right in your browser, on a phone, tablet or laptop. Nothing to download, nothing to sign up for.</p>
