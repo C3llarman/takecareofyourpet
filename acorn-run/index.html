@@ -17,10 +17,14 @@
      notches and home indicators. Do not remove. */
   #safe{position:fixed;top:0;left:0;width:1px;height:env(safe-area-inset-top,0px);pointer-events:none;visibility:hidden}
   #safeb{position:fixed;bottom:0;left:0;width:1px;height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden}
-  /* Home button back to the arcade menu, top centre so it clears the score and distance */
-  #home{position:fixed;z-index:2;top:calc(env(safe-area-inset-top,0px) + 12px);left:50%;transform:translateX(-50%);
-    width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    background:rgba(59,36,18,.45);border:3px solid #FFF3D6;color:#FFF3D6;font:700 24px/1 system-ui,sans-serif;text-decoration:none}
+  /* Elk Leaf Arcade badge, back to the arcade menu: top left on the menus, top centre during a run
+     so it clears the acorn count and distance (game.js sets body.running) */
+  #home{position:fixed;z-index:2;top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(env(safe-area-inset-left,0px) + 10px);
+    width:54px;height:54px;display:block;border-radius:50%;text-decoration:none}
+  #home img{display:block;width:100%;height:100%;filter:drop-shadow(0 3px 0 rgba(59,36,18,.45));transition:transform .15s}
+  #home:hover img{transform:rotate(-8deg) scale(1.06)}
+  #home:active img{transform:scale(.92)}
+  body.running #home{top:calc(env(safe-area-inset-top,0px) + 6px);left:50%;transform:translateX(-50%)}
   #home:focus-visible{outline:3px solid #FFD85A;outline-offset:3px}
 </style>
 </head>
@@ -28,7 +32,7 @@
 <canvas id="c" role="img" aria-label="Acorn Run. Tap or press space to jump."></canvas>
 <div id="safe"></div>
 <div id="safeb"></div>
-<a id="home" href="../" aria-label="Back to Elk Leaf Arcade" title="Back to Elk Leaf Arcade">&#8962;</a>
+<a id="home" href="../" aria-label="Back to Elk Leaf Arcade" title="Back to Elk Leaf Arcade"><img src="../badge.webp" width="54" height="54" alt=""></a>
 <script src="src/atlas.js"></script>
 <script src="src/game.js"></script>
 </body>

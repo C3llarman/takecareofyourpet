@@ -321,7 +321,9 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--ink); outli
 .start h1 .d { color: var(--dog); } .start h1 .c { color: var(--cat); } .start h1 .b { color: var(--bun); }
 .start p { margin: 0; font-weight: 700; font-size: 16px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
 .start .how { display: grid; gap: 6px; text-align: left; font-size: 15px; font-weight: 800; background: var(--track); border-radius: 18px; padding: 12px 16px; }
-.arcade-link { font-weight: 800; font-size: 14px; color: var(--muted); text-decoration: none; }
+.arcade-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 800; font-size: 14px; color: var(--muted); text-decoration: none; }
+.arcade-link img { width: 34px; height: 34px; transition: transform .15s; }
+.arcade-link:hover img { transform: rotate(-8deg) scale(1.06); }
 .arcade-link:hover { color: var(--ink); text-decoration: underline; }
 .play { border: 0; cursor: pointer; border-radius: 20px; padding: 16px; background: var(--sun); box-shadow: 0 5px 0 var(--sun-edge); font-family: var(--font-display); font-size: 30px; }
 .play:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--sun-edge); }
@@ -510,7 +512,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--ink); outli
       <span>Need help? Mr. Appletree at City Hall can explain anything.</span>
     </div>
     <button class="play" id="playBtn" type="button">Play</button>
-    <a class="arcade-link" href="../">&larr; Back to Elk Leaf Arcade</a>
+    <a class="arcade-link" href="../"><img src="../badge.webp" width="34" height="34" alt="">Back to Elk Leaf Arcade</a>
   </div>
 </div>
 

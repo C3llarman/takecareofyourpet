@@ -186,6 +186,7 @@ const sqImg = () => sqImgs[sqI] || atlas;
 function bestFor() { return best[D.id] || (best[D.id] = { acorns: 0, dist: 0 }); }
 
 // ---- State ----
+let hudShown = false; // the arcade badge moves out of the acorn count's way during a run
 let state = 'title', time = 0, elapsed = 0, speed = BASE, camX = 0;
 let dieT = 0, overT = 0, deathKind = '', lastDist = 0, newBest = false;
 let acornCount = 0, bridgeNext = false, lastMain = null;
@@ -1121,7 +1122,9 @@ function draw() {
   if (state !== 'title') drawSquirrel();
   drawParts();
   ctx.restore();
-  if (state === 'play' || state === 'dying') drawHUD();
+  const running = state === 'play' || state === 'dying';
+  if (running !== hudShown) { hudShown = running; document.body.classList.toggle('running', running); }
+  if (running) drawHUD();
   else if (state === 'title') drawTitle();
   else if (state === 'over') drawOver();
 }

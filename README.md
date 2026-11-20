@@ -37,6 +37,7 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 | `about/index.html` | The About page (elkleafarcade.com/about/), linked from the menu's footer |
 | `site.css` | Shared look for the menu and About pages (colours, top bar, sky-and-pines header, cards) |
 | `logo.webp`, `logo-360.webp` | The Elk Leaf Arcade logo, full size and small |
+| `badge.webp` | The small arcade badge used as the "back to the arcade" button in Acorn Run, Build a House and the pet game (Cluck Patrol, Flick Archery and Elven Hunter carry an embedded copy so they stay single files) |
 | `favicon.png`, `apple-touch-icon.png` | Browser tab and home-screen icons made from the logo |
 | `og-image.jpg` | The picture shown when the site is shared in chats and social posts |
 | `icon.svg` | The older elk leaf icon (Acorn Run's tab icon and the pet game's home-screen icon still use it) |
@@ -60,7 +61,7 @@ Upload new games into their own folder, not the top of the repo, or they will re
 
 1. Put the game in its own folder, for example `newgame/index.html`.
 2. Add a card for it in the `games` section of `index.html` (copy the pet game card).
-3. Add a link back to the menu in the game (`<a href="../">`).
+3. Add a link back to the menu in the game, using the arcade badge as its picture: `<a href="../" aria-label="Back to Elk Leaf Arcade"><img src="../badge.webp" width="52" height="52" alt=""></a>`. Put it in a corner the game's own controls and score don't use.
 
 ## Hosting on Netlify
 
