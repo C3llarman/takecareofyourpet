@@ -31,5 +31,5 @@ createServer(async (req, res) => {
     res.writeHead(404, { 'content-type': 'text/plain' }).end('not found');
   }
 }).listen(PORT, () => {
-  console.log(`Elven Hunter 3D  →  http://localhost:${PORT}`);
+  console.log(`Elven Hunter Deluxe  →  http://localhost:${PORT}`);
 });

@@ -47,6 +47,11 @@
     Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
+  for = "/elven-hunter-classic/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
   for = "/cluck-patrol/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"

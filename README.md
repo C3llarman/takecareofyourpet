@@ -7,7 +7,8 @@ The home of Elk Leaf Arcade at [elkleafarcade.com](https://elkleafarcade.com): a
 | Game | Address | Folder |
 |---|---|---|
 | Take Care of Your Pet | elkleafarcade.com/pet/ | `pet/` |
-| Elven Hunter | elkleafarcade.com/elven-hunter/ | `elven-hunter/` |
+| Elven Hunter Deluxe | elkleafarcade.com/elven-hunter/ | `elven-hunter/` |
+| Elven Hunter Classic | elkleafarcade.com/elven-hunter-classic/ | `elven-hunter-classic/` |
 | Cluck Patrol | elkleafarcade.com/cluck-patrol/ | `cluck-patrol/` |
 | Acorn Run | elkleafarcade.com/acorn-run/ | `acorn-run/` |
 | Build a House | elkleafarcade.com/build-a-house/ | `build-a-house/` |
@@ -15,7 +16,9 @@ The home of Elk Leaf Arcade at [elkleafarcade.com](https://elkleafarcade.com): a
 
 **Take Care of Your Pet** is a 3D pet care game. Feed, pet and train your pets, explore a big city, walk into shops, visit the vet, go down forest trails, and make friends with woodland animals.
 
-**Elven Hunter** is an open-world forest adventure: fight spiders, snakes, wasps and mushroom grumps, free your kin from their cocoons, call up the Stone Warden and face the dragon on his crag. It has its own README in `elven-hunter/`. Edit its files in `elven-hunter/src/`, then run `node tools/build.mjs` inside `elven-hunter/` to rebuild its `index.html`.
+**Elven Hunter Deluxe** is the 3D Elven Hunter, an open-world forest adventure: fight spiders, snakes, wasps and mushroom grumps, free your kin from their cocoons, call up the Stone Warden and face the dragon on his crag. It has its own README in `elven-hunter/`. Edit its files in `elven-hunter/src/`, then run `node tools/build.mjs` inside `elven-hunter/` to rebuild its `index.html`.
+
+**Elven Hunter Classic** is the original 2D side-scrolling Elven Hunter: cut your kin out of the spider-silk cocoons they hang in so they join your company, fight spiders, wasps (and their paper nests) and snakes, face the Corrupted Treant, the Great Serpent and the Spider Queen, level up, spend skill points and buy gear at the tavern between levels, and go deeper into a wood that never ends. Everything, including its pictures, is inside `elven-hunter-classic/index.html`. Its saves use different keys from the 3D game, so the two never overwrite each other.
 
 **Cluck Patrol** is a 2D platformer: hop across five tropical levels as a chicken and stomp or egg every raccoon and fox before the clock runs out. Palm Beach is the original island; clearing a level unlocks the next: Coconut Cove (drifting ledges over wide water), Sunset Cliffs (lifts up to the cliff tops), Moonlit Lagoon (cracked ledges that crumble under you) and Fox Den Peak (all of it at once). Pick any unlocked level on the title screen. Pick Easy, Medium or Hard (more lives and time on the easier ones), throw eggs with X or the EGG button, and grab floating hearts for an extra life. Everything, including its pictures, is inside `cluck-patrol/index.html`.
 
@@ -48,6 +51,8 @@ Start a small web server in this folder (for example `python3 -m http.server`) a
 | `pet/cover.jpg` | The game's picture on the arcade menu |
 | `pet/manifest.webmanifest`, `pet/icon.svg` | Lets phones and tablets add the pet game to the home screen |
 | `elven-hunter/` | Elven Hunter: built `index.html`, source in `src/`, build tools, tests and `cover.jpg` |
+| `elven-hunter-classic/index.html` | Elven Hunter Classic: one self-contained page (art is embedded) |
+| `elven-hunter-classic/cover.jpg` | Elven Hunter Classic's picture on the arcade menu |
 | `cluck-patrol/index.html` | Cluck Patrol: one self-contained page (art is embedded) |
 | `cluck-patrol/cover.jpg` | Cluck Patrol's picture on the arcade menu |
 | `acorn-run/` | Acorn Run: `index.html`, code in `src/`, sprite atlas in `assets/`, original art sheet in `assets/source/`, optional bundler in `tools/` |

@@ -1,4 +1,6 @@
-# Elven Hunter 3D
+# Elven Hunter Deluxe
+
+The 3D Elven Hunter. On Elk Leaf Arcade it is called **Elven Hunter Deluxe**; the original 2D game is **Elven Hunter Classic** in `../elven-hunter-classic/`.
 
 An open-world, third-person forest game that runs in **one self-contained HTML file**.
 
