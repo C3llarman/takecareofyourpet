@@ -218,7 +218,9 @@ function resize(){
   DPR=Math.min(window.devicePixelRatio||1,2);
   W=cvs.clientWidth; H=cvs.clientHeight;
   cvs.width=Math.round(W*DPR); cvs.height=Math.round(H*DPR);
-  SC=Math.max(W/560,H/860); VW=W/SC; VH=H/SC;
+  // Fit the 860-unit-tall play area to the screen height; on wide screens allow up to
+  // 1200 units across before zooming in further, so the ground stays near the bottom.
+  SC=Math.max(H/860,W/1200); VW=W/SC; VH=H/SC;
   ctx.setTransform(DPR,0,0,DPR,0,0);
 }
 addEventListener('resize',resize);
