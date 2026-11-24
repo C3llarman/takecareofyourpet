@@ -101,6 +101,15 @@ a.btn{text-align:center;text-decoration:none}
 #cine .cskip{position:absolute;right:18px;bottom:calc(5.5vh - 9px + var(--sab));font-size:14px;letter-spacing:1.5px;color:#a89873;
   opacity:0;transition:opacity 1s}
 #cine .cskip.on{opacity:.8}
+/* fly fishing and the kitty */
+.card canvas.scene{position:static;display:block;width:100%;height:auto;margin:8px 0 2px;border:1px solid var(--edge);border-radius:10px;background:#1a3540}
+.btn.strike{background:linear-gradient(#ffe7a0,#f0b040);box-shadow:0 0 0 3px rgba(255,215,106,.35);animation:strk .5s ease-in-out infinite alternate;font-weight:600;letter-spacing:1px}
+@keyframes strk{from{transform:scale(1)}to{transform:scale(1.03)}}
+.btn:disabled{opacity:.5;cursor:default}
+input.field{display:block;width:100%;padding:11px 12px;font:inherit;font-size:17px;color:var(--ink);background:#120d05;border:1px solid var(--edge);border-radius:10px;-webkit-user-select:text;user-select:text;margin-bottom:6px}
+input.field:focus{outline:none;border-color:var(--gold)}
+.picks.coats{grid-template-columns:repeat(auto-fit,minmax(86px,1fr))}
+.sw{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:6px;vertical-align:-2px;border:1px solid rgba(255,255,255,.4)}
 #boot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   background:#0a0d09;color:var(--gold);font-size:15px;letter-spacing:.5px}
 </style>
@@ -127,6 +136,7 @@ a.btn{text-align:center;text-decoration:none}
 <script>/*FOLK*/</script>
 <script>/*ABIL*/</script>
 <script>/*GEAR*/</script>
+<script>/*FARM*/</script>
 <script>/*UI*/</script>
 <script>/*INTRO*/</script>
 <script>/*GAME*/</script>

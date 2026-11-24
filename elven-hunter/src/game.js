@@ -883,6 +883,7 @@ function updateEnts(dt){
     if(e.kind==='node'){ updateNode(e,dt,pd); continue; }
     if(e.kind==='qitem'){ updateQItem(e,dt,pd); continue; }
     if(e.kind==='loot'){ updateLoot(e,dt,pd); continue; }
+    if(e.kind==='kitty'){ updateKitty(e,dt,pd); continue; }
     if(e.kind==='eagle'){ updateEagle(e,dt); continue; }
     if(e.kind==='gnome'){ e.yaw+=wrapA(Math.atan2(p.x-e.x,p.z-e.z)-e.yaw)*Math.min(1,dt*(pd<8?3:0));
       if(pd<2.2&&!p.dead) findGnome(e); continue; }
@@ -1057,6 +1058,7 @@ function addShadow(e){
   if(e.boss||(e.kind==='corpse'&&e.boss)) sc=(e.rad||3)*2.4;
   if(e.kind==='critter'||e.kind==='gnome'||e.kind==='node'||e.kind==='qitem') sc=0.6;
   if(e.kind==='eagle') sc=(e.scale||1)*1.8;
+  if(e.kind==='kitty') sc=0.7;
   var air=Math.max(0,e.y-H(e.x,e.z));
   var f=Math.max(0.35,1-air*0.22);
   var m=mat(); m4trs(m,e.x,H(e.x,e.z)+0.06,e.z,0,e.yaw||0,0,sc*f,1,sc*f);
@@ -1269,6 +1271,7 @@ function pushEnt(e){
   else if(e.kind==='node') nodeRig(RIG,e,G.t);
   else if(e.kind==='qitem') qitemRig(RIG,e,G.t);
   else if(e.kind==='loot') lootRig(RIG,e,G.t);
+  else if(e.kind==='kitty') kittyRig(RIG,e,G.t);
   else if(e.kind==='critter'){ if(e.sub==='fly') flyRig(RIG,e,G.t); else if(e.sub==='gull') eagleRig(RIG,e,G.t); else bunnyRig(RIG,e,G.t); }
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
   else if(e.kind==='shot'||e.kind==='eshot'||e.kind==='stuck'){ pushShot(e); return; }
@@ -1921,6 +1924,8 @@ function keeperScreen(say){
   var full=deployed()>=S.allies;
   opts.push({id:'hire',  t:'Hire a companion', d:full?'Your company is full ('+deployed()+' of '+S.allies+')':'Blades for coin ('+deployed()+' of '+S.allies+' in your company)', off:full});
   if(!WILD.torch) opts.push({id:'torch', t:'Buy a torch — '+TORCH_PRICE+' ◉', d:p.coins<TORCH_PRICE?'Not enough coin':'For the Glimmer Cave under the Dragon\'s Crag', off:p.coins<TORCH_PRICE});
+  if(!WILD.rod) opts.push({id:'rod', t:'Buy a fly rod — '+ROD_PRICE+' ◉', d:p.coins<ROD_PRICE?'Not enough coin':'Fish the river, the sea and the isle shore', off:p.coins<ROD_PRICE});
+  if(fishTotal()) opts.push({id:'sellfish', t:'Sell your fish ('+fishTotal()+') — +'+fishValue()+' ◉', d:'Bram puts them on the stew'+(HOME.kitty?' · or keep one for '+esc(HOME.kitty.name):''), off:false});
   bramParcel(opts);
   opts.push({id:'story', t:'Ask for a story', d:'Bram knows the wood\'s old tales — and a few of his own', off:false});
   if(!b) opts.push({id:'work', t:'Ask for work', d:'Bram always has a job going', off:false});
@@ -1952,6 +1957,12 @@ function keeperDo(id){
     if(WILD.torch||p.coins<TORCH_PRICE) return;
     p.coins-=TORCH_PRICE; WILD.torch=true; sfx('pickup'); saveGame();
     keeperScreen('There. Pitch-soaked, burns for days. The cave\'s in the west face of the crag — and whatever glitters in there, I want to hear about it.');
+  } else if(id==='rod'){
+    if(WILD.rod||p.coins<ROD_PRICE) return;
+    p.coins-=ROD_PRICE; WILD.rod=true; sfx('pickup'); saveGame();
+    keeperScreen('Hazel rod, silk line, and a box of flies I tied myself. Walk up to any water and give it a cast. The trout are rising on the river, and I hear there\'s a golden one, if you\'re patient.');
+  } else if(id==='sellfish'){
+    var fv=sellFish(); if(fv){ sfx('coin'); saveGame(); } keeperScreen(fv?'Lovely and fresh! That\'s '+fv+' coins. Fish stew tonight.':'');
   } else if(id==='parcel'){ keeperScreen(bramParcelDo());
   } else if(id==='story'){ var st=bramStory(); sfx('pickup'); keeperScreen(st);
   } else if(id==='hire'){ hireScreen(); }
@@ -2101,6 +2112,7 @@ cvs.addEventListener('pointermove',function(e){ ptrMove(e.pointerId,e.clientX,e.
 cvs.addEventListener('touchstart',function(e){e.preventDefault();},{passive:false});
 cvs.addEventListener('touchmove',function(e){e.preventDefault();},{passive:false});
 addEventListener('keydown',function(e){
+  if(e.target&&e.target.tagName==='INPUT') return;      // typing a name, not playing
   if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0) e.preventDefault();
   KEY[e.key]=true; KEY[e.key.toLowerCase&&e.key.toLowerCase()]=true;
   sndWake();

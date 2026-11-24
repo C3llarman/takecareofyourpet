@@ -218,5 +218,35 @@ function sfx(name,x,z,v){
       b=sndBus(0.9*P.g,P.pan,0.8); tone(b,'sine',110,40,t,0.35,0.8); hiss(b,'lowpass',2000,200,0.7,t,0.3,0.7); break;
     case 'click':
       b=sndBus(0.35,0,0.1); tone(b,'square',1200,900,t,0.03,0.15); break;
+    case 'cast':                          // the line whips out over the water
+      b=sndBus(0.6,0,0.6); hiss(b,'bandpass',600,2600,1.6,t,0.22,0.5,0.03); hiss(b,'bandpass',2200,800,1.6,t+0.24,0.28,0.4,0.02); break;
+    case 'splash':                        // something breaks the surface
+      b=sndBus(0.7*P.g,P.pan,0.6); hiss(b,'lowpass',2600*r,500,0.8,t,0.32,0.8,0.005); hiss(b,'bandpass',1400,3200,2,t+0.04,0.18,0.35); tone(b,'sine',320*r,140,t,0.1,0.25); break;
+    case 'reel':                          // the ratchet of the reel
+      b=sndBus(0.5,0,0.5); for(var rl=0;rl<6;rl++) tone(b,'square',2100+rl*40,1800,t+rl*0.045,0.012,0.14); break;
+    case 'meow':                          // a small cat says hello
+      b=sndBus(0.55*Math.max(P.g,0.4),P.pan,0.9);
+      (function(){ var o=c.createOscillator(), f=c.createBiquadFilter(), g=c.createGain(), f0=(500+Math.random()*120);
+        o.type='sawtooth'; o.frequency.setValueAtTime(f0,t); o.frequency.linearRampToValueAtTime(f0*1.55,t+0.17); o.frequency.linearRampToValueAtTime(f0*0.95,t+0.55);
+        f.type='bandpass'; f.Q.value=3; f.frequency.setValueAtTime(900,t); f.frequency.linearRampToValueAtTime(1900,t+0.2); f.frequency.linearRampToValueAtTime(1000,t+0.55);
+        g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.5,t+0.06); g.gain.setValueAtTime(0.45,t+0.38); g.gain.exponentialRampToValueAtTime(0.0001,t+0.62);
+        o.connect(f); f.connect(g); g.connect(b); o.start(t); o.stop(t+0.7); })();
+      break;
+    case 'purr':                          // a low rumble that flutters ~24 times a second, breathing in and out
+      b=sndBus(1.0*Math.max(P.g,0.5),P.pan,2.6);
+      (function(){ var s=c.createBufferSource(), f=c.createBiquadFilter(), am=c.createGain(), g=c.createGain(),
+          lfo=c.createOscillator(), lg=c.createGain(), o=c.createOscillator(), og=c.createGain();
+        s.buffer=SND.noise; s.loop=true; f.type='lowpass'; f.frequency.value=300; f.Q.value=0.9;
+        am.gain.value=0.5; lfo.type='sine'; lfo.frequency.value=23+Math.random()*3; lg.gain.value=0.5; lfo.connect(lg); lg.connect(am.gain);
+        o.type='triangle'; o.frequency.value=46; og.gain.value=0.35; o.connect(og); og.connect(am);
+        s.connect(f); f.connect(am); am.connect(g); g.connect(b);
+        var q=g.gain; q.setValueAtTime(0.0001,t); q.linearRampToValueAtTime(1.0,t+0.18); q.linearRampToValueAtTime(0.8,t+1.0);
+        q.linearRampToValueAtTime(0.2,t+1.15); q.linearRampToValueAtTime(0.55,t+1.35); q.linearRampToValueAtTime(0.5,t+2.05); q.linearRampToValueAtTime(0.0001,t+2.35);
+        [s,lfo,o].forEach(function(n){ n.start(t); n.stop(t+2.45); }); })();
+      break;
+    case 'hiss':                          // the kitty spots a pest
+      b=sndBus(0.55*Math.max(P.g,0.3),P.pan,0.5); hiss(b,'highpass',3000,4200,0.7,t,0.3,0.4,0.03); break;
+    case 'pounce':
+      b=sndBus(0.7*Math.max(P.g,0.3),P.pan,0.4); hiss(b,'bandpass',700,2200,1.2,t,0.14,0.5,0.01); tone(b,'square',260*r,140,t+0.08,0.08,0.18); break;
   }
 }

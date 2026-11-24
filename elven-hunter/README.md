@@ -20,7 +20,8 @@ nothing grows into a thicket), ringed by mountains on three sides; to the east i
 to a long beach and the sea. Nine landmarks to find. Spiders hunt the undergrowth, snakes lie in the grass, wasps swarm
 their hive, cross little mushrooms hop about the meadows, and your kin hang in cocoons
 waiting to be cut down. Free them and they follow you and fight. Bram keeps the tavern;
-from level 10 an abandoned cottage can be bought, fixed up and farmed. The standing stones
+from level 10 an abandoned cottage can be bought, fixed up and farmed, with a kitty of your
+own to guard it. Buy a fly rod and you can go fly fishing at any water's edge. The standing stones
 wake while you hunt and can call up a boss; a dragon sleeps on the Dragon's Crag; and the
 Glimmer Cave under it opens to anyone with a torch. Six named mini-bosses guard their
 homes, golden champions roam on Normal and up, and a journal fills with the wood's story
@@ -123,6 +124,8 @@ src/
   abilities.js three abilities per calling, unlocked at levels 2, 4 and 7
   gear.js     five gear slots, five rarities, loot bags, the bag and character
               sheet, Bram's cousin's forge
+  farm.js     fly fishing (the rod, the cast-strike-reel game, the creel) and the
+              farm kitty (adopting and naming it, guarding the house, feeding it)
   ui.js       the laptop HUD: portrait and target frames, action bar, XP bar,
               quest tracker, zone name, event log
   folk.js     Wren, Tobin and Ærtheldor and their ten quests, gathering, the
@@ -183,6 +186,8 @@ strike button, which reads **TALK** beside him). He offers:
 - **The forge** (Bram's cousin): weapon, head, shoulders and chest pieces up to rare.
 - **A story**: Bram has four tales of his own; each goes in your journal.
 - **A torch**: 60 coins, once. You need it to go into the Glimmer Cave.
+- **A fly rod**: 40 coins, once. See *Fly fishing* below.
+- **Sell your fish**: Bram buys your whole creel for the stew.
 - **Bounties**: slay spiders, drive off snakes, swat wasps, squash mushroom grumps, free
   captives or, from level 3, slay a giant spider. Progress shows in the status panel; come back for coins and XP.
 - **Training**: a shortcut to spend skill points.
@@ -222,6 +227,52 @@ tap **LOOK**). From **level 10**, with 600 coins, it's yours, and then a job at 
 (15, 4 min, 58) in empty plots. Crops grow while you play and are drawn growing in the
 patch; ripe plots glint gold. Harvest from the cottage menu. `HOUSE_LEVEL` and the prices
 live at the top of `src/home.js`.
+
+### The farm kitty (`src/farm.js`)
+
+Once the cottage is yours, its menu offers **Adopt a kitty** (60 coins). Pick a coat
+(ginger, tabby, black, grey or snowy) and type a name (or tap one of the suggestions); you can
+rename it later. The kitty lives on the farm: it potters about the yard, sits on the
+doorstep, and trots over to you when you come home. Walk up to it (`E` / **PET**) to pet it,
+feed it or rename it.
+
+**It guards the house.** Anything hostile that comes within 30 units of the cottage, the
+kitty chases down and pounces on. An ordinary monster goes down in one pounce (you get the
+coins and XP); a champion or a mini-boss takes a few. Bosses (the Warden, the dragons) are
+too big even for a farm cat. Its tally of pests caught is on its screen.
+
+**Bring it a fish.** Give the kitty something from your creel and the menu closes so you
+can watch: it eats (nom nom nom), then shuts its eyes and **purrs**, a synthesised purr
+with hearts floating up, for a few seconds.
+
+### Fly fishing (`src/farm.js`)
+
+Buy a **fly rod** from Bram (40 coins). Then walk to the edge of any water (the river, the
+sea off the Sunlit Shore, the Emberleaf Isle's shore) and `E` / **FISH**. A little scene
+opens over the game:
+
+1. **Cast your fly.** The line unrolls over the water.
+2. **Wait.** A fish's shadow swims up under the fly. Press too soon and it darts away.
+3. **STRIKE!** when it rises and splashes (1.25 s, 1.7 s on Easy).
+4. **REEL!** A needle swings across the line's tension bar: press when it's in the green.
+   Three good pulls land the fish; three bad ones and it gets away. Rarer fish swing faster
+   with a narrower green.
+
+On a laptop, Space or `E` works the rod too. What you catch goes in your **creel** (and pays
+a little XP): sell it to Bram or take it home to the kitty.
+
+| Fish | Where | Bram pays |
+|---|---|---|
+| Brook trout | the river | 10 |
+| Grayling | the river | 14 |
+| Rainbow trout | the river | 22 |
+| Mackerel | the sea | 10 |
+| Sea bass | the sea | 18 |
+| Ember carp | the Emberleaf shore | 26 |
+| Golden trout (rare) | anywhere | 60 |
+
+The fish, their prices and how often each bites are the `FISH` table at the top of
+`src/farm.js`.
 
 ### The wilder wood (`src/wild.js`)
 
@@ -367,8 +418,13 @@ less harm; trinkets +8 health and +3% damage).
 
 - **Loot** drops as a bag with a beam of its rarity's colour; walk over it. Anything better
   than what you wear goes on at once (the old piece goes in your bag); anything else goes
-  in the bag, to equip or sell from the character sheet (`C`), which also has "sell
-  everything not better".
+  in the bag, to wear or sell from the character sheet (`C`), which also has "sell
+  everything not better" (tap twice).
+- **Wear what you like.** Any piece in the bag can be **swapped in**, better or not, and
+  anything you wear can be **taken off**. A slot you dressed by hand keeps your choice:
+  better loot for it waits in the bag marked "▲ Better!" instead of replacing it, until you
+  equip a better piece yourself. Trinkets come as charms, pendants, lucky acorns, rune
+  stones, feather tokens, moonstones, bell charms, oak rings, fox teeth and shell necklaces.
 - **Where it comes from**: mini-bosses always drop rare or epic; the Warden epic or
   legendary; Cinderwing an epic-or-legendary plus a rare; champions 40% of the time; the
   Glimmer Hoard often; ordinary monsters rarely. Bram's cousin sells up to rare.
@@ -545,7 +601,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-222 assertions run the actual game in headless Chromium with software WebGL and check
+233 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames

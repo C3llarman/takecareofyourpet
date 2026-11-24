@@ -20,7 +20,7 @@ var CROPS={
   corn:   {n:'Corn',     seed:8,  grow:150, sell:28},
   pumpkin:{n:'Pumpkins', seed:15, grow:240, sell:58}
 };
-function homeReset(){ HOME={owned:false, up:{}, plots:[], playT:0}; for(var i=0;i<8;i++) HOME.plots.push({c:null,t:0}); }
+function homeReset(){ HOME={owned:false, up:{}, plots:[], playT:0, kitty:null}; for(var i=0;i<8;i++) HOME.plots.push({c:null,t:0}); }
 homeReset();
 
 /* cottage-local (lx across the front, lz out of the door) -> world */
@@ -186,6 +186,8 @@ function cottageScreen(say){
     html='<h1>Your Cottage</h1><p class="sub">'+(built===HOME_UP.length?'Every job done. It\'s home.':built+' of '+HOME_UP.length+' jobs done')+' · ◉ '+p.coins+'</p>'+
       (say?'<p class="say">'+say+'</p>':'');
     if(Object.keys(WILD.recipes||{}).length) opts.push({id:'craft',t:'Your workbench',d:'Brew and make from what you\'ve gathered',off:false});
+    if(HOME.kitty) opts.push({id:'cat',t:'See '+esc(HOME.kitty.name),d:fishTotal()?'You have a fish for '+esc(HOME.kitty.name)+'!':'Pet your kitty, or bring a fish',off:false,gold:fishTotal()>0});
+    else opts.push({id:'adopt',t:'Adopt a kitty — '+KITTY_PRICE+' ◉',d:p.coins<KITTY_PRICE?'A farm cat to keep pests off your doorstep · not enough coin':'A farm cat to keep pests off your doorstep. You get to name it',off:false});
     if(HOME.up.hearth) opts.push({id:'rest',t:'Rest by the hearth',d:p.hp>=p.maxHp-0.5?'You are already rested':'Mend you and your company',off:false});
     if(plotsOpen()){
       var rc=readyCrops(), empty=0, growing=[];
@@ -235,6 +237,8 @@ function cottageDo(id){
     for(var k=0;k<plotsOpen();k++){ var q=HOME.plots[k]; if(cropReady(q)){ q.c=null; q.t=0; } }
     if(rc.n){ p.coins+=rc.v; sfx('coin'); var hp=HT(8,0); burst(hp.x,H(hp.x,hp.z)+1,hp.z,20,[1.0,0.85,0.4],{up:3,spread:3,size:0.12,life:1}); saveGame(); }
     cottageScreen(rc.n?'A good harvest: +'+rc.v+' coins.':'');
+  } else if(id==='adopt'){ if(!HOME.kitty) kittyNameScreen(false);
+  } else if(id==='cat'){ kittyScreen();
   } else if(id==='craft'){ craftScreen(function(){ cottageScreen(); });
   } else if(id==='rest'){
     p.hp=p.maxHp; for(var a=0;a<G.ents.length;a++) if(G.ents[a].kind==='ally') G.ents[a].hp=G.ents[a].maxHp;
@@ -248,13 +252,13 @@ function saveGame(){
   if(!G.player||G.player.dead&&G.state!=='dead') return;
   var p=G.player, b=G.build;
   var sv={v:1, t:Date.now(),
-    build:{race:b.race,cls:b.cls,skills:b.skills,points:b.points,gear:b.gear||{w:0,a:0},diff:b.diff||'normal',items:b.items||{},bag:b.bag||[]},
+    build:{race:b.race,cls:b.cls,skills:b.skills,points:b.points,gear:b.gear||{w:0,a:0},diff:b.diff||'normal',items:b.items||{},bag:b.bag||[],picked:b.picked||{}},
     wild:wildSave(),
     p:{level:p.level,xp:p.xp,hp:Math.max(1,Math.round(p.hp)),coins:p.coins,potions:p.potions},
     killed:G.killed, freed:G.freed, found:G.found, bounty:G.bounty?{id:G.bounty.def.id,n:G.bounty.n,got:G.bounty.got}:null,
     bountiesDone:G.bountiesDone||0,
     allies:G.ents.filter(function(e){ return e.kind==='ally'; }).map(function(e){ return {ak:e.ak,name:e.name}; }),
-    home:{owned:HOME.owned,up:HOME.up,plots:HOME.plots,playT:Math.round(HOME.playT)}};
+    home:{owned:HOME.owned,up:HOME.up,plots:HOME.plots,playT:Math.round(HOME.playT),kitty:HOME.kitty}};
   try{ localStorage.setItem(SAVE_KEY,JSON.stringify(sv)); }catch(e){}
 }
 function loadSave(){
@@ -272,7 +276,8 @@ function applySave(sv){
   homeReset();
   wildLoad(sv.wild);
   if(sv.home){ HOME.owned=!!sv.home.owned; HOME.up=sv.home.up||{}; HOME.playT=sv.home.playT||0;
-    if(sv.home.plots) for(var j=0;j<8&&j<sv.home.plots.length;j++) HOME.plots[j]=sv.home.plots[j]; }
+    if(sv.home.plots) for(var j=0;j<8&&j<sv.home.plots.length;j++) HOME.plots[j]=sv.home.plots[j];
+    if(sv.home.kitty&&sv.home.kitty.name){ HOME.kitty=sv.home.kitty; spawnKitty(); } }
   (sv.allies||[]).forEach(function(a,k){ spawnAlly(a.ak,p.x+Math.cos(k*2.1)*2,p.z+Math.sin(k*2.1)*2,a.name); });
 }
 /* where you wake: your own hearth once you have one, otherwise the Greenleaf's yard */

@@ -571,18 +571,74 @@ section('Home and progress');
   ok('at level 10 you can buy the cottage and fix it up', home.owned && home.ups === 7, `${home.ups} jobs done`);
   ok('crops grow and sell', home.planted === 8 && home.earned === 8 * home.sell, `8 plots of wheat: +${home.earned}`);
 
+  // gear you choose by hand stays on, even when it isn't "better"
+  const swap = await page.evaluate(() => { G.build.bag = []; G.build.picked = {}; const hi = makeItem('trinket', 3), lo = makeItem('trinket', 1); lo.n = 'Lucky Acorn';
+    equip(hi); G.build.bag.push(lo); G.state = 'play'; gearSheet(); const btn = document.querySelector('[data-e]'); const label = btn.textContent; btn.click();
+    const worn = equipped('trinket').n; takeItem(makeItem('trinket', 4)); const kept = equipped('trinket').n;
+    document.querySelector('[data-off="trinket"]').click(); const off = !equipped('trinket') && G.build.bag.some((i) => i.n === 'Lucky Acorn');
+    menuClose(); return { label, worn, kept, off }; });
+  ok('any piece in the bag can be swapped in, better or not', swap.label === 'Swap in' && swap.worn === 'Lucky Acorn', swap.label);
+  ok('a piece you chose stays on when better loot drops', swap.kept === 'Lucky Acorn');
+  ok('worn gear can be taken off', swap.off);
+
+  // fly fishing: Bram sells the rod; any water's edge will do
+  const fish = await page.evaluate(() => { const p = G.player; p.coins = 500; G.state = 'play'; keeperScreen(); keeperDo('rod'); const rod = WILD.rod; menuClose();
+    let spot = null;
+    for (let x = -120; x < 120 && !spot; x += 3) for (let z = -150; z < 150 && !spot; z += 3)
+      if (inBounds(x, z, 15) && Math.hypot(x, z) > 30 && H(x, z) > WATER + 0.1 && H(x, z) < WATER + 0.8 && H(x + 4, z) < WATER - 0.6) spot = { x, z };
+    p.x = spot.x; p.z = spot.z; p.y = H(p.x, p.z); p.yaw = Math.PI / 2;
+    const at = !!fishSpot(p); const dry = (() => { const q = { x: 0, z: 6, yaw: 0, dead: false }; return !fishSpot(q); })();
+    G.state = 'play'; fishScreen(); const F = FISHING; const where = F.where;
+    fishButton(); fishTick(F, 1); const waiting = F.stage === 'wait';
+    fishButton(); const spooked = F.stage === 'lost';                      // striking too soon scares it off
+    fishButton(); fishTick(F, 1); fishTick(F, F.waitT + 0.01); const bite = F.stage === 'bite';
+    fishButton(); const reel = F.stage === 'reel';
+    for (let i = 0; i < 3; i++) { F.u = F.zc; fishButton(); }
+    const r = { rod, at, dry, where, waiting, spooked, bite, reel, landed: F.stage === 'landed', n: fishTotal(), coins: p.coins };
+    menuClose(); return r; });
+  ok('Bram sells a fly rod', fish.rod && fish.coins === 500 - 40);
+  ok('you can fish at the water\'s edge, not on dry land', fish.at && fish.dry, fish.where);
+  ok('cast, wait for the rise, strike, reel it in', fish.waiting && fish.spooked && fish.bite && fish.reel && fish.landed && fish.n === 1);
+
+  // the farm kitty: adopt and name it; it guards the house; a fish makes it purr
+  const cat = await page.evaluate(() => { const p = G.player; p.coins = 500; G.state = 'play'; cottageScreen(); cottageDo('adopt');
+    document.getElementById('kname').value = 'Sir <b>Fluff</b>'; document.querySelector('[data-coat="black"]').click();
+    document.getElementById('kname').value = 'Sir <b>Fluff</b>'; document.getElementById('kok').click();
+    const named = HOME.kitty && HOME.kitty.name, coat = HOME.kitty && HOME.kitty.coat, escaped = !ui.querySelector('b b'), k = findKitty();
+    menuClose();
+    // a spider wanders up to the house; the player is far away
+    p.x = HOUSE.x + 80; p.z = HOUSE.z; G.ents = G.ents.filter((e) => !FOE[e.kind]);
+    const q = HT(12, 10); spawnSpider(q.x, q.z, false); const sp = G.ents[G.ents.length - 1];
+    for (let i = 0; i < 400 && G.ents.indexOf(sp) >= 0; i++) updateKitty(k, 0.05, 80);
+    const got = G.ents.indexOf(sp) < 0 && HOME.kitty.got === 1;
+    // one far from the house is left alone
+    const far = HT(60, 0); spawnSpider(far.x, far.z, false); const sp2 = G.ents[G.ents.length - 1];
+    for (let i = 0; i < 100; i++) updateKitty(k, 0.05, 80);
+    const spared = G.ents.indexOf(sp2) >= 0;
+    G.ents = G.ents.filter((e) => !FOE[e.kind]);
+    WILD.fish = { trout: 1 }; G.state = 'play'; kittyScreen(); kittyDo('feed:trout');
+    const eating = k.eatT > 0 && fishTotal() === 0;
+    for (let i = 0; i < 60; i++) updateKitty(k, 0.05, 80);
+    return { named, coat, escaped, got, spared, eating, purr: k.purrT > 0, fed: HOME.kitty.fed, coins: p.coins }; });
+  ok('a kitty can be adopted and named', cat.named === 'Sir <b>Fluff</b>' && cat.coat === 'black' && cat.escaped && cat.coins === 500 - 60, cat.named);
+  ok('the kitty gets pests that come near the house', cat.got);
+  ok('and leaves the rest of the wood alone', cat.spared);
+  ok('bring the kitty a fish and it purrs', cat.eating && cat.purr && cat.fed === 1);
+
   // everything you own survives a reload
-  await page.evaluate(() => { G.bounty = { def: BOUNTIES[0], n: 9, got: 4 }; saveGame(); });
+  await page.evaluate(() => { G.bounty = { def: BOUNTIES[0], n: 9, got: 4 }; WILD.fish = { grayling: 2 }; saveGame(); });
   const saved = await page.evaluate(() => ({ lvl: G.player.level, coins: G.player.coins, gear: G.build.gear.w }));
   await page.reload(); await page.waitForFunction('window.__ready===true', { timeout: 60000 });
   const hasCont = await page.evaluate(() => !!document.getElementById('cont'));
   ok('the title offers to continue', hasCont);
   await page.click('#cont'); await page.waitForTimeout(400);
   const back = await page.evaluate(() => ({ lvl: G.player.level, coins: G.player.coins, gear: G.build.gear.w, owned: HOME.owned, ups: Object.keys(HOME.up).length,
-    bounty: G.bounty && G.bounty.got, dHome: Math.hypot(G.player.x - HOUSE.x, G.player.z - HOUSE.z) }));
+    bounty: G.bounty && G.bounty.got, dHome: Math.hypot(G.player.x - HOUSE.x, G.player.z - HOUSE.z),
+    kitty: HOME.kitty && HOME.kitty.name, cat: !!findKitty(), rod: WILD.rod, fish: fishTotal(), picked: !!G.build.picked.trinket }));
   ok('your hunter, coin, gear, bounty and cottage are saved', back.lvl === saved.lvl && back.coins === saved.coins && back.gear === saved.gear
     && back.owned && back.ups === 7 && back.bounty === 4, JSON.stringify({ lvl: back.lvl, coins: back.coins }));
   ok('you carry on at your own hearth', back.dHome < 8);
+  ok('your kitty, rod, fish and gear choices are saved', back.kitty === 'Sir <b>Fluff</b>' && back.cat && back.rod && back.fish === 2 && back.picked);
   await page.evaluate(() => { G.player.inv = 0; hurtPlayer(1e6, 'test'); });
   await page.waitForFunction(() => G.state === 'dead', null, { timeout: 10000 });
   await page.click('#again'); await page.waitForTimeout(200);
