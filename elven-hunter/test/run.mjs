@@ -68,7 +68,7 @@ section('World');
   // walkable land is a circle inside the mountains, so the corners were unreachable
   const reach = await page.evaluate(() => { startRun(); QUESTS.forEach((q) => { WILD.q[q.id] = { s: 'on', got: [] }; }); spawnQuestItems();
     const lim = WHALF * 0.95, bad = [];
-    G.ents.forEach((e) => { if (e.z > CAVE.z0 || inIsle(e.x, e.z) || e.kind === 'critter' || e.kind === 'eagle') return;
+    G.ents.forEach((e) => { if (e.z > CAVE.z0 || inIsle(e.x, e.z) || inHall(e.x, e.z) || e.kind === 'critter' || e.kind === 'eagle') return;
       if (Math.hypot(e.x, e.z) > lim - 2 || Hn(e.x, e.z) > 0.9) bad.push(e.kind); });
     return { bad, n: G.ents.length, size: WSIZE }; });
   const marks = await page.evaluate(() => { const p = G.player; p.x = 0; p.z = 6; WILD.inCave = false;
@@ -512,6 +512,7 @@ section('Tavern');
   const tick = await page.evaluate(() => { const b = G.bounty; const before = b.got; bountyTick(b.def.on); return b.got - before; });
   ok('bounty progress counts', tick === 1);
 
+
   await page.click('#hback');
   await page.evaluate(() => { G.build.points = 2; keeperScreen(); });
   await page.click('.opt[data-o="train"]');
@@ -520,6 +521,28 @@ section('Tavern');
   ok('spending a skill point takes, and the page updates', sk.pts === 1 && sk.shown === '1' && sk.state === 'skills', `${sk.shown} left`);
   await page.click('#close');
   ok('closing the menu returns to the wood', (await page.evaluate(() => G.state)) === 'play');
+  // the great hall: walk in at the door, and the Greenleaf opens up inside
+  const hall = await page.evaluate(() => new Promise((res) => {
+    const p = G.player; G.ents = G.ents.filter((e) => !FOE[e.kind]); menuClose(); G.state = 'play';
+    p.x = TAVERN.enter.x; p.z = TAVERN.enter.z; p.y = H(p.x, p.z);
+    const t0 = G.t; const tick = () => { if (G.t - t0 > 0.4) {
+      const k = keeper(), allies = G.ents.filter((e) => e.kind === 'ally');
+      res({ inside: WILD.inHall && inHall(p.x, p.z), world: WORLD.visible, hall: HALL3.visible, bram: !!k && inHall(k.x, k.z),
+        allies: allies.length > 0 && allies.every((a) => inHall(a.x, a.z)), regulars: G.ents.filter((e) => e.patron).length,
+        cam: Math.abs(G.cam.x - HALL.x) < HALL.W && Math.abs(G.cam.z - HALL.z) < HALL.D && G.cam.y < HALL.ridge, safe: p.safe, zone: zoneName() });
+    } else requestAnimationFrame(tick); }; tick(); }));
+  ok('walking in at the door carries you into the hall, company and all', hall.inside && !hall.world && hall.hall && hall.allies, JSON.stringify(hall));
+  ok('Bram keeps the bar inside, and the regulars wander the hall', hall.bram && hall.regulars >= 3);
+  ok('the camera stays inside the room, and the hall is safe ground', hall.cam && hall.safe && hall.zone === 'The Greenleaf Tavern');
+  const bar = await page.evaluate(() => new Promise((res) => {
+    const k = keeper(), p = G.player; p.x = k.x - 2.3; p.z = k.z; p.y = H(p.x, p.z);
+    const t0 = G.t; const tick = () => { if (G.t - t0 > 0.3) res(!!G.talk && /Bram/.test(G.talk.label)); else requestAnimationFrame(tick); }; tick(); }));
+  ok('you can talk to Bram across the bar', bar);
+  const out = await page.evaluate(() => new Promise((res) => {
+    const p = G.player; HALL_CD = 0; p.x = HALL.x + HALL.exit.x; p.z = HALL.z + HALL.exit.z - 0.9; p.y = H(p.x, p.z);
+    const t0 = G.t; const tick = () => { if (G.t - t0 > 0.4) res({ out: !WILD.inHall && !inHall(p.x, p.z) && Math.hypot(p.x - TAVERN.x, p.z - TAVERN.z) < 14, world: WORLD.visible, hall: HALL3.visible });
+      else requestAnimationFrame(tick); }; tick(); }));
+  ok('and out through the far door, back into the yard', out.out && out.world && !out.hall, JSON.stringify(out));
   ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
   await page.close();
 }
@@ -654,7 +677,7 @@ section('Forest');
   ok('you can wade into the shallows, not out to sea', coast.deep >= WATER_ - 1.0, `stopped where the water is ${(WATER_ - coast.deep + 0).toFixed(1)} deep`);
   ok('the wood is open, not a thicket', trees.n / trees.area < 500, `${trees.n} trees, ${Math.round(trees.n / trees.area)} per original map's worth of ground`);
   const size = (await import('node:fs')).statSync(PAGE.replace('file://', '')).size / 1024 / 1024;
-  ok('the whole game stays small', size < 3.3, `${size.toFixed(2)} MB with models, forest and music`);
+  ok('the whole game stays small', size < 3.4, `${size.toFixed(2)} MB with models, forest and music`);
   await page.close();
 }
 
@@ -842,7 +865,7 @@ section('Expert, and the Emberleaf Isle');
   const freed = await page.evaluate(() => { const s = G.ents.find((e) => e.sister), c0 = G.player.coins; hurtEnemy(s, s.hp + 10);
     const pr = princessEnt(); G.player.x = pr.x - 3; G.player.z = pr.z; princessScreen(); menuClose();
     return { st: WILD.princess, coins: G.player.coins > c0, fav: Object.values(G.build.items || {}).concat(G.build.bag || []).some((i) => i && /Elowen/.test(i.n)),
-      atTavern: (() => { const q = princessEnt(); return !!q && Math.hypot(q.x - TAVERN.x, q.z - TAVERN.z) < 20; })(), back: WILD.sister.t > 0, lore: !!WILD.lore.elowen }; });
+      atTavern: (() => { const q = princessEnt(); return !!q && inHall(q.x, q.z); })(), back: WILD.sister.t > 0, lore: !!WILD.lore.elowen }; });
   ok('slay Ashwing, and Elowen is free', freed.st === 2 && freed.coins && freed.lore, JSON.stringify(freed));
   ok('she gives you her favour, and waits for you at the Greenleaf', freed.fav && freed.atTavern);
   ok('Ashwing comes back in time, but the princess stays free', freed.back);

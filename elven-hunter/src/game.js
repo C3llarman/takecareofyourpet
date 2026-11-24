@@ -213,7 +213,8 @@ function buildWorld(){
   for(var i=0;i<PROPS3.length;i++){ SCENE.add(PROPS3[i].hi); SCENE.add(PROPS3[i].lo); }
   initCropParts(); buildCottage();
   buildCave();
-  WORLDTRIS=m.count()/3+PROPTRIS+isleTris;
+  var hallTris=buildHall(); tavernExtras();     // the Greenleaf's great hall (hall.js)
+  WORLDTRIS=m.count()/3+PROPTRIS+isleTris+hallTris;
 }
 var WORLDTRIS=0, PROPS3=[];
 /* level of detail per chunk: full models near the camera, stand-ins further out,
@@ -254,7 +255,7 @@ function populate(){
   }
   for(var f=0;f<Math.round(10*WS);f++){ var q3=randIn(r), fx=q3.x, fz=q3.z;
     if(H(fx,fz)<WATER+0.4) continue; spawnFairy(fx,fz); }
-  spawnKeeper();
+  spawnKeeper(); spawnPatrons();
   spawnCritters(); spawnGnomes(); populateCave(); populateIsle();
   if(WILD.dragon.t<=0) spawnDragon();
   spawnMinis(); seedChampions();
@@ -963,6 +964,7 @@ function updateEnts(dt){
       if(hit||e.life<=0) G.ents.splice(i,1);
       continue;
     }
+    if(e.patron){ patronTick(e,dt,pd); continue; }
     if(e.kind==='npc'){
       // Bram turns to watch you come up the path, and raises a mug when you arrive
       var want=pd<10?Math.atan2(p.x-e.x,p.z-e.z):e.home;
@@ -1031,16 +1033,16 @@ function followCam(dt){
     if(cd2<9) crowd=Math.max(crowd,(ce.scale||1)*(1-cd2/9));
     if(ce.boss&&ce.state!=='sleep'&&cd2<30) crowd=Math.max(crowd,1.3*(1-cd2/40));
   }
-  var want0=c.dist*(asp<1?0.74:1)*(1+crowd*0.55)*(WILD.inCave?0.8:1);
+  var want0=c.dist*(asp<1?0.74:1)*(1+crowd*0.55)*(WILD.inCave?0.8:(WILD.inHall?0.85:1));
   var cp=Math.cos(c.pitch);
   var dx=-Math.sin(c.yaw)*cp, dz=-Math.cos(c.yaw)*cp, dy=Math.sin(c.pitch);
   // march out from the player and stop before the camera enters a hill
   var want=want0, d=want, N=14;
   for(var i=1;i<=N;i++){
     var t=want*i/N, sx=px+dx*t, sy=py+dy*t, sz=pz+dz*t;
-    if(sy<H(sx,sz)+1.0){ d=want*(i-1)/N; break; }
+    if(sy<H(sx,sz)+1.0||camBlocked(sx,sy,sz)){ d=want*(i-1)/N; break; }
   }
-  d=Math.max(2.4,d);
+  d=Math.max(WILD.inHall?1.2:2.4,d);
   c.cd=(c.cd===undefined)?d:(d<c.cd ? d : c.cd+(d-c.cd)*Math.min(1,dt*2.2));
   var tx=px+dx*c.cd, ty=py+dy*c.cd, tz=pz+dz*c.cd;
   var fl=H(tx,tz)+1.1; if(ty<fl) ty=fl;
@@ -1535,7 +1537,15 @@ function drawHUD(){
     hx.strokeStyle='rgba(143,208,232,.45)'; hx.lineWidth=2; hx.beginPath(); hx.arc(mx+iq.x,my+iq.y,ISLE.R*0.8*sc,0,6.3); hx.stroke();
   }
   hx.restore();
-  for(var L=0;L<LANDMARKS.length&&!WILD.inCave;L++){
+  if(WILD.inHall){                        // indoors the map shows the hall's walls and its door
+    var hq=[[-HALL.W,-HALL.D],[HALL.W,-HALL.D],[HALL.W,HALL.D],[-HALL.W,HALL.D]].map(function(c){ return rotPt((HALL.x+c[0]-p.x)*sc,(HALL.z+c[1]-p.z)*sc,G.cam.yaw); });
+    hx.save(); hx.beginPath(); hx.arc(mx,my,mr,0,6.3); hx.clip();
+    hx.fillStyle='rgba(230,170,90,.14)'; hx.strokeStyle='rgba(240,200,130,.6)'; hx.lineWidth=2; hx.beginPath();
+    hq.forEach(function(q,i){ if(i) hx.lineTo(mx+q.x,my+q.y); else hx.moveTo(mx+q.x,my+q.y); }); hx.closePath(); hx.fill(); hx.stroke();
+    var dq=rotPt((HALL.x+HALL.exit.x-p.x)*sc,(HALL.z+HALL.exit.z-p.z)*sc,G.cam.yaw);
+    hx.fillStyle='#f6e7a8'; hx.beginPath(); hx.arc(mx+dq.x,my+dq.y,3.2,0,6.3); hx.fill(); hx.restore();
+  }
+  for(var L=0;L<LANDMARKS.length&&!WILD.inCave&&!WILD.inHall;L++){
     var lm=LANDMARKS[L]; if(!!lm.isle!==!!WILD.inIsle) continue;     // only this land's places
     var dx=(lm.x-p.x)*sc, dz=(lm.z-p.z)*sc;
     var rot=rotPt(dx,dz,G.cam.yaw), rl=Math.hypot(rot.x,rot.y), edge=rl>mr-7;
@@ -1790,7 +1800,7 @@ function makeScreen(){
 function startRun(sv){
   if(sv){ G.build={race:sv.build.race,cls:sv.build.cls,skills:sv.build.skills||{},points:sv.build.points||0,gear:sv.build.gear||{w:0,a:0},diff:sv.build.diff||'normal'}; gearInit(sv.build); }
   else { G.build.skills={}; G.build.points=0; if(!G.build.diff) G.build.diff='normal'; gearInit(null); }
-  wildLoad(sv&&sv.wild); CAVEENV=null; ISLEENV=null; WILD.lore.wood=1;
+  wildLoad(sv&&sv.wild); CAVEENV=null; ISLEENV=null; HALLENV=null; WILD.lore.wood=1;
   cineStop();
   G.player=null; recalc();
   G.player=newPlayer(); G.killed=0; G.freed=0; G.found={}; G.msgs.length=0; G.bounty=null; G.bountiesDone=0; G.runStart=G.t; FX.length=0; G.hitStop=0; G.shakeA=0;

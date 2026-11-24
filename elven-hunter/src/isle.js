@@ -22,7 +22,7 @@ ISLE.flats.push({x:ISLE.land.x,z:ISLE.land.z,r:10,h:0.9},{x:ISLE.spire.x,z:ISLE.
 var ISLE_FOG=[0.55,0.47,0.40], ISLE_TINT=[1.18,0.86,0.74];
 
 function inIsle(x,z){ return x>ISLE.x0; }
-function offMap(x,z){ return inCave(x,z)||inIsle(x,z); }
+function offMap(x,z){ return inCave(x,z)||inIsle(x,z)||inHall(x,z); }
 
 /* ---------- the ground ---------- */
 function isleRaw(x,z){
@@ -216,7 +216,7 @@ function buildIsle(homeMesh){
 var ISLEENV=null;
 function setIsleEnv(on){
   if(ISLEENV===on) return; ISLEENV=on; WILD.inIsle=on;
-  if(WILD.inCave) return;                        // the cave sets its own light
+  if(WILD.inCave||WILD.inHall) return;                        // the cave sets its own light
   var c=on?ISLE_FOG:SKYCOL;
   R3.setClearColor(new THREE.Color(c[0],c[1],c[2]),1);
   SCENE.fog.color.setRGB(c[0],c[1],c[2]); SCENE.fog.near=on?30:38; SCENE.fog.far=on?118:133;
@@ -425,7 +425,7 @@ var PRINCESS_SAY=['“Bram says the stew is a family recipe. I\'ve met his famil
   '“You smell of smoke. Good. So does everyone worth knowing.”',
   '“Ashwing kept every shiny thing on the isle. Including me. I\'m told I\'m very shiny.”'];
 function princessSpot(){
-  if(WILD.princess>=2){ var t=dryNear(TAVERN.x-6,TAVERN.z+7); return {x:t.x,z:t.z,yaw:TAVERN.ry+Math.PI}; }
+  if(WILD.princess>=2) return {x:HALL.x-14.2,z:HALL.z-6.4,yaw:Math.PI/2};       // in the Greenleaf, by the fire
   return {x:CASTLE.cage.x,z:CASTLE.cage.z,yaw:-Math.PI/2};
 }
 function spawnPrincess(){

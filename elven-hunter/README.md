@@ -115,6 +115,8 @@ src/
               Cave and its torch, butterflies, rabbits, toadstools and gnomes
   legends.js  the journal (44 pages of lore), waystones, Bram's tales, the six
               mini-bosses and the golden champions
+  hall.js     the Greenleaf: the house in the yard and the great hall inside it,
+              its regulars, and walking in and out
   isle.js     the Emberleaf Isle: its ground, autumn trees, the landing, the Sunken
               Spire and Caer Aelfhaven, the white boat, its light, its foes, Ashwing
               and Princess Elowen
@@ -151,13 +153,27 @@ are bundled.
 
 ### The tavern
 
-The Greenleaf sits on a levelled yard at the end of a worn dirt path from the glade.
-Trees and undergrowth are kept out of the yard, the path and the other landmark grounds.
-The yard has a table and benches, barrels, a hanging sign and a fire pit. It is safe
-ground: no foes spawn within 32 units, those chasing you break off at the yard, and you
-and your company slowly mend there.
+The Greenleaf sits on a levelled yard at the end of a worn dirt path from the glade: a
+two-storey inn of stone and timber, with dormers, a smoking chimney, a porch with a
+painted sign, and an old oak growing up through the back of its roof. The yard has a
+table and benches, barrels, lanterns and a fire pit. It is safe ground: no foes spawn
+within 32 units, those chasing you break off at the yard, and you and your company slowly
+mend there.
 
-**Bram**, the innkeeper, waits by the door: walk up and press `E` / left-click (or tap the
+**Walk in at the door** and you (and your company) step into the great hall, which is a
+lot bigger than the house looks: it was an elf waystation first. Like the Glimmer Cave it
+lies off the map (`src/hall.js`), with its own light and a camera that stays inside the
+room. In it: a stone hearth with a cauldron over the fire, a rug and armchairs (walk up and
+**REST** by the fire); a long bar with shelves of glowing bottles, kegs, and a gallery above
+with Bram's painted sign; round tables with candles; a feasting table on a raised dais
+under tall green windows with light falling through them; a wheel of candles and green
+lanterns hung from arched trusses; and in the middle, an old tree growing up through the
+floor, its roots across the flagstones and its branches along the ceiling. Four regulars
+(Moll, Old Fennick, Sylvi and Pip) wander between the tables; walk up to one for a word.
+Walk back out through the open doors to return to the yard. The light is baked into the
+vertex colours, so the whole room is two draw calls.
+
+**Bram**, the innkeeper, keeps the bar inside: walk up and press `E` / left-click (or tap the
 strike button, which reads **TALK** beside him). He offers:
 
 - **Rest by the fire**: full health for you and your company, free.

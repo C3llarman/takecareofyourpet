@@ -390,7 +390,7 @@ function moveParty(x,z,yaw){
     if(e.kind==='eagle'&&e.sub==='pet'){ e.x=x; e.z=z; e.y=H(x,z)+6; }
     if(e.kind==='shot'||e.kind==='eshot') e.life=0; }
   G.cam.yaw=yaw; G.cam.x=x-Math.sin(yaw)*6; G.cam.z=z-Math.cos(yaw)*6; G.cam.y=p.y+4; G.cam.cd=undefined;
-  setCaveEnv(inCave(x,z)); setIsleEnv(inIsle(x,z));
+  setCaveEnv(inCave(x,z)); setIsleEnv(inIsle(x,z)); setHallEnv(inHall(x,z));
 }
 function chestScreen(){
   menuOpen('talk'); sfx('click');
@@ -476,7 +476,7 @@ function updateCritter(e,dt,pd){
   e.y=H(e.x,e.z);
 }
 var GNOMES=[
-  {id:'tavern', at:function(){ var c=Math.cos(TAVERN.ry), s=Math.sin(TAVERN.ry), lx=2.6, lz=-4.6; return {x:TAVERN.x+lx*c+lz*s,z:TAVERN.z-lx*s+lz*c}; },
+  {id:'tavern', at:function(){ var c=Math.cos(TAVERN.ry), s=Math.sin(TAVERN.ry), lx=10.4, lz=-6.6; return {x:TAVERN.x+lx*c+lz*s,z:TAVERN.z-lx*s+lz*c}; },
    say:'“Oi! I was promised this was a garden.”', hat:[0.82,0.18,0.16]},
   {id:'ring',   at:function(){ return {x:FAIRYRING.x,z:FAIRYRING.z}; }, say:'“Dance with me! No? Fine. FINE.”', hat:[0.85,0.40,0.80]},
   {id:'hive',   at:function(){ return {x:LM.hive.x+6.5,z:LM.hive.z+5}; }, say:'“Shh! I\'m hiding from the wasps. Have been since spring.”', hat:[0.95,0.75,0.20]},
@@ -519,7 +519,7 @@ function bounceCheck(p){
 
 /* ---------- what you can walk up to and use ---------- */
 function wildTalk(p,list){
-  legendTalk(p,list); folkTalk(p,list); isleTalk(p,list);
+  legendTalk(p,list); folkTalk(p,list); isleTalk(p,list); hallTalk(p,list);
   var g=findKind('golem');
   if(!WILD.inCave){
     if(!g&&Math.hypot(STONES.x-p.x,STONES.z-p.z)<3.6)
@@ -551,6 +551,7 @@ function wildUpdate(dt){
   // the dragon comes back to his crag in his own time
   if(WILD.dragon.t>0){ WILD.dragon.t-=dt; if(WILD.dragon.t<=0&&!G.ents.some(function(d){ return d.kind==='dragon'&&!d.sister; })){ spawnDragon(); } }
   // a glint where the hoard waits
+  hallUpdate(dt);
   if(WILD.inCave&&WILD.chestT<=0&&Math.random()<0.15) burst(CAVE.chest.x+(Math.random()-0.5)*1.4,H(CAVE.chest.x,CAVE.chest.z)+1.2,CAVE.chest.z+(Math.random()-0.5)*1,1,[1.0,0.9,0.5],{up:1,spread:0.3,size:0.07,life:0.6,grav:-1});
 }
 

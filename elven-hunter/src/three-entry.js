@@ -8,7 +8,7 @@ export {
   Mesh, InstancedMesh, MeshLambertMaterial, MeshBasicMaterial, DoubleSide,
   HemisphereLight, DirectionalLight, PointLight, Vector3, REVISION,
   Group, Box3, AnimationMixer, AnimationClip, LoopOnce, LoopRepeat, NoColorSpace,
-  PCFShadowMap,
+  PCFShadowMap, CanvasTexture,
 } from 'three';
 export { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 export { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';

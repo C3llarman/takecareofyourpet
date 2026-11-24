@@ -123,6 +123,8 @@ function actorSpec(e){
     var gr=G.build.gear||{w:0,a:0}, at={h:gr.h||0,s:gr.s||0,c:gr.c||0};
     return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null, armor:(at.h||at.s||at.c)?at:0, akey:''+at.h+at.s+at.c, wtier:gr.w};
   }
+  if(e.patron)                       // the Greenleaf's regulars
+    return {model:e.model, weapons:e.patron.weapons||[], beard:!!e.beard, tint:e.tint, key:e.npcId};
   if(e.kind==='npc'&&e.npcId)        // the other folk: Wren the hedge-witch, Tobin the tinker
     return {model:e.model, weapons:e.npcId==='tobin'?['1H_Axe_Offhand']:[], beard:!!e.beard, tint:e.tint, key:e.npcId};
   if(e.kind==='npc')                  // the innkeeper: a barbarian with a mug, in warm tones

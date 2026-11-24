@@ -260,7 +260,7 @@ function drawTargetRing(){
 
 /* ---------- zone name, quest tracker and the event log ---------- */
 function zoneName(){
-  var p=G.player; if(WILD.inCave) return 'The Glimmer Cave';
+  var p=G.player; if(WILD.inCave) return 'The Glimmer Cave'; if(WILD.inHall) return 'The Greenleaf Tavern';
   var best=null,bd=1e9;
   for(var i=0;i<LANDMARKS.length;i++){ var l=LANDMARKS[i], d=Math.hypot(p.x-l.x,p.z-l.z); if(d<l.r+16&&d<bd&&G.found[l.name]){ bd=d; best=l.name; } }
   return best||(WILD.inIsle?'The Emberleaf Isle':'The Elderwood');

@@ -317,7 +317,10 @@ function questTargets(){
   // the cave lies off the map: from outside, a target in it is reached through the
   // mouth; from inside, a target outside is reached through the way out
   function add(x,z,label){
-    var tc=inCave(x,z);
+    var th=inHall(x,z), tc=inCave(x,z);
+    // the Greenleaf's hall too: from outside, a target in it is reached through the door
+    if(th&&!WILD.inHall){ x=TAVERN.enter.x; z=TAVERN.enter.z; label='The Greenleaf — '+label; tc=false; }
+    else if(!th&&WILD.inHall){ x=HALL.x+HALL.exit.x; z=HALL.z+HALL.exit.z-1; label='Way out — '+label; tc=inCv; }
     if(tc&&!inCv){ x=CRAG.mouth.x; z=CRAG.mouth.z; label='Glimmer Cave'+(WILD.torch?'':' (bring a torch)')+' — '+label; }
     else if(!tc&&inCv){ x=CAVE.exit.x; z=CAVE.exit.z; label='Way out — '+label; }
     for(var i=0;i<out.length;i++) if(Math.abs(out[i].x-x)<0.5&&Math.abs(out[i].z-z)<0.5) return;
@@ -411,6 +414,8 @@ function flyScreen(){
   if(!WILD.eagle) return;
   if(G.state==='play') menuOpen('talk');
   var html='<h1>Fly with Aelfrend</h1>';
+  if(WILD.inHall){ html+='<p class="say">Aelfrend eyes the rafters, then the door. Outside first.</p><button class="btn" id="leave">All right</button>';
+    show(html); document.getElementById('leave').onclick=menuClose; return; }
   if(WILD.inCave){ html+='<p class="say">Aelfrend looks at the rock above you, then at you, and does not say anything. Get outside first.</p><button class="btn" id="leave">All right</button>';
     show(html); document.getElementById('leave').onclick=menuClose; return; }
   html+='<p class="sub">He shrieks, and the wind comes up under his wings. Where to?</p><div class="opts">';
