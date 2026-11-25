@@ -628,6 +628,16 @@ section('Home and progress');
   ok('salt-water flies work in the sea, not the river; dries do nothing in salt', flies.seaClouser === 3 && flies.riverClouser === 0 && flies.seaDry === 0);
   ok('still water loves a chironomid', flies.lakeMidge === 3);
   ok('match the hatch: the right dry is best while it hatches', flies.match === 3 && flies.noHatch < flies.match);
+  const scale = await page.evaluate(() => { const order = ['easy', 'normal', 'hard', 'expert'], d0 = G.build.diff, out = {};
+    WILD.fish = { trout: 10 }; order.forEach((k) => { G.build.diff = k; out[k] = { win: FD().win, late: FD().late, snap: FD().snap, run: FD().run, pay: fishValue() }; });
+    G.build.diff = d0; WILD.fish = {};
+    // the kitty's map icon draws in every coat without trouble
+    let drawn = true; try { const save = HOME.kitty; Object.keys(KITTY_COATS).forEach((c) => { HOME.kitty = { name: 'x', coat: c }; mapIcon('kitty', 10, 10, 1); }); HOME.kitty = save; } catch (e) { drawn = false; }
+    return { out, drawn }; });
+  const S = scale.out, harder = (a, b) => a.win >= b.win && a.late >= b.late && a.snap >= b.snap && a.run <= b.run;
+  ok('fishing gets harder with the difficulty, and pays more', harder(S.easy, S.normal) && harder(S.normal, S.hard) && harder(S.hard, S.expert)
+    && S.expert.win < S.normal.win && S.expert.pay > S.normal.pay, `10 trout: ${S.easy.pay} / ${S.normal.pay} / ${S.hard.pay} / ${S.expert.pay} coins`);
+  ok('the kitty has a map icon', scale.drawn);
   ok('pike come to streamers far more than to dries', flies.pike > flies.pikeDry * 3, `${flies.pike} vs ${flies.pikeDry} in 300`);
 
   // the farm kitty: adopt and name it; it guards the house; a fish makes it purr

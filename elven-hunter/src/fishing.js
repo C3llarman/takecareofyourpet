@@ -22,6 +22,18 @@
    in your creel: sell it to Bram or take it home to the kitty (farm.js). */
 
 var ROD_PRICE=40;
+/* fishing follows the hunt's difficulty, gently: the timing windows narrow, the fish
+   run harder, the line forgives less, and Bram and the journal pay a little more.
+   win: extra seconds to set the hook · early/late: the forward-cast window, as a
+   fraction of the time the line takes to straighten · snap: tension that breaks the
+   tippet · slack: seconds of slack before it shakes free · run: how hard fish pull */
+var FISHDIFF={
+  easy:  {win:0.45, early:0.50, late:1.70, snap:1.12, slack:3.6, run:0.85, pay:1.0},
+  normal:{win:0,    early:0.55, late:1.35, snap:1.00, slack:2.6, run:1.0,  pay:1.0},
+  hard:  {win:-0.12,early:0.58, late:1.25, snap:0.96, slack:2.2, run:1.12, pay:1.15},
+  expert:{win:-0.22,early:0.60, late:1.18, snap:0.93, slack:1.9, run:1.25, pay:1.3}
+};
+function FD(){ return FISHDIFF[G.build.diff]||FISHDIFF.normal; }
 var FISH={
   trout:   {n:'Brook trout',   sell:10, w:{river:6,lake:3},   cm:[18,32], pw:0.45, like:{dry:1.3},           col:'#9a8a5c', spot:'#d2643c', tier:1},
   grayling:{n:'Grayling',      sell:14, w:{river:3},          cm:[25,42], pw:0.5,  like:{nymph:2.2},         col:'#8c95a6', spot:'#5a6278', tier:2},
@@ -62,7 +74,7 @@ var HATCHES=['caddis','mayfly','none','hoppers'];
 var HATCHSAY={caddis:'Caddis are hatching: little moth-like flies skitter on the water.',mayfly:'Mayflies are hatching: they ride the water like tiny sailboats.',
   hoppers:'A breeze is blowing grasshoppers onto the water.',none:'Nothing is hatching. The fish are feeding down deep.'};
 function fishTotal(){ var n=0, f=WILD.fish||{}; for(var k in f) n+=f[k]|0; return n; }
-function fishValue(){ var v=0, f=WILD.fish||{}; for(var k in f) if(FISH[k]) v+=(f[k]|0)*FISH[k].sell; return v; }
+function fishValue(){ var v=0, f=WILD.fish||{}; for(var k in f) if(FISH[k]) v+=(f[k]|0)*FISH[k].sell; return Math.round(v*FD().pay); }
 function esc(s){ return String(s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 /* what's on the water now: it changes every couple of minutes, and the lakes run behind the river */
 function hatchFor(where){
@@ -127,7 +139,7 @@ function fishScreen(){
   FISHING={stage:'ready',where:where,hatch:hatchFor(where),spot:s,t:0,tok:((FISHING&&FISHING.tok)||0)+1,
     lvl:0,cp:'idle',ct:0,fx:0.5,fy:0.6,drag:0,tt:0,ripples:[],drops:[],shadow:null,hold:false,target:null,bugs:[]};
   var F=FISHING; newTarget(F);
-  show('<h1>Fly fishing</h1><p class="sub">'+WATERNAME[F.where]+' · <span id="fcreel">'+creelText()+'</span></p>'+
+  show('<h1>Fly fishing</h1><p class="sub">'+WATERNAME[F.where]+' · <span id="fcreel">'+creelText()+'</span> · '+DF().n+'</p>'+
     '<p class="hint" style="margin:2px 0 6px">'+WATERTIP[F.where]+(F.where==='river'||F.where==='lake'?' <b style="color:#e8c26a">'+HATCHSAY[F.hatch]+'</b>':'')+'</p>'+
     '<div class="flybox" id="flybox"></div>'+
     '<canvas id="fcv" class="scene" width="480" height="240"></canvas>'+
@@ -168,7 +180,7 @@ function fishUI(F,say){
   var b=document.getElementById('fbtn'), b2=document.getElementById('fbtn2'), st=FLIES[WILD.fly].style, lab='', gold=false, lab2='';
   switch(F.stage){
     case 'ready': case 'landed': case 'lost': case 'empty': lab='Back cast'; break;
-    case 'casting': lab=F.cp==='back'?'Forward!':'Back cast'; gold=F.cp==='back'&&F.ct>=CAST_DUR*0.55; if(F.cp==='hang'||F.cp==='fwd') lab2='Lay it down'; break;
+    case 'casting': lab=F.cp==='back'?'Forward!':'Back cast'; gold=F.cp==='back'&&F.ct>=CAST_DUR*FD().early; if(F.cp==='hang'||F.cp==='fwd') lab2='Lay it down'; break;
     case 'drift': lab='Pick up and recast'; if(F.where==='river') lab2='Mend the line'; break;
     case 'strip': lab='Strip!'; break;
     case 'take': lab=st==='streamer'?'STRIP-SET!':'SET THE HOOK!'; gold=true; break;
@@ -190,7 +202,7 @@ function fishPress(){
     fishUI(F,'Back cast… let the line straighten out behind you…');
   } else if(F.stage==='casting'){
     if(F.cp==='back'){
-      if(F.ct<CAST_DUR*0.55){ F.lvl=Math.max(1,F.lvl); fishUI(F,'<b>Crack!</b> Too soon: the line snapped like a whip. Wait until it\'s straight behind you.'); }
+      if(F.ct<CAST_DUR*FD().early){ F.lvl=Math.max(1,F.lvl); fishUI(F,'<b>Crack!</b> Too soon: the line snapped like a whip. Wait until it\'s straight behind you.'); }
       else { F.lvl=Math.min(3,F.lvl+1); fishUI(F,F.lvl>=F.target.lvl?'Good loop! The line is out far enough: <b>lay it down</b>, or false cast again.':'Good loop! Each false cast carries it further. Back again!'); }
       F.cp='fwd'; F.ct=0; sfx('cast');
     } else if(F.cp==='hang'||F.cp==='fwd'){ F.cp='back'; F.ct=0; sfx('cast'); fishUI(F,'Back cast… wait for it…'); }
@@ -229,7 +241,7 @@ function present(F){
 }
 function fishTake(F){
   var st=FLIES[WILD.fly].style;
-  F.stage='take'; F.t=0; F.window=(st==='nymph'?0.95:(st==='streamer'?0.9:1.25))+(G.build.diff==='easy'?0.45:0);
+  F.stage='take'; F.t=0; F.window=(st==='nymph'?0.95:(st==='streamer'?0.9:1.25))+FD().win;
   F.catchK=pickFish(F.where,WILD.fly);
   if(st==='dry'){ ripple(F,F.fx,F.fy,1.3); sfx('splash'); fishUI(F,'<b>A fish rises to your fly! Set the hook!</b>'); }
   else if(st==='nymph'){ ripple(F,F.fx,F.fy,0.5); fishUI(F,'<b>The indicator dips! Set the hook!</b>'); }
@@ -239,7 +251,7 @@ function hookFish(F){
   var k=F.catchK, D=FISH[k];
   F.stage='fight'; F.t=0; F.dist=1; F.T=0.3; F.slack=0; F.run=0; F.runIn=0.6+Math.random()*1.2; F.hold=false;
   F.cm=Math.round(D.cm[0]+Math.pow(Math.random(),1.6)*(D.cm[1]-D.cm[0]));
-  F.size=(F.cm-D.cm[0])/(D.cm[1]-D.cm[0]); F.P=D.pw*(0.8+F.size*0.4);
+  F.size=(F.cm-D.cm[0])/(D.cm[1]-D.cm[0]); F.P=D.pw*(0.8+F.size*0.4)*FD().run;
   flyLearn(WILD.fly,F.where,true); sfx('reel');
   fishUI(F,'Fish on! <b>Hold</b> to strip line in. When it runs, <b>let go</b>, or the tippet will snap.');
 }
@@ -256,7 +268,7 @@ function fishLand(F){
   WILD.fish[k]=(WILD.fish[k]||0)+1; WILD.caught=(WILD.caught||0)+1;
   if(!WILD.fishBest) WILD.fishBest={}; var pb=F.cm>(WILD.fishBest[k]|0); if(pb) WILD.fishBest[k]=F.cm;
   sfx(D.tier>=4?'levelup':'pickup');
-  var xp=10+D.tier*8; gainXp(xp,p.x,p.y+2.6,p.z,'+'+xp+' XP: a '+D.n.toLowerCase());
+  var xp=Math.round((10+D.tier*8)*FD().pay); gainXp(xp,p.x,p.y+2.6,p.z,'+'+xp+' XP: a '+D.n.toLowerCase());
   logLine('Caught: a '+F.cm+' cm '+D.n.toLowerCase(),'#9fd8ff');
   fishUI(F,'You landed a <b style="color:'+D.col+'">'+F.cm+' cm '+D.n.toLowerCase()+'</b>'+(pb&&WILD.caught>1?', your biggest yet!':'!')+
     (D.tier>=4?' A rare one: it shines like a coin.':'')+(HOME.kitty?' '+esc(HOME.kitty.name)+' would love this.':' Bram buys fish for '+D.sell+' ◉.'));
@@ -268,12 +280,12 @@ function ripple(F,x,y,s){ F.ripples.push({x:x,y:y,r:0,s:s||1}); for(var i=0;i<Ma
 
 /* ---------- time passing ---------- */
 function fishTick(F,dt){
-  F.t+=dt; var st=FLIES[WILD.fly].style, easy=G.build.diff==='easy';
+  F.t+=dt; var st=FLIES[WILD.fly].style, FX0=FD();
   if(F.stage==='casting'){
     F.ct+=dt;
     if(F.cp==='back'){
-      if(F.ct>=CAST_DUR*0.55&&!F.cue){ F.cue=1; fishUI(F); }
-      if(F.ct>CAST_DUR*(easy?1.7:1.35)){ F.cp='idle'; F.cue=0; F.stage='ready'; F.lvl=0; sfx('thunk');
+      if(F.ct>=CAST_DUR*FX0.early&&!F.cue){ F.cue=1; fishUI(F); }
+      if(F.ct>CAST_DUR*FX0.late){ F.cp='idle'; F.cue=0; F.stage='ready'; F.lvl=0; sfx('thunk');
         fishUI(F,'Too late! The line fell on the grass behind you. Come forward as soon as it\'s straight.'); }
     } else { F.cue=0; }
     if(F.cp==='fwd'&&F.ct>0.45){ F.cp='hang'; F.ct=0; fishUI(F); }
@@ -296,8 +308,8 @@ function fishTick(F,dt){
     F.dist+=(F.hold?(run?-0.01:-0.15/(0.7+F.size*0.6)):(run?0.11*F.P:0))*dt;
     if(!F.hold&&F.T<0.1) F.slack+=dt; else F.slack=Math.max(0,F.slack-dt*2);
     F.fx=0.3+F.dist*0.3+Math.sin(F.t*5)*0.02*(1+run); F.fy=0.88-F.dist*0.4;
-    if(F.T>(easy?1.12:1.0)){ fishLost(F,'<b>Snap!</b> Too much pressure while it was running. Let go when the fish pulls!'); return; }
-    if(F.slack>(easy?3.6:2.6)){ fishLost(F,'The line went slack and it shook the hook. Keep a little tension on it.'); return; }
+    if(F.T>FX0.snap){ fishLost(F,'<b>Snap!</b> Too much pressure while it was running. Let go when the fish pulls!'); return; }
+    if(F.slack>FX0.slack){ fishLost(F,'The line went slack and it shook the hook. Keep a little tension on it.'); return; }
     if(F.dist>1.45){ fishLost(F,'It ran and ran, and took the fly with it. Strip in between its runs.'); return; }
     if(F.dist<=0){ fishLand(F); return; }
   }
@@ -366,9 +378,9 @@ function fishDraw(cv,F){
       if(u<1){ c.beginPath(); c.ellipse(ex,ey+(1-u)*13,4+(1-u)*8,(1-u)*13,0,0,6.283); c.stroke(); }
       // the timing bar: come forward in the green
       var bx=X(0.3), bw=X(0.4), by=6; c.fillStyle='rgba(10,8,4,.7)'; c.fillRect(bx-3,by-3,bw+6,14);
-      c.fillStyle='#7a2c22'; c.fillRect(bx,by,bw,8); c.fillStyle='#62c24c'; c.fillRect(bx+bw*0.55/1.35,by,bw*(1-0.55)/1.35,8);
-      c.fillStyle='#fff6d8'; c.fillRect(bx+bw*Math.min(1,F.ct/CAST_DUR/1.35)-2,by-3,4,14);
-      c.fillStyle='#fff3c4'; c.font='600 12px Georgia,serif'; c.textAlign='center'; c.fillText(F.ct>=CAST_DUR*0.55?'NOW!':'wait…',bx+bw/2,by+24);
+      c.fillStyle='#7a2c22'; c.fillRect(bx,by,bw,8); var FDd=FD(); c.fillStyle='#62c24c'; c.fillRect(bx+bw*FDd.early/FDd.late,by,bw*(1-FDd.early/FDd.late),8);
+      c.fillStyle='#fff6d8'; c.fillRect(bx+bw*Math.min(1,F.ct/CAST_DUR/FDd.late)-2,by-3,4,14);
+      c.fillStyle='#fff3c4'; c.font='600 12px Georgia,serif'; c.textAlign='center'; c.fillText(F.ct>=CAST_DUR*FDd.early?'NOW!':'wait…',bx+bw/2,by+24);
     } else { var v=F.cp==='fwd'?Math.min(1,F.ct/0.45):1, fx2=X(0.21)+v*X(reach)*1.4, fy2=Y(0.14)+v*Y(lvlY(F.lvl)-0.34)*0.6;
       c.beginPath(); c.moveTo(tipX,tipY); c.quadraticCurveTo((tipX+fx2)/2,tipY-14,fx2,fy2); c.stroke();
       if(F.cp==='hang'){ c.fillStyle='rgba(255,215,106,.9)'; c.font='12px Georgia,serif'; c.textAlign='left'; c.fillText(['','near','middle','far'][F.lvl],fx2+6,fy2); } }
@@ -395,7 +407,7 @@ function fishDraw(cv,F){
     var bx2=X(0.1), bw2=X(0.8), by2=Hh-34;
     c.fillStyle='rgba(10,8,4,.75)'; c.fillRect(bx2-4,by2-18,bw2+8,40);
     c.fillStyle='#2a3a2a'; c.fillRect(bx2,by2,bw2,10);
-    c.fillStyle='#62c24c'; c.fillRect(bx2+bw2*0.2,by2,bw2*0.55,10); c.fillStyle='#d6584a'; c.fillRect(bx2+bw2*0.85,by2,bw2*0.15,10);
+    var snp=Math.min(1,FD().snap); c.fillStyle='#62c24c'; c.fillRect(bx2+bw2*0.2,by2,bw2*(snp-0.35),10); c.fillStyle='#d6584a'; c.fillRect(bx2+bw2*(snp-0.15),by2,bw2*(1.0-snp+0.15),10);
     c.fillStyle='#fff6d8'; c.fillRect(bx2+bw2*Math.min(1,F.T)-2.5,by2-4,5,18);
     c.fillStyle='#fff3c4'; c.font='600 12px Georgia,serif'; c.textAlign='left'; c.fillText('line tension',bx2,by2-6);
     c.textAlign='right'; c.fillText(F.run>0?'IT\'S RUNNING!':'line out: '+Math.round(Math.max(0,F.dist)*25)+' m',bx2+bw2,by2-6);
