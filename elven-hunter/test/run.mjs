@@ -587,18 +587,48 @@ section('Home and progress');
     for (let x = -120; x < 120 && !spot; x += 3) for (let z = -150; z < 150 && !spot; z += 3)
       if (inBounds(x, z, 15) && Math.hypot(x, z) > 30 && H(x, z) > WATER + 0.1 && H(x, z) < WATER + 0.8 && H(x + 4, z) < WATER - 0.6) spot = { x, z };
     p.x = spot.x; p.z = spot.z; p.y = H(p.x, p.z); p.yaw = Math.PI / 2;
-    const at = !!fishSpot(p); const dry = (() => { const q = { x: 0, z: 6, yaw: 0, dead: false }; return !fishSpot(q); })();
-    G.state = 'play'; fishScreen(); const F = FISHING; const where = F.where;
-    fishButton(); fishTick(F, 1); const waiting = F.stage === 'wait';
-    fishButton(); const spooked = F.stage === 'lost';                      // striking too soon scares it off
-    fishButton(); fishTick(F, 1); fishTick(F, F.waitT + 0.01); const bite = F.stage === 'bite';
-    fishButton(); const reel = F.stage === 'reel';
-    for (let i = 0; i < 3; i++) { F.u = F.zc; fishButton(); }
-    const r = { rod, at, dry, where, waiting, spooked, bite, reel, landed: F.stage === 'landed', n: fishTotal(), coins: p.coins };
-    menuClose(); return r; });
+    const at = !!fishSpot(p); const dry = !fishSpot({ x: 0, z: 6, yaw: 0, dead: false });
+    // kinds of water: the river, the big lake by the glade, the sea
+    const kinds = [fishWhere(-116 + Math.sin(1) * 3.4, 82 + Math.cos(1) * 3.4), fishWhere(38, 24), fishWhere(WHALF * 0.84, 0)];
+    G.state = 'play'; fishScreen(); const F = FISHING; F.tok += 1000;          // drive it by hand, not by the clock
+    WILD.fly = 'pheasant'; F.target.lvl = 2;
+    // false casting: forward too soon cracks the line and gains nothing
+    fishPress(); fishTick(F, CAST_DUR * 0.2); fishPress(); const crack = F.lvl === 1;
+    fishTick(F, 0.5); fishPress(); fishTick(F, CAST_DUR * 0.7); fishPress(); const good = F.lvl === 2;
+    // too late and it falls on the grass
+    fishTick(F, 0.5); fishPress(); fishTick(F, CAST_DUR * 1.5); const dropped = F.stage === 'ready' && F.lvl === 0;
+    // two good false casts, then lay it down on the fish
+    fishPress(); fishTick(F, CAST_DUR * 0.7); fishPress(); fishTick(F, 0.5); fishPress(); fishTick(F, CAST_DUR * 0.7); fishPress(); fishTick(F, 0.5);
+    fishPress2(); const drifting = F.stage === 'drift' && F.acc === 1;
+    // on the river the line drags; mending frees it
+    F.took = false; F.dur = 99; for (let i = 0; i < 70; i++) fishTick(F, 0.1); const dragged = F.drag >= 1 || F.where !== 'river';
+    fishPress2(); const mended = F.drag === 0;
+    // a take: set the hook, then play the fish
+    fishTake(F); const take = F.stage === 'take'; fishPress(); const on = F.stage === 'fight';
+    F.runIn = 99; F.hold = true; for (let i = 0; i < 200 && F.stage === 'fight'; i++) fishTick(F, 0.1);
+    const landed = F.stage === 'landed', cm = F.cm;
+    // holding hard while it runs snaps the tippet
+    fishPress(); fishTick(F, CAST_DUR * 0.7); fishPress(); fishTick(F, 0.5); fishPress2(); fishTake(F); fishPress();
+    F.hold = true; F.P = 1.2; F.run = 99; for (let i = 0; i < 60 && F.stage === 'fight'; i++) fishTick(F, 0.1);
+    const snapped = F.stage === 'lost';
+    const r = { rod, at, dry, kinds, crack, good, dropped, drifting, dragged, mended, take, on, landed, cm, snapped, n: fishTotal(), coins: p.coins, known: flyKnown('pheasant', F.where) };
+    FISHING = null; menuClose(); return r; });
   ok('Bram sells a fly rod', fish.rod && fish.coins === 500 - 40);
-  ok('you can fish at the water\'s edge, not on dry land', fish.at && fish.dry, fish.where);
-  ok('cast, wait for the rise, strike, reel it in', fish.waiting && fish.spooked && fish.bite && fish.reel && fish.landed && fish.n === 1);
+  ok('you can fish at the water\'s edge, not on dry land', fish.at && fish.dry);
+  ok('the wood has river, lake and sea fishing', fish.kinds.join() === 'river,lake,sea', fish.kinds.join(', '));
+  ok('false casting: too soon cracks, in time carries the line out, too late drops it', fish.crack && fish.good && fish.dropped);
+  ok('lay it on the fish; the river drags the line until you mend', fish.drifting && fish.dragged && fish.mended);
+  ok('set the hook, strip in between runs, land it', fish.take && fish.on && fish.landed && fish.n === 1, `${fish.cm} cm`);
+  ok('hauling while it runs snaps the tippet', fish.snapped);
+  ok('a fly that takes a fish is learned for that water', fish.known);
+  const flies = await page.evaluate(() => ({ seaClouser: flyEff('clouser', 'sea'), riverClouser: flyEff('clouser', 'river'), lakeMidge: flyEff('chironomid', 'lake'),
+    seaDry: flyEff('caddis', 'sea'), match: flyEff('adams', 'river', 'mayfly'), noHatch: flyEff('adams', 'river', 'none'),
+    pike: (() => { let n = 0; for (let i = 0; i < 300; i++) if (pickFish('lake', 'bugger') === 'pike') n++; return n; })(),
+    pikeDry: (() => { let n = 0; for (let i = 0; i < 300; i++) if (pickFish('lake', 'adams') === 'pike') n++; return n; })() }));
+  ok('salt-water flies work in the sea, not the river; dries do nothing in salt', flies.seaClouser === 3 && flies.riverClouser === 0 && flies.seaDry === 0);
+  ok('still water loves a chironomid', flies.lakeMidge === 3);
+  ok('match the hatch: the right dry is best while it hatches', flies.match === 3 && flies.noHatch < flies.match);
+  ok('pike come to streamers far more than to dries', flies.pike > flies.pikeDry * 3, `${flies.pike} vs ${flies.pikeDry} in 300`);
 
   // the farm kitty: adopt and name it; it guards the house; a fish makes it purr
   const cat = await page.evaluate(() => { const p = G.player; p.coins = 500; G.state = 'play'; cottageScreen(); cottageDo('adopt');

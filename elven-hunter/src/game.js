@@ -1960,7 +1960,7 @@ function keeperDo(id){
   } else if(id==='rod'){
     if(WILD.rod||p.coins<ROD_PRICE) return;
     p.coins-=ROD_PRICE; WILD.rod=true; sfx('pickup'); saveGame();
-    keeperScreen('Hazel rod, silk line, and a box of flies I tied myself. Walk up to any water and give it a cast. The trout are rising on the river, and I hear there\'s a golden one, if you\'re patient.');
+    keeperScreen('Hazel rod, silk line, and a box of flies I tied myself. Mind: a fly that kills on the river won\'t get a look in the sea. Dry flies when they\'re rising, nymphs when they\'re not, streamers for the big ones and the salt. And I hear there\'s a golden trout, if you\'re patient.');
   } else if(id==='sellfish'){
     var fv=sellFish(); if(fv){ sfx('coin'); saveGame(); } keeperScreen(fv?'Lovely and fresh! That\'s '+fv+' coins. Fish stew tonight.':'');
   } else if(id==='parcel'){ keeperScreen(bramParcelDo());

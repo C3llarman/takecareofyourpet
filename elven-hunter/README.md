@@ -21,7 +21,7 @@ to a long beach and the sea. Nine landmarks to find. Spiders hunt the undergrowt
 their hive, cross little mushrooms hop about the meadows, and your kin hang in cocoons
 waiting to be cut down. Free them and they follow you and fight. Bram keeps the tavern;
 from level 10 an abandoned cottage can be bought, fixed up and farmed, with a kitty of your
-own to guard it. Buy a fly rod and you can go fly fishing at any water's edge. The standing stones
+own to guard it. Buy a fly rod and you can go fly fishing on the river, the lakes and the sea, with a box of real flies to match to the water. The standing stones
 wake while you hunt and can call up a boss; a dragon sleeps on the Dragon's Crag; and the
 Glimmer Cave under it opens to anyone with a torch. Six named mini-bosses guard their
 homes, golden champions roam on Normal and up, and a journal fills with the wood's story
@@ -124,8 +124,9 @@ src/
   abilities.js three abilities per calling, unlocked at levels 2, 4 and 7
   gear.js     five gear slots, five rarities, loot bags, the bag and character
               sheet, Bram's cousin's forge
-  farm.js     fly fishing (the rod, the cast-strike-reel game, the creel) and the
-              farm kitty (adopting and naming it, guarding the house, feeding it)
+  fishing.js  fly fishing: the fly box, the waters and their hatches, false casting,
+              drifting, mending and stripping, playing the fish, the creel
+  farm.js     the farm kitty: adopting and naming it, guarding the house, feeding it
   ui.js       the laptop HUD: portrait and target frames, action bar, XP bar,
               quest tracker, zone name, event log
   folk.js     Wren, Tobin and Ærtheldor and their ten quests, gathering, the
@@ -186,7 +187,7 @@ strike button, which reads **TALK** beside him). He offers:
 - **The forge** (Bram's cousin): weapon, head, shoulders and chest pieces up to rare.
 - **A story**: Bram has four tales of his own; each goes in your journal.
 - **A torch**: 60 coins, once. You need it to go into the Glimmer Cave.
-- **A fly rod**: 40 coins, once. See *Fly fishing* below.
+- **A fly rod**: 40 coins, once, with a box of eight flies. See *Fly fishing* below.
 - **Sell your fish**: Bram buys your whole creel for the stew.
 - **Bounties**: slay spiders, drive off snakes, swat wasps, squash mushroom grumps, free
   captives or, from level 3, slay a giant spider. Progress shows in the status panel; come back for coins and XP.
@@ -245,34 +246,74 @@ too big even for a farm cat. Its tally of pests caught is on its screen.
 can watch: it eats (nom nom nom), then shuts its eyes and **purrs**, a synthesised purr
 with hearts floating up, for a few seconds.
 
-### Fly fishing (`src/farm.js`)
+### Fly fishing (`src/fishing.js`)
 
-Buy a **fly rod** from Bram (40 coins). Then walk to the edge of any water (the river, the
-sea off the Sunlit Shore, the Emberleaf Isle's shore) and `E` / **FISH**. A little scene
-opens over the game:
+Real fly fishing, made simple enough for young players. Buy a **fly rod** from Bram (40
+coins). Then walk to the edge of any water and `E` / **FISH**. The wood has four kinds:
 
-1. **Cast your fly.** The line unrolls over the water.
-2. **Wait.** A fish's shadow swims up under the fly. Press too soon and it darts away.
-3. **STRIKE!** when it rises and splashes (1.25 s, 1.7 s on Easy).
-4. **REEL!** A needle swings across the line's tension bar: press when it's in the green.
-   Three good pulls land the fish; three bad ones and it gets away. Rarer fish swing faster
-   with a narrower green.
-
-On a laptop, Space or `E` works the rod too. What you catch goes in your **creel** (and pays
-a little XP): sell it to Bram or take it home to the kitty.
-
-| Fish | Where | Bram pays |
+| Water | Where | What works |
 |---|---|---|
-| Brook trout | the river | 10 |
-| Grayling | the river | 14 |
-| Rainbow trout | the river | 22 |
-| Mackerel | the sea | 10 |
-| Sea bass | the sea | 18 |
-| Ember carp | the Emberleaf shore | 26 |
-| Golden trout (rare) | anywhere | 60 |
+| **The river** | the long winding river | moving water: drift a dry fly or a nymph, and *mend* |
+| **Lakes and ponds** | a dozen still waters, the biggest just east of the glade | chironomids and Woolly Buggers; dries when something's hatching |
+| **The sea** | off the Sunlit Shore | salt-water streamers, stripped back: Clouser Minnow, Shrimp Fly |
+| **The Emberleaf shore** | round the isle | the Shrimp Fly above all |
 
-The fish, their prices and how often each bites are the `FISH` table at the top of
-`src/farm.js`.
+**1. Pick a fly.** The fly box holds eight real patterns, each fished its own way:
+
+| Fly | Style | Best on |
+|---|---|---|
+| Elk Hair Caddis | dry | river and lake, when caddis hatch |
+| Parachute Adams | dry | river and lake, when mayflies hatch |
+| Foam Hopper | dry | lakes, and when the breeze blows grasshoppers on the water |
+| Pheasant Tail Nymph | nymph | the river, nearly always |
+| Chironomid | nymph | still water |
+| Woolly Bugger | streamer | lakes (and it's what the pike want), the river |
+| Clouser Minnow | streamer | the sea (mackerel love it) |
+| Shrimp Fly | streamer | the sea (sea bass) and the isle |
+
+Each fly shows its stars for the water you're on (`? ? ?` until you've tried it there).
+The river and lakes have a **hatch** that changes every couple of minutes (caddis, mayflies,
+grasshoppers, or nothing), shown in words and as little flies over the water: the dry
+that **matches the hatch** gets three stars, and with nothing hatching the dries lose one.
+
+**2. False cast.** **Back cast**, then watch the timing bar: come **Forward!** once the line
+has straightened out behind you (the bar is green). Too soon and it cracks like a whip and
+goes nowhere; too late and it falls on the grass. Each good false cast carries the line
+further out: near, middle, far. A gold dashed line shows how far out the fish is: **Lay
+it down** when the line reaches it (or it drops by itself). A dry fly cast past the fish
+lands the line on its head and spooks it; short of it, the fish may not see it.
+
+**3. Fish the fly.**
+- **Dry flies** float. On the river the current bellies the line and the **drag** meter
+  fills; once it drags, the fly skates and no fish will touch it, so **Mend the line**
+  (flip it upstream). When a fish rises to the fly: **SET THE HOOK!**
+- **Nymphs** sink under an orange strike indicator. Set when it dips (the window is short).
+- **Streamers** are **stripped** back in little pulls. A fish follows; when it hits:
+  **STRIP-SET!** (in salt water you pull the line, you don't lift the rod).
+
+**4. Play the fish.** **Hold** to strip line in. Now and then it runs: **let go**, or the
+tension goes into the red and the tippet snaps. Leave it slack too long and it shakes the
+hook. Bigger fish run harder and longer.
+
+On a laptop, Space or `E` is the rod hand (hold it to strip in) and Enter or `F` is the
+second button. Easy gives wider timing windows. Each catch has a size (a 15 cm perch to a 95
+cm pike), pays a little XP, and goes in your **creel**: sell it to Bram or take it home to
+the kitty. Your biggest of each kind is remembered.
+
+| Fish | Where | Likes | Bram pays |
+|---|---|---|---|
+| Brook trout | river, lakes | dries | 10 |
+| Grayling | river | nymphs | 14 |
+| Rainbow trout | lakes, river | nymphs, streamers | 22 |
+| Perch | lakes | streamers | 8 |
+| Pike | lakes | streamers, almost only | 34 |
+| Mackerel | sea | the Clouser | 10 |
+| Sea bass | sea | the Shrimp Fly | 18 |
+| Ember carp | the isle | the Shrimp Fly | 26 |
+| Golden trout (rare) | anywhere | dries | 60 |
+
+The fish, the flies and how well each suits each water are the tables at the top of
+`src/fishing.js`.
 
 ### The wilder wood (`src/wild.js`)
 
@@ -601,7 +642,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-238 assertions run the actual game in headless Chromium with software WebGL and check
+247 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames
