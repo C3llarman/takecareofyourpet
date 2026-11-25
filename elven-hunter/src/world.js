@@ -29,7 +29,9 @@ function fbm(x,z,oct,sc){
 var TAVERN={x:0,z:-34*WS,ry:0.5,yard:19,flat:15,h:null};
 /* the old cottage, out past the tavern on a quiet rise (see home.js) */
 var HOUSE={x:35*WS,z:-60*WS,ry:-0.9,yard:17,flat:14,h:null};
-var FLATS=[TAVERN,HOUSE];
+/* the Fairy Fountain, deep in the west wood past Wren's fairy ring (see fountain.js) */
+var FOUNTAIN={x:-74*WS,z:-8*WS,r:3.6,dais:-9.5,flat:13,h:null};
+var FLATS=[TAVERN,HOUSE,FOUNTAIN];
 /* the Dragon's Crag: a sheer-sided plateau north of the tavern, one ramp up, a
    cave in its western face. The dragon sleeps on top. */
 var CRAG={x:-16*WS,z:-106*WS,r:14,top:null,rd:[0.15,0.989],rl:28,rw:2.7,endH:null};
@@ -73,7 +75,7 @@ var WAYSTONES=[['way1',10,-12],['way2',-2,-58],['way3',52,-40],['way4',0,76],['w
 /* clearings kept free of trees: landmark grounds and the paths */
 /* the landmarks, where the original map put them, stretched out by WS */
 var LM={hive:WP(-72,48),hollow:WP(86,-56),stones:WP(-88,-78)};
-var CLEAR=[[TAVERN.x,TAVERN.z,20],[LM.hive.x,LM.hive.z,15],[LM.hollow.x,LM.hollow.z,15],[LM.stones.x,LM.stones.z,11],[HOUSE.x,HOUSE.z,20],[FAIRYRING.x,FAIRYRING.z,8]];
+var CLEAR=[[TAVERN.x,TAVERN.z,20],[LM.hive.x,LM.hive.z,15],[LM.hollow.x,LM.hollow.z,15],[LM.stones.x,LM.stones.z,11],[HOUSE.x,HOUSE.z,20],[FAIRYRING.x,FAIRYRING.z,8],[FOUNTAIN.x,FOUNTAIN.z,16]];
 BOUNCE.forEach(function(b){ CLEAR.push([b.x,b.z,2.6]); });
 WAYSTONES.forEach(function(w){ CLEAR.push([w.x,w.z,3]); });
 /* where the folk live: Wren's camp by the fairy ring, Tobin's cart on the east road,
@@ -109,7 +111,7 @@ function H(x,z){
   if(z<HALL.z0) return hallH(x,z);
   if(x>ISLE.x0) return isleH(x,z);          // the Emberleaf Isle (isle.js)
   var h=Hraw(x,z);
-  // level the tavern yard and the cottage's plot
+  // level the tavern yard, the cottage's plot and the fountain's glade
   for(var i=0;i<FLATS.length;i++){ var F=FLATS[i], dt=Math.hypot(x-F.x,z-F.z);
     if(dt<F.flat*2.2){
       if(F.h===null) F.h=Hraw(F.x,F.z);

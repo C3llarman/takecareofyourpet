@@ -124,8 +124,8 @@ function deskSlots(){
 function useItem(id){
   var p=G.player; if(!p||p.dead||inv(id)<=0) return;
   WILD.inv[id]--;
-  if(id==='cake'){ p.buff=3; p.buffT=40; msg('Honey cake!','#ffe08a',p.x,p.y+2.4,p.z); }
-  else { p.buff=2; p.buffT=45; msg('Wardleaf tonic','#bff0d0',p.x,p.y+2.4,p.z); }
+  if(id==='cake'){ p.buff=3; p.buffT=40; p.buffMax=40; msg('Honey cake!','#ffe08a',p.x,p.y+2.4,p.z); }
+  else { p.buff=2; p.buffT=45; p.buffMax=45; msg('Wardleaf tonic','#bff0d0',p.x,p.y+2.4,p.z); }
   sfx('potion'); burst(p.x,p.y+1.2,p.z,14,id==='cake'?[1.0,0.85,0.4]:[0.5,1.0,0.7],{up:3,spread:2,size:0.12,life:0.8,grav:-1.5});
 }
 var UIBAR=null;

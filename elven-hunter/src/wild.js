@@ -27,12 +27,12 @@ function DF(){ return DIFFS[G.build.diff]||DIFFS.normal; }
 var WILD=null;
 function wildReset(){
   WILD={inIsle:false, torch:false, gnomes:{}, stone:{c:0,tier:0,full:false}, dragon:{t:0,kills:0}, chestT:0, wardens:0, inCave:false, lore:{}, minis:{}, trophies:0,
-    q:{}, inv:{}, recipes:{}, charms:{}, compass:0, eagle:0, sister:{t:0,kills:0}, princess:0, rod:false, fish:{}, caught:0, fly:'pheasant', flyKnow:{}, fishBest:{}};
+    q:{}, inv:{}, recipes:{}, charms:{}, compass:0, eagle:0, sister:{t:0,kills:0}, princess:0, rod:false, fish:{}, caught:0, fly:'pheasant', flyKnow:{}, fishBest:{}, fount:{t:0,n:0,met:0,drinks:0}};
 }
 wildReset();
 function wildSave(){ return {torch:WILD.torch,gnomes:WILD.gnomes,stone:{c:WILD.stone.c,tier:WILD.stone.tier},
   dragon:WILD.dragon,chestT:Math.round(WILD.chestT),wardens:WILD.wardens,lore:WILD.lore,minis:WILD.minis,trophies:WILD.trophies,
-  q:WILD.q,inv:WILD.inv,recipes:WILD.recipes,charms:WILD.charms,compass:WILD.compass,eagle:WILD.eagle,sister:{t:Math.round(WILD.sister.t),kills:WILD.sister.kills},princess:WILD.princess,rod:WILD.rod,fish:WILD.fish,caught:WILD.caught,fly:WILD.fly,flyKnow:WILD.flyKnow,fishBest:WILD.fishBest}; }
+  q:WILD.q,inv:WILD.inv,recipes:WILD.recipes,charms:WILD.charms,compass:WILD.compass,eagle:WILD.eagle,sister:{t:Math.round(WILD.sister.t),kills:WILD.sister.kills},princess:WILD.princess,rod:WILD.rod,fish:WILD.fish,caught:WILD.caught,fly:WILD.fly,flyKnow:WILD.flyKnow,fishBest:WILD.fishBest,fount:{t:Math.round(WILD.fount.t),n:WILD.fount.n,met:WILD.fount.met,drinks:WILD.fount.drinks}}; }
 function wildLoad(w){
   wildReset(); if(!w) return;
   WILD.torch=!!w.torch; WILD.gnomes=w.gnomes||{}; WILD.chestT=w.chestT||0; WILD.wardens=w.wardens||0;
@@ -43,6 +43,7 @@ function wildLoad(w){
   if(w.sister){ WILD.sister.t=w.sister.t||0; WILD.sister.kills=w.sister.kills||0; }
   WILD.princess=w.princess||0;
   WILD.rod=!!w.rod; WILD.fish=w.fish||{}; WILD.caught=w.caught||0; WILD.fly=w.fly||'pheasant'; WILD.flyKnow=w.flyKnow||{}; WILD.fishBest=w.fishBest||{};
+  if(w.fount){ WILD.fount.t=w.fount.t||0; WILD.fount.n=w.fount.n||0; WILD.fount.met=w.fount.met||0; WILD.fount.drinks=w.fount.drinks||0; }
 }
 
 /* ---------- mushroom grumps ---------- */
@@ -520,7 +521,7 @@ function bounceCheck(p){
 
 /* ---------- what you can walk up to and use ---------- */
 function wildTalk(p,list){
-  legendTalk(p,list); folkTalk(p,list); isleTalk(p,list); hallTalk(p,list); farmTalk(p,list);
+  legendTalk(p,list); folkTalk(p,list); isleTalk(p,list); hallTalk(p,list); farmTalk(p,list); fountainTalk(p,list);
   var g=findKind('golem');
   if(!WILD.inCave){
     if(!g&&Math.hypot(STONES.x-p.x,STONES.z-p.z)<3.6)
@@ -543,6 +544,7 @@ function wildUpdate(dt){
   var p=G.player;
   setCaveEnv(inCave(p.x,p.z));
   isleUpdate(dt);
+  fountainUpdate(dt);
   torchUpdate();
   stonesUpdate(dt);
   minisTick(dt);

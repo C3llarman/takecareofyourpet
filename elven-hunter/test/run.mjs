@@ -62,7 +62,7 @@ section('World');
     })(),
   }));
   ok('world mesh builds', w.tris > 50000, `${w.tris} triangles in one draw call`);
-  ok('twelve landmarks placed (nine in the wood, three on the isle)', w.landmarks.length === 12, w.landmarks.join(', '));
+  ok('thirteen landmarks placed (ten in the wood, three on the isle)', w.landmarks.length === 13, w.landmarks.join(', '));
   ok('spawn is above water', w.spawnAboveWater);
   // the "objectives outside the map" bug: things were scattered over a square, but the
   // walkable land is a circle inside the mountains, so the corners were unreachable
@@ -1116,6 +1116,73 @@ section('Folk, quests, gathering, crafting and the eagles');
   await page.click('#cont'); await page.waitForTimeout(300);
   const kept = await page.evaluate(() => ({ q: Object.keys(WILD.q).length, inv: JSON.stringify(WILD.inv), eagle: WILD.eagle, pet: !!findPet(), mantle: !!WILD.charms.mantle }));
   ok('quests, satchel, charms and Aelfrend are saved', kept.q === before.q && kept.inv === before.inv && kept.eagle && kept.pet && kept.mantle);
+  ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
+  await page.close();
+}
+
+/* ---------------- the Fairy Fountain ---------------- */
+section('The Fairy Fountain and the Grand Fairy');
+{
+  const page = await open(browser, PHONE);
+  await page.evaluate(() => { startRun(); G.ents = G.ents.filter((e) => !FOE[e.kind] || e.boss); G.player.inv = 1e9; });
+  await page.waitForTimeout(300);
+  const site = await page.evaluate(() => {
+    const X = FOUNTAIN.x, Z = FOUNTAIN.z, D = fairyDais(); let lo = 1e9, hi = -1e9;
+    for (let a = 0; a < 16; a++) for (const r of [0, 5, 9]) { const h = H(X + Math.cos(a / 16 * 6.283) * r, Z + Math.sin(a / 16 * 6.283) * r); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+    let trees = 0; for (const t of TREEPOS) if (Math.hypot(t[0] - X, t[1] - Z) < 12) trees++;
+    return { lm: LANDMARKS.some((l) => l.kind === 'fountain'), dry: lo > WATER + 1, flat: hi - lo, trees, inside: inBounds(X, Z, 10), dais: Math.hypot(D.x - X, D.z - Z) };
+  });
+  ok('the Fairy Fountain stands in a level glade in the west wood', site.lm && site.dry && site.flat < 0.6 && site.inside && site.trees === 0, `${site.flat.toFixed(2)} high-to-low`);
+  // walk up and drink: you and your company are healed, poison and webs washed out
+  const drink = await page.evaluate(() => { const p = G.player, D = fairyDais();
+    p.x = FOUNTAIN.x + FOUNTAIN.r + 1.2; p.z = FOUNTAIN.z; p.y = H(p.x, p.z);
+    spawnAlly(1, p.x + 1.5, p.z + 1); const al = G.ents[G.ents.length - 1]; al.hp = 3;
+    p.hp = 5; p.poisonT = 8; p.slowT = 3;
+    const list = []; fountainTalk(p, list); const d = list.find((c) => c.tap === 'DRINK');
+    if (d) d.open();
+    // over by the dais, she's the one to talk to
+    const l2 = []; p.x = D.x + 2.4; p.z = D.z; fountainTalk(p, l2);
+    return { offered: !!d, full: p.hp === p.maxHp, ally: al.hp === al.maxHp, clean: p.poisonT === 0 && p.slowT === 0,
+      visit: l2.some((c) => c.tap === 'VISIT'), page: !!WILD.lore.fountain };
+  });
+  ok('walk up to the fountain and DRINK', drink.offered);
+  ok('a drink heals you to full, poison and all', drink.full && drink.clean && drink.page);
+  ok('and heals your company too', drink.ally);
+  ok('the Grand Fairy is by the fountain, to VISIT', drink.visit);
+  // the blessing: three minutes of a fairy gift, then she rests before the next one
+  const bless = await page.evaluate(() => { const p = G.player; p.hp = 10; p.buff = null; p.buffT = 0;
+    G.state = 'play'; grandFairyScreen(); const choices = document.querySelectorAll('.opt[data-b]').length;
+    document.querySelector('.opt[data-b="1"]').click();
+    const r = { choices, buff: p.buff, t: p.buffT, healed: p.hp === p.maxHp, rest: WILD.fount.t, n: WILD.fount.n, state: G.state, page: !!WILD.lore.grandfairy };
+    // a second go while she rests does nothing, and says so
+    G.state = 'play'; grandFairyScreen(); r.resting = !document.querySelector('.opt[data-b="0"]') && /resting/i.test(ui.textContent);
+    grandFairyDo('3'); r.still = p.buff === 1 && WILD.fount.n === 1; menuClose();
+    return r; });
+  ok('the Grand Fairy offers the four fairy blessings', bless.choices === 5 && bless.page, `${bless.choices - 1} blessings and a drink`);
+  ok('her blessing lasts three minutes, not half a minute', bless.buff === 1 && bless.t === 180 && bless.healed && bless.state === 'play', `${bless.t}s of Wrath`);
+  ok('then she rests before she can bless again', bless.rest > 0 && bless.n === 1 && bless.resting && bless.still);
+  const tick = await page.evaluate(() => { const p = G.player, t0 = p.buffT;
+    // a little fairy caught now adds to the blessing instead of cutting it short
+    spawnFairy(p.x, p.z); const f = G.ents[G.ents.length - 1]; f.y = p.y; updateEnts(0.016);
+    const kept = p.buff === 1 && p.buffT > t0;
+    fountainUpdate(WILD.fount.t + 1);
+    return { kept, rested: WILD.fount.t === 0 }; });
+  ok('a little fairy caught on top adds time instead of cutting it short', tick.kept);
+  ok('her light comes back after a rest', tick.rested);
+  // the glade is safe ground: foes break off and you mend
+  const safe = await page.evaluate(() => { const p = G.player; p.x = FOUNTAIN.x + 7; p.z = FOUNTAIN.z + 2; p.y = H(p.x, p.z); p.hp = 10;
+    for (let i = 0; i < 10; i++) fountainUpdate(0.5); G.state = 'play';
+    const hp = p.hp; return { at: p.atFountain, mended: hp > 10, noSpawn: nearTavern(FOUNTAIN.x + 5, FOUNTAIN.z, 32) }; });
+  ok('the glade is safe ground: you mend, and no packs spawn there', safe.at && safe.mended && safe.noSpawn);
+  const fly = await page.evaluate(() => { G.found['The Fairy Fountain'] = 1; return flyDests().some((d) => d.id === 'fountain'); });
+  ok('once found, Aelfrend can fly you there', fly);
+  // it's all remembered
+  await page.evaluate(() => { WILD.fount.t = 90; WILD.fount.n = 3; saveGame(); });
+  await page.reload(); await page.waitForFunction('window.__ready===true', { timeout: 60000 });
+  await page.evaluate(() => { document.getElementById('cont').click(); });
+  await page.waitForTimeout(300);
+  const kept = await page.evaluate(() => ({ t: WILD.fount.t, n: WILD.fount.n, met: WILD.fount.met }));
+  ok('her rest and your blessings are saved', kept.t > 85 && kept.t <= 90 && kept.n === 3 && kept.met === 1, JSON.stringify(kept));
   ok('no runtime errors', page.__errors.length === 0, page.__errors.slice(0, 2).join(' | '));
   await page.close();
 }
