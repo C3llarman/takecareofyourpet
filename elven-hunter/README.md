@@ -249,7 +249,23 @@ with hearts floating up, for a few seconds.
 ### Fly fishing (`src/fishing.js`)
 
 Real fly fishing, made simple enough for young players. Buy a **fly rod** from Bram (40
-coins). Then walk to the edge of any water and `E` / **FISH**. The wood has four kinds:
+coins). Then walk to the edge of any water and `E` / **FISH**.
+
+**The view.** Fishing takes the whole screen, with the controls floating over it. The scene
+is a little 3D stage of its own, seen from downstream and to one side, so you watch your
+hunter on the bank and the line go back over the shoulder and out over the water. The fly
+line is a chain of 44 points (a verlet rope). While you cast, it is steered towards the
+real shape of a fly cast: the line follows the rod tip, and when the rod stops a loop
+forms (a straight rod leg, the fly leg riding above it, and the loop between) and rolls
+out to the fly. Come forward too soon and the loop *tails* (the fly leg drops through
+the rod leg) and cracks; too late and the line falls on the grass. Once it lands it is
+left to the physics: it floats, and a fast seam of current a few metres out bellies it
+downstream until it drags the fly, which is why you mend. The view glides in and out to
+keep the whole line, you and the fish in frame. On a phone held upright it suggests
+turning sideways for a wider view. The camera, the water and the rope are at the bottom
+of `src/fishing.js`.
+
+The wood has four kinds of water:
 
 | Water | Where | What works |
 |---|---|---|
@@ -642,7 +658,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-249 assertions run the actual game in headless Chromium with software WebGL and check
+253 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames

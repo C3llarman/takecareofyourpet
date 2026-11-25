@@ -621,6 +621,26 @@ section('Home and progress');
   ok('set the hook, strip in between runs, land it', fish.take && fish.on && fish.landed && fish.n === 1, `${fish.cm} cm`);
   ok('hauling while it runs snaps the tippet', fish.snapped);
   ok('a fly that takes a fish is learned for that water', fish.known);
+  // the fishing screen fills the screen, and the line is a real line: it loops out behind you, lands, and bellies in the current
+  const line = await page.evaluate(() => { const p = G.player; p.x = -116; p.z = 82; p.y = H(p.x, p.z); p.yaw = 1; FISHSPOT = fishSpot(p); G.state = 'play'; fishScreen();
+    const F = FISHING; F.tok += 1000; const cv = document.getElementById('fcv'), r = cv.getBoundingClientRect();
+    const full = ui.classList.contains('full') && r.width >= innerWidth - 2 && r.height >= innerHeight - 2;
+    const step = (s) => { for (let i = 0; i < Math.round(s / 0.016); i++) { fishTick(F, 0.016); ropeTick(F, 0.016); } fishDraw(cv, F); };
+    WILD.fly = 'caddis'; F.target.lvl = 2; step(0.3);
+    fishPress(); step(CAST_DUR * 0.35);
+    const loopBack = F.rope.p.some((q) => q.z < F.rope.p[0].z - 2) && F.rope.p.every((q) => q.y >= -0.01);
+    let above = 0; const tip = F.rope.p[0]; F.rope.p.forEach((q) => { if (q.y > tip.y - 0.2 && q.z < tip.z) above++; });
+    step(CAST_DUR * 0.55); const back = F.rope.p[ROPE_N - 1].z < tip.z - 3;       // straight out behind you
+    fishPress(); step(0.3); fishPress(); step(CAST_DUR * 0.8); fishPress(); step(0.6); const out = F.rope.p[ROPE_N - 1].z > 8;
+    fishPress2(); F.took = false; step(3);
+    const floating = F.rope.p.slice(ROPE_N >> 1).every((q) => q.y < 0.3);
+    const mid = F.rope.p[ROPE_N >> 1], chord = (F.rope.p[0].x + F.rope.p[ROPE_N - 1].x) / 2;
+    const belly = mid.x > chord + 0.3;
+    FISHING = null; menuClose(); return { full, loopBack, above, back, out, floating, belly, hide: !ui.classList.contains('full') }; });
+  ok('the fishing screen fills the whole screen, and closes back to the game', line.full && line.hide);
+  ok('the line loops back over your shoulder and straightens out behind you', line.loopBack && line.above > 3 && line.back);
+  ok('then shoots out over the water, lands and floats', line.out && line.floating);
+  ok('the current bellies the line downstream', line.belly);
   const flies = await page.evaluate(() => ({ seaClouser: flyEff('clouser', 'sea'), riverClouser: flyEff('clouser', 'river'), lakeMidge: flyEff('chironomid', 'lake'),
     seaDry: flyEff('caddis', 'sea'), match: flyEff('adams', 'river', 'mayfly'), noHatch: flyEff('adams', 'river', 'none'),
     pike: (() => { let n = 0; for (let i = 0; i < 300; i++) if (pickFish('lake', 'bugger') === 'pike') n++; return n; })(),

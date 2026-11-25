@@ -1753,11 +1753,11 @@ function project(x,y,z){
 
 /* ---------- screens ---------- */
 function show(html){
-  ui.innerHTML='<div class="card">'+html+'</div>'; ui.classList.add('on'); ui.classList.remove('see');
+  ui.innerHTML='<div class="card">'+html+'</div>'; ui.classList.add('on'); ui.classList.remove('see','full');
   // any page over the game frees a captured mouse, or its buttons could not be clicked
   if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
 }
-function hide(){ ui.classList.remove('on','see'); ui.innerHTML=''; touches={}; IN.attack=false; }
+function hide(){ ui.classList.remove('on','see','full'); ui.innerHTML=''; touches={}; IN.attack=false; }
 var SAVED=null;
 function titleScreen(){
   if(G.player&&(G.state==='dead'||G.state==='play')) saveGame();
