@@ -6055,10 +6055,10 @@ function actorSpec(e){
     // the rogue carries a crossbow but draws the knife to strike
     var mw=cls==='rogue'?['Knife','Knife_Offhand']:null;
     var gr=G.build.gear||{w:0,a:0}, at={h:gr.h||0,s:gr.s||0,c:gr.c||0};
-    return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', tint:null, armor:(at.h||at.s||at.c)?at:0, akey:''+at.h+at.s+at.c, wtier:gr.w};
+    return {model:m, weapons:w, melee:mw, ears:race==='elf', beard:race==='dwarf', dwarf:race==='dwarf', tint:null, armor:(at.h||at.s||at.c)?at:0, akey:''+at.h+at.s+at.c, wtier:gr.w};
   }
   if(e.patron)                       // the Greenleaf's regulars
-    return {model:e.model, weapons:e.patron.weapons||[], beard:!!e.beard, tint:e.tint, key:e.npcId};
+    return {model:e.model, weapons:e.patron.weapons||[], beard:!!e.beard, dwarf:!!e.beard, tint:e.tint, key:e.npcId};   // a bearded regular is a dwarf
   if(e.kind==='npc'&&e.npcId)        // the other folk: Wren the hedge-witch, Tobin the tinker
     return {model:e.model, weapons:e.npcId==='tobin'?['1H_Axe_Offhand']:[], beard:!!e.beard, tint:e.tint, key:e.npcId};
   if(e.kind==='npc')                  // the innkeeper: a barbarian with a mug, in warm tones
@@ -6073,11 +6073,55 @@ function actorSpec(e){
     case 'knight': return {model:'knight', weapons:['1H_Sword','Round_Shield']};
     case 'mage':   return {model:'mage', weapons:['2H_Staff']};
     case 'druid':  return {model:'mage', weapons:['1H_Wand','Spellbook_open'], tint:[0.78,1.0,0.74], key:'druid'};
-    default:       return {model:'barbarian', weapons:['1H_Axe','Barbarian_Round_Shield'], beard:true};
+    default:       return {model:'barbarian', weapons:['1H_Axe','Barbarian_Round_Shield'], beard:true, dwarf:true};
   }
 }
 
 var ACTORS=[], EARGEO=null, BEARDGEO=null, ARMGEO=null;
+
+/* Grown-up proportions. KayKit's adventurers are chibi: a head a third of their
+   height on short stubby legs. Everyone but the dwarves is re-proportioned at
+   load by scaling bones: a smaller head, longer legs and arms, a longer and
+   slightly narrower torso. The clips only rotate bones (and move the hips), so
+   every animation still fits. Dwarves keep the stocky KayKit build. */
+var BUILD={head:0.68, leg:2.5, shin:2.0, arm:1.32, torso:1.18, slim:0.92, wpn:0.8};
+var HIPS_UP=(BUILD.leg-1)*0.227+(BUILD.shin-1)*0.149;   // the longer legs lift the hips this far (rig units)
+var LIMBS={upperarml:1,upperarmr:1,lowerarml:1,lowerarmr:1,wristl:1,wristr:1,handl:1,handr:1,
+  upperlegl:1,upperlegr:1,lowerlegl:1,lowerlegr:1,footl:1,footr:1};
+function reshapeRig(root){
+  var P=BUILD; function b(n){ return root.getObjectByName(n); }
+  // each bone undoes what its parent's stretch would do to the parts that should not stretch
+  b('head').scale.set(P.head/P.slim,P.head/P.torso,P.head/P.slim);
+  b('chest').scale.set(P.slim,P.torso,P.slim);
+  ['l','r'].forEach(function(sd){
+    b('upperarm'+sd).scale.set(1/P.slim,P.arm/P.torso,1/P.slim);
+    b('hand'+sd).scale.set(1,1/P.arm,1);
+    b('upperleg'+sd).scale.set(1,P.leg,1);
+    b('lowerleg'+sd).scale.set(1,P.shin/P.leg,1);
+    b('foot'+sd).scale.set(1,1/P.shin,1);
+    var h=b('handslot'+sd); if(h) h.scale.setScalar(P.wpn);       // the props were sized for chibi hands
+  });
+  b('hips').position.y+=HIPS_UP;
+}
+function bodyBox(root){
+  var box=new THREE.Box3(); root.updateMatrixWorld(true);
+  root.traverse(function(o){ if(o.isSkinnedMesh) box.union(new THREE.Box3().setFromObject(o,true)); });
+  return box;
+}
+/* a reshaped body is taller in rig units: scale it back to the same height (once per model) */
+var BUILD_K={};
+function buildK(model,root){
+  if(BUILD_K[model]) return BUILD_K[model];
+  var b0=bodyBox(MODELS[model].scene), b1=bodyBox(root);
+  return (BUILD_K[model]=(b0.max.y-b0.min.y)/Math.max(0.01,b1.max.y-b1.min.y));
+}
+/* The clips set the hips' height outright, for a short-legged body. Standing,
+   lift them by the extra leg length; as a body drops (crouching, dying) the lift
+   fades, so the fallen lie on the ground rather than above it. */
+function liftHips(a){
+  var h=a.hips.position, f=(h.y-0.15)/0.242;
+  h.y+=HIPS_UP*(f<0?0:(f>1?1:f));
+}
 /* Armour you can see. Each tier of Bram's cousin's armour hangs more metal on the
    hunter's bones: leather pauldrons, then iron, steel with a breastplate, elvensteel
    with a leaf circlet, and at Legendary: gold plate, a spiked crown and a glowing gem.
@@ -6102,8 +6146,12 @@ function addArmor(root,T,inv,mats,glow,model){
     var plate=mat(A.plate,A.gold?[0.26,0.16,0.02]:null); return {A:A,plate:plate,trim:A.trim?mat(A.trim,A.gold?[0.20,0.18,0.12]:null):plate}; }
   function bone(n){ return root.getObjectByName(n); }
   var chest=bone('chest'), head=bone('head');
+  root.updateMatrixWorld(true);
+  var ws=new THREE.Vector3();
   function put(b,g,m,x,y,z,sx,sy,sz,rx,ry,rz){ if(!b) return null;
-    var o=new THREE.Mesh(ARMGEO[g],m); o.position.set(x*inv,y*inv,z*inv); o.scale.set(sx*inv,sy*inv,sz*inv);
+    // a stretched limb (see reshapeRig) would stretch its guard too: undo that
+    if(LIMBS[b.name]) b.getWorldScale(ws); else ws.set(1,1,1);
+    var o=new THREE.Mesh(ARMGEO[g],m); o.position.set(x*inv/ws.x,y*inv/ws.y,z*inv/ws.z); o.scale.set(sx*inv/ws.x,sy*inv/ws.y,sz*inv/ws.z);
     o.rotation.set(rx||0,ry||0,rz||0); o.castShadow=true; b.add(o); return o; }
   // the hats differ: how high the top of the head sits, how wide a crown must be
   var top=model==='mage'?{y:0.50,r:0.80}:(model==='barbarian'?{y:0.84,r:0.62}:{y:0.72,r:0.60});
@@ -6153,6 +6201,8 @@ function makeActor(spec){
     mats.push(o.material);
     if(T.weapons.indexOf(o.name)>=0){ held[o.name]=o; o.visible=spec.weapons.indexOf(o.name)>=0; }
   });
+  var tall=!T.creature&&!spec.dwarf, kb=1;
+  if(tall){ reshapeRig(root); kb=buildK(spec.model,root); }
   var head=root.getObjectByName('head');
   if(head&&(spec.ears||spec.beard)){
     if(!EARGEO){ EARGEO=toGeom(coneMesh([1,1,1],8)); BEARDGEO=toGeom(blobMesh([1,1,1],0,2)); }
@@ -6171,12 +6221,12 @@ function makeActor(spec){
     }
   }
   var glow=[];
-  if(spec.armor) addArmor(root,spec.armor,1/T.k,mats,glow,spec.model);
+  if(spec.armor) addArmor(root,spec.armor,1/T.k,mats,glow,spec.model);   // sized to the KayKit body, so it scales with ours
   // a weapon of the top tiers shines: elvensteel pale, legendary gold
   if(spec.wtier>=4) for(var hn in held){ var hm=held[hn].material; glow.push({m:hm,c:spec.wtier>=5?[0.55,0.38,0.08]:[0.10,0.30,0.34]}); }
   var group=new THREE.Group(); group.add(root);
-  root.scale.setScalar(T.k); root.position.y=T.lift*T.k;
-  var a={glow:glow, armor:spec.armor||0, creature:T.creature||null, held:held, wNorm:spec.weapons, wMelee:spec.melee||null, wCur:spec.weapons, key:spec.key||spec.model, group:group, root:root, mats:mats, mixer:new THREE.AnimationMixer(root),
+  root.scale.setScalar(T.k*kb); root.position.y=T.lift*T.k*kb;
+  var a={glow:glow, armor:spec.armor||0, creature:T.creature||null, held:held, wNorm:spec.weapons, wMelee:spec.melee||null, wCur:spec.weapons, key:spec.key||spec.model, hips:tall?root.getObjectByName('hips'):null, group:group, root:root, mats:mats, mixer:new THREE.AnimationMixer(root),
     acts:{}, ent:null, used:false, ov:null, ovT:0, lastAtk:0, base:null, dead:false};
   SCENE.add(group);
   ACTORS.push(a);
@@ -6304,6 +6354,7 @@ function animateActor(a,e,dt){
   var rate=Math.min(1,dt*12);
   for(var k2 in a.acts){ var x2=a.acts[k2]; x2.weight+=(x2.tw-x2.weight)*rate; if(x2.weight<0.002&&x2.tw===0) x2.weight=0; x2.setEffectiveWeight(x2.weight); }
   a.mixer.update(dt);
+  if(a.hips) liftHips(a);
   // place it
   a.group.position.set(e.x,e.y,e.z);
   a.group.rotation.set(0,e.yaw||0,0);
@@ -6351,7 +6402,7 @@ function assignActors(dt){
 }
 function specKey(e){
   var s=actorSpec(e);
-  return s.model+'|'+(s.key||'')+'|'+s.weapons.join(',')+'|'+(s.ears?1:0)+(s.beard?1:0)+'|'+(s.akey||0)+(s.wtier||0);
+  return s.model+'|'+(s.key||'')+'|'+s.weapons.join(',')+'|'+(s.ears?1:0)+(s.beard?1:0)+(s.dwarf?1:0)+'|'+(s.akey||0)+(s.wtier||0);
 }
 
 </script>

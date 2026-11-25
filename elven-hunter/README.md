@@ -8,6 +8,8 @@ No CDN and no network calls at runtime. Rendering is done by
 [three.js](https://threejs.org) (MIT); the terrain generator and the gameplay are plain
 JavaScript. The hunter, followers and the innkeeper are rigged, animated models from Kay
 Lousberg's CC0 [KayKit Adventurers](https://kaylousberg.itch.io/kaykit-adventurers) pack.
+They are re-proportioned as they load (smaller heads, longer legs and arms) so they read as
+grown-ups rather than chibi dolls; dwarves keep the stocky KayKit build.
 Everything you fight is a monster, never a person: Quaternius's animated spider, snake and
 wasp, plus hand-built mushroom grumps, a stone golem and a dragon. The forest is planted from his Ultimate Nature Pack (all CC0). Every sound effect is synthesised in code; the music is "Peaceful Forest" by Samza
 (CC0). The build bundles the slice of three.js the game uses, the models, the forest, the
