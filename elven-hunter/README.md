@@ -19,9 +19,10 @@ plays.
 The wood is 405 × 405 units of procedurally generated hills, a winding river, open meadows
 and evenly spaced stands of oak, birch and pine (no two trees closer than 4.2 units, so
 nothing grows into a thicket), ringed by mountains on three sides; to the east it runs down
-to a long beach and the sea. Nine landmarks to find. Spiders hunt the undergrowth, snakes lie in the grass, wasps swarm
+to a long beach and the sea. Ten landmarks to find. Spiders hunt the undergrowth, snakes lie in the grass, wasps swarm
 their hive, cross little mushrooms hop about the meadows, and your kin hang in cocoons
-waiting to be cut down. Free them and they follow you and fight. Bram keeps the tavern;
+waiting to be cut down. Free them and they follow you and fight. In the west wood a Fairy
+Fountain heals you to full, and the Grand Fairy beside it gives a fairy blessing. Bram keeps the tavern;
 from level 10 an abandoned cottage can be bought, fixed up and farmed, with a kitty of your
 own to guard it. Buy a fly rod and you can go fly fishing on the river, the lakes and the sea, with a box of real flies to match to the water. The standing stones
 wake while you hunt and can call up a boss; a dragon sleeps on the Dragon's Crag; and the
@@ -116,7 +117,7 @@ src/
   home.js     the cottage, its farm, and saving / continuing
   wild.js     difficulty, mushroom grumps, the Stone Warden, the dragon, the Glimmer
               Cave and its torch, butterflies, rabbits, toadstools and gnomes
-  legends.js  the journal (44 pages of lore), waystones, Bram's tales, the six
+  legends.js  the journal (46 pages of lore), waystones, Bram's tales, the six
               mini-bosses and the golden champions
   hall.js     the Greenleaf: the house in the yard and the great hall inside it,
               its regulars, and walking in and out
@@ -126,6 +127,7 @@ src/
   abilities.js three abilities per calling, unlocked at levels 2, 4 and 7
   gear.js     five gear slots, five rarities, loot bags, the bag and character
               sheet, Bram's cousin's forge
+  fountain.js the Fairy Fountain (drink to heal) and the Grand Fairy's blessing
   fishing.js  fly fishing: the fly box, the waters and their hatches, false casting,
               drifting, mending and stripping, playing the fish, the creel
   farm.js     the farm kitty: adopting and naming it, guarding the house, feeding it
@@ -230,6 +232,32 @@ tap **LOOK**). From **level 10**, with 600 coins, it's yours, and then a job at 
 (15, 4 min, 58) in empty plots. Crops grow while you play and are drawn growing in the
 patch; ripe plots glint gold. Harvest from the cottage menu. `HOUSE_LEVEL` and the prices
 live at the top of `src/home.js`.
+
+### The Fairy Fountain (`src/fountain.js`)
+
+Deep in the west wood, past Wren's fairy ring, the Sylvani built a white stone fountain
+round a spring that never freezes: a round basin with lily pads, a column with two bowls
+spilling water, a ring of white pillars (some broken), glowing toadstools and flowers. The
+glade is levelled and kept clear of trees, and it's **safe ground** like the tavern yard:
+no packs spawn there, foes break off, and you and your company slowly mend.
+
+- **Drink from the fountain** (`E` / **DRINK**). You and your company are healed to full,
+  and poison and webs wash out. Free, any time, as often as you like.
+- **The Grand Fairy.** Lumenne, the greatest of the fairies, hovers over a mossy dais under
+  a willow arch on the west side: a tall fairy in a pale gown with four wings, a crown and a
+  starred wand, with motes in the four fairy colours circling her. Walk up and `E` /
+  **VISIT**. Pick one **fairy blessing**: Swift (faster attacks and feet), Wrath (+45%
+  damage), Ward (half damage) or Bloom (mend all the time). It's the same gift a little
+  fairy gives, but it lasts **three minutes** instead of 26 seconds, and she heals you as
+  she sings it. Then she **rests** for four minutes (curled on her moss, dimmer, wings
+  folded) before she can bless again. Her menu offers a drink from the fountain too.
+- A little fairy caught while a longer blessing is on adds 10 seconds to it instead of
+  cutting it short. The blessing chip shows how much is left.
+- Two journal pages (the fountain, and Lumenne), a minimap icon (a water drop) and, once
+  found, a stop on Aelfrend's flights.
+
+Where it is (`FOUNTAIN`) is in `src/world.js`; how long a blessing lasts and how long she
+rests (`GRAND`) is at the top of `src/fountain.js`.
 
 ### The farm kitty (`src/farm.js`)
 
@@ -424,7 +452,7 @@ and recipes, more places to find, and gnomes.
 
 ### Legends (`src/legends.js`)
 
-- **The journal** (`L`, or from the skills screen). Forty-four pages: the story of the
+- **The journal** (`L`, or from the skills screen). Forty-six pages: the story of the
   Elderwood and the Long Weaving, every landmark, every named foe, Bram's tales and five
   carved **waystones** set about the wood (walk up and `E` / **READ**). Pages fill as you
   discover, read, listen and kill; empty pages carry a hint where to look.
@@ -526,7 +554,7 @@ Rewards include coin, XP, recipes, a whetstone (+5% damage), **Tobin's compass**
 the top of the screen pointing at your nearest objective) and, at the end of Ærtheldor's
 chain, **Aelfrend**: a young eagle who circles over you, dives on anything that comes
 near, and on `G` / **FLY** carries you to the Eyrie, the tavern, Wren, Tobin, your
-cottage or the standing stones.
+cottage, the standing stones or the Fairy Fountain.
 
 **Gathering.** Silverleaf grows in the open, fallen wood lies everywhere, iron ore sits in
 the high ground and round the crag, honeycomb by the hive, silk at the Hollow and
@@ -660,7 +688,7 @@ npm install         # three, esbuild, playwright (dev only; nothing ships but in
 npm test
 ```
 
-253 assertions run the actual game in headless Chromium with software WebGL and check
+267 assertions run the actual game in headless Chromium with software WebGL and check
 live state. Most of them are regression tests for bugs that shipped at least once:
 
 - projectiles tunnelling through enemies on slow frames

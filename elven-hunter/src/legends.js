@@ -37,6 +37,10 @@ var LORE=[
    x:"The Long Weaving began here. The old Spider Queen spun her court in this sunken ring, and the Sylvani bound her with song beneath the standing stones' gaze. She died bound. Her daughter did not."},
   {id:'stones',sec:'Places',t:"The Stillstones",h:"Six stones stand in the far north-west.",
    x:"Six stones, raised by the first Sylvani to keep the mountain's heart asleep. They drink in what dies near them; when they have drunk enough the runes wake, and the Warden rises to ask whoever touches the altar a single question with its fists: are you strong enough to keep the wood? It does not hate you. It is checking."},
+  {id:'fountain',sec:'Places',t:"The Fairy Fountain",h:"Deep in the west wood, past the fairy ring, water sings.",
+   x:"The Sylvani found a spring in the west wood that never froze and never ran dry, and they built a fountain round it out of white stone so the water could dance. Drink and every hurt closes; poison runs out of you like rain off a leaf. Bram swears he once saw a wolf and a deer drink from it side by side. Bram swears a lot of things, but this one might be true."},
+  {id:'grandfairy',sec:'Folk of the wood',t:"Lumenne, the Grand Fairy",h:"Someone very bright lives by the fountain.",
+   x:"When the Long Weaving came, the last singer of the Sylvani did not let her songs die in the silk. She let them go, a verse at a time, as little lights, and stayed by her spring to keep singing more. That was Lumenne. She has been singing for a hundred years, and she is a little tired, and very glad of company. Ask, and she will lend you a whole verse of the song: three minutes of it, not the half-minute a little fairy can carry."},
   {id:'cottage',sec:'Places',t:"Hesper's Cottage",h:"A quiet rise past the tavern.",
    x:"The cottage belonged to Hesper, the herb-wife, who made Bram's potions before he learned. One spring she walked toward the crag with a basket and a lantern and did not come back. The notice on the post is in Bram's hand."},
   {id:'crag',sec:'Places',t:"The Dragon's Crag",h:"The cliff north of the tavern. Climb the ramp, if you dare.",
@@ -145,7 +149,7 @@ function waystoneScreen(w){
     (fresh?'<p class="sub">✎ Written in your journal.</p>':'')+'<button class="btn" id="leave">Walk on</button>');
   document.getElementById('leave').onclick=menuClose;
 }
-var LANDLORE={landing:'isle',spire:'spire',castle:'castle',shore:'shore',eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
+var LANDLORE={fountain:'fountain',landing:'isle',spire:'spire',castle:'castle',shore:'shore',eyrie:'aertheldor',tavern:'tavern',hive:'hive',hollow:'hollow',stones:'stones',cottage:'cottage',crag:'crag',cave:'cave'};
 
 /* ---------- mini-bosses ----------
    Named monsters with a home they guard and a trick of their own. Beaten, they

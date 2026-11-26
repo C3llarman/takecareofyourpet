@@ -407,6 +407,7 @@ function flyDests(){
     {id:'wren',n:'Wren\'s camp',x:FOLK.wren.x+2.5,z:FOLK.wren.z+2},
     {id:'tobin',n:'Tobin\'s cart',x:FOLK.tobin.x-2,z:FOLK.tobin.z+3}];
   if(HOME.owned){ var h=HT(0,5.5); d.push({id:'home',n:'Your cottage',x:h.x,z:h.z}); }
+  if(G.found['The Fairy Fountain']) d.push({id:'fountain',n:'The Fairy Fountain',x:FOUNTAIN.x+FOUNTAIN.r+5,z:FOUNTAIN.z});
   if(G.found['The Standing Stones']) d.push({id:'stones',n:'The Standing Stones',x:STONES.x+6,z:STONES.z+6});
   return d;
 }

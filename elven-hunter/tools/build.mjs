@@ -59,6 +59,7 @@ const MODULES = [
   ['/*ABIL*/',   'abilities.js'],
   ['/*GEAR*/',   'gear.js'],
   ['/*FISHING*/','fishing.js'],
+  ['/*FOUNTAIN*/','fountain.js'],
   ['/*FARM*/',   'farm.js'],
   ['/*UI*/',     'ui.js'],
   ['/*INTRO*/',  'intro.js'],

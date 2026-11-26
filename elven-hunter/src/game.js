@@ -203,6 +203,7 @@ function buildWorld(){
   buildBounce(m);
   buildWaystones(m);
   buildFolkSites(m);
+  buildFountain(m);
   buildShore(m);
   var isleTris=buildIsle(m);          // the next land, across the sea (isle.js)
   WORLD=new THREE.Mesh(toGeom(m),WORLDMAT); WORLD.frustumCulled=false;
@@ -261,7 +262,7 @@ function populate(){
   spawnMinis(); seedChampions();
   spawnFolk(); spawnNodes(); spawnQuestItems();
 }
-function nearTavern(x,z,r){ return Math.hypot(x-TAVERN.x,z-TAVERN.z)<r||homeSafe(x,z,r*0.8); }
+function nearTavern(x,z,r){ return Math.hypot(x-TAVERN.x,z-TAVERN.z)<r||homeSafe(x,z,r*0.8)||fountainSafe(x,z,r*0.8); }
 /* Bram keeps the Greenleaf: rest, potions, hired blades and bounties */
 function spawnKeeper(){
   var k=TAVERN.keeper; if(!k) return;
@@ -734,7 +735,7 @@ function update(dt){
   }
   wildUpdate(dt);
   homeUpdate(dt);
-  p.safe=p.atTavern||p.atHome||isleSafe(p);
+  p.safe=p.atTavern||p.atHome||p.atFountain||isleSafe(p);
   G.saveT=(G.saveT||0)+dt; if(G.saveT>15){ G.saveT=0; saveGame(); }
   for(var i=0;i<LANDMARKS.length;i++){
     var lm=LANDMARKS[i], ld=Math.hypot(p.x-lm.x,p.z-lm.z);
@@ -868,8 +869,10 @@ function updateEnts(dt){
     if(e.kind==='fairy'){
       e.t+=dt; e.bx=Math.sin(e.t*0.9)*2.2; e.by=Math.sin(e.t*1.7)*0.5;
       if(pd<2.6){
-        p.buff=e.col; p.buffT=26; loreGet('fairies');
-        msg(FAIRYNAME[e.col],'#bff0ff',e.x,e.y+1.4,e.z); sfx('fairy');
+        // a wild fairy never cuts short a longer blessing (the Grand Fairy's): it adds to it
+        if(p.buffT>26){ p.buffT+=10; msg('+10s '+FAIRYNAME[p.buff].split(' ')[0],'#bff0ff',e.x,e.y+1.4,e.z); }
+        else { p.buff=e.col; p.buffT=26; p.buffMax=26; msg(FAIRYNAME[e.col],'#bff0ff',e.x,e.y+1.4,e.z); }
+        loreGet('fairies'); sfx('fairy');
         burst(e.x+e.bx,e.y+e.by,e.z,24,FAIRYCOL[e.col],{up:2,spread:3,size:0.12,life:1.0,grav:-1});
         buzz([12,30,12]); G.ents.splice(i,1);
       }
@@ -1183,6 +1186,7 @@ function draw(){
   LOD=0;
   drawFarm();
   drawStones();
+  drawFountain();
   drawFX();
   for(var k=0;k<DRAW.length;k++){ var d=DRAW[k]; batchAdd(partBatch(d[0]),d[1],d[2]); }
   batchesEnd();
@@ -1414,6 +1418,9 @@ function mapIcon(kind,x,y,s,unknown){
       hx.arc(0,0.4,4.3,-0.32,3.46); hx.closePath(); hx.fill(); hx.stroke();
       hx.fillStyle='rgb('+kc.eye.map(function(v){ return Math.round(v*255); }).join(',')+')'; hx.fillRect(-2.4,-0.6,1.5,1.5); hx.fillRect(0.9,-0.6,1.5,1.5);
       hx.fillStyle='#f0a0b0'; hx.fillRect(-0.5,1.4,1,0.8); break;
+    case 'fountain':                     // a drop of water with a sparkle
+      hx.fillStyle='#8fe6ff'; hx.beginPath(); hx.moveTo(0,-5); hx.quadraticCurveTo(4.2,0.5,0,4.2); hx.quadraticCurveTo(-4.2,0.5,0,-5); hx.fill();
+      hx.fillStyle='#ffffff'; hx.beginPath(); hx.arc(-1.1,0.6,1.1,0,6.3); hx.fill(); break;
     case 'stones':                       // ring of stones
       hx.fillStyle='#b8b8c0';
       for(var q=0;q<6;q++){ var qa=q/6*6.283; hx.fillRect(Math.cos(qa)*4-1.2,Math.sin(qa)*4-1.2,2.4,2.4); } break;
@@ -1503,7 +1510,7 @@ function drawHUD(){
       bfW=hx.measureText(bt2).width;
       hx.textAlign='right'; hx.fillStyle='rgb('+FAIRYCOL[p.buff].map(function(v){return Math.round(v*255);}).join(',')+')';
       hx.fillText(bt2,bx+bw,sy);
-      hx.fillStyle='rgba(191,240,255,.35)'; hx.fillRect(bx+bw-bfW,sy+3*UI,bfW*clamp(p.buffT/26,0,1),2*UI);
+      hx.fillStyle='rgba(191,240,255,.35)'; hx.fillRect(bx+bw-bfW,sy+3*UI,bfW*clamp(p.buffT/(p.buffMax||26),0,1),2*UI);
     }
     if(pts>0){
       hx.textAlign='left'; hx.fillStyle=Math.sin(G.t*5)>-0.3?'#9ff07a':'#6fbf55';
@@ -1584,7 +1591,7 @@ function drawHUD(){
   if(SHOWKEY){
     var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['shroom','Mushroom grump'],['cocoon','Captive — free them'],
       ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
-      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['shore','The Sunlit Shore — a boat east'],['cave','Glimmer Cave — bring a torch'],['landing','Emberleaf Landing — sail home'],['spire','The Sunken Spire'],['castle','Caer Aelfhaven — Ashwing']];
+      ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['fountain','Fairy Fountain — heal, a blessing'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['shore','The Sunlit Shore — a boat east'],['cave','Glimmer Cave — bring a torch'],['landing','Emberleaf Landing — sail home'],['spire','The Sunken Spire'],['castle','Caer Aelfhaven — Ashwing']];
     if(HOME.kitty) keyItems.splice(11,0,['kitty',HOME.kitty.name+', your kitty']);
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
