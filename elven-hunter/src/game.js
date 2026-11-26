@@ -883,6 +883,7 @@ function updateEnts(dt){
     if(e.kind==='node'){ updateNode(e,dt,pd); continue; }
     if(e.kind==='qitem'){ updateQItem(e,dt,pd); continue; }
     if(e.kind==='loot'){ updateLoot(e,dt,pd); continue; }
+    if(e.kind==='kitty'){ updateKitty(e,dt,pd); continue; }
     if(e.kind==='eagle'){ updateEagle(e,dt); continue; }
     if(e.kind==='gnome'){ e.yaw+=wrapA(Math.atan2(p.x-e.x,p.z-e.z)-e.yaw)*Math.min(1,dt*(pd<8?3:0));
       if(pd<2.2&&!p.dead) findGnome(e); continue; }
@@ -1057,6 +1058,7 @@ function addShadow(e){
   if(e.boss||(e.kind==='corpse'&&e.boss)) sc=(e.rad||3)*2.4;
   if(e.kind==='critter'||e.kind==='gnome'||e.kind==='node'||e.kind==='qitem') sc=0.6;
   if(e.kind==='eagle') sc=(e.scale||1)*1.8;
+  if(e.kind==='kitty') sc=0.7;
   var air=Math.max(0,e.y-H(e.x,e.z));
   var f=Math.max(0.35,1-air*0.22);
   var m=mat(); m4trs(m,e.x,H(e.x,e.z)+0.06,e.z,0,e.yaw||0,0,sc*f,1,sc*f);
@@ -1269,6 +1271,7 @@ function pushEnt(e){
   else if(e.kind==='node') nodeRig(RIG,e,G.t);
   else if(e.kind==='qitem') qitemRig(RIG,e,G.t);
   else if(e.kind==='loot') lootRig(RIG,e,G.t);
+  else if(e.kind==='kitty') kittyRig(RIG,e,G.t);
   else if(e.kind==='critter'){ if(e.sub==='fly') flyRig(RIG,e,G.t); else if(e.sub==='gull') eagleRig(RIG,e,G.t); else bunnyRig(RIG,e,G.t); }
   else if(e.kind==='cocoon') cocoonRig(RIG,e,G.t);
   else if(e.kind==='shot'||e.kind==='eshot'||e.kind==='stuck'){ pushShot(e); return; }
@@ -1403,6 +1406,14 @@ function mapIcon(kind,x,y,s,unknown){
     case 'spire':                        // a broken tower
       hx.fillStyle='#b8aea0'; hx.beginPath(); hx.moveTo(-3.5,4.5); hx.lineTo(-3,-3); hx.lineTo(-1.5,-5); hx.lineTo(0,-3); hx.lineTo(1.5,-4.2); hx.lineTo(3,-2.5); hx.lineTo(3.5,4.5); hx.closePath(); hx.fill();
       hx.fillStyle='#e0702e'; hx.fillRect(-1,0.5,2,4); break;
+    case 'kitty':                        // your cat's head, in its coat colour
+      var kc=(typeof KITTY_COATS!=='undefined'&&HOME.kitty&&KITTY_COATS[HOME.kitty.coat])||{c:[0.9,0.52,0.2],eye:[0.45,0.8,0.3]};
+      var kcol='rgb('+kc.c.map(function(v){ return Math.round(v*255); }).join(',')+')';
+      hx.fillStyle=kcol; hx.strokeStyle='#f3e7c9'; hx.lineWidth=1;
+      hx.beginPath(); hx.moveTo(-4.2,-1); hx.lineTo(-3.6,-5.6); hx.lineTo(-0.9,-3.2); hx.lineTo(0.9,-3.2); hx.lineTo(3.6,-5.6); hx.lineTo(4.2,-1);
+      hx.arc(0,0.4,4.3,-0.32,3.46); hx.closePath(); hx.fill(); hx.stroke();
+      hx.fillStyle='rgb('+kc.eye.map(function(v){ return Math.round(v*255); }).join(',')+')'; hx.fillRect(-2.4,-0.6,1.5,1.5); hx.fillRect(0.9,-0.6,1.5,1.5);
+      hx.fillStyle='#f0a0b0'; hx.fillRect(-0.5,1.4,1,0.8); break;
     case 'stones':                       // ring of stones
       hx.fillStyle='#b8b8c0';
       for(var q=0;q<6;q++){ var qa=q/6*6.283; hx.fillRect(Math.cos(qa)*4-1.2,Math.sin(qa)*4-1.2,2.4,2.4); } break;
@@ -1519,7 +1530,7 @@ function drawHUD(){
   var sc=mr/(DESKTOP?86:70), ms=DESKTOP?1:0.85;
   for(var e2=0;e2<G.ents.length;e2++){
     var en=G.ents[e2];
-    if(en.kind==='shot'||en.kind==='eshot'||en.kind==='stuck'||en.kind==='critter'||en.kind==='gnome'||en.kind==='corpse'||en.kind==='node'||en.kind==='qitem'||(en.kind==='eagle'&&en.sub==='pet')) continue;
+    if(en.kind==='shot'||en.kind==='eshot'||en.kind==='stuck'||en.kind==='critter'||en.kind==='gnome'||en.kind==='corpse'||en.kind==='node'||en.kind==='qitem'||(en.kind==='eagle'&&en.sub==='pet')||en.kind==='kitty') continue;
     var ddx=(en.x-p.x)*sc, ddz=(en.z-p.z)*sc;
     if(Math.hypot(ddx,ddz)>mr) continue;
     var rp=rotPt(ddx,ddz,G.cam.yaw);
@@ -1552,6 +1563,11 @@ function drawHUD(){
     if(edge){ rot.x*=(mr-7)/rl; rot.y*=(mr-7)/rl; }
     mapIcon(lm.kind,mx+rot.x,my+rot.y,ms*(edge?0.85:1.1),!G.found[lm.name]);
   }
+  // your kitty, pinned to the rim when it's out of sight, so you can always find it
+  var kit=typeof findKitty==='function'&&!WILD.inCave&&!WILD.inHall&&!WILD.inIsle?findKitty():null;
+  if(kit){ var kr=rotPt((kit.x-p.x)*sc,(kit.z-p.z)*sc,G.cam.yaw), kl=Math.hypot(kr.x,kr.y), kedge=kl>mr-7;
+    if(kedge){ kr.x*=(mr-7)/kl; kr.y*=(mr-7)/kl; }
+    mapIcon('kitty',mx+kr.x,my+kr.y,ms*(kedge?0.85:1.05)); }
   // quest objectives: gold diamonds, pinned to the rim when they lie beyond it
   var QT=questTargets();
   for(var qi=0;qi<QT.length;qi++){ var qt=QT[qi], qr=rotPt((qt.x-p.x)*sc,(qt.z-p.z)*sc,G.cam.yaw), ql=Math.hypot(qr.x,qr.y);
@@ -1569,6 +1585,7 @@ function drawHUD(){
     var keyItems=[['spider','Spider'],['snake','Snake'],['wasp','Wasp'],['shroom','Mushroom grump'],['cocoon','Captive — free them'],
       ['ally','Your company'],['fairy','Fairy blessing'],['tavern','Tavern — rest'],['keeper','Bram, innkeeper'],['hive','Wasp hive'],['cottage','The old cottage'],
       ['hollow',"Queen's Hollow"],['stones','Standing stones — a summoning'],['folk','Wren, Tobin — quests'],['eyrie','The Eyrie — Ærtheldor'],['crag',"Dragon's Crag"],['shore','The Sunlit Shore — a boat east'],['cave','Glimmer Cave — bring a torch'],['landing','Emberleaf Landing — sail home'],['spire','The Sunken Spire'],['castle','Caer Aelfhaven — Ashwing']];
+    if(HOME.kitty) keyItems.splice(11,0,['kitty',HOME.kitty.name+', your kitty']);
     var kx=mx-mr, ky=my+mr+16, lh=DESKTOP?15:13;
     hx.fillStyle='rgba(8,11,8,.55)'; roundRect(kx-6,ky-11,mr*2+12,keyItems.length*lh+8,8); hx.fill();
     hx.textAlign='left'; hx.font='600 '+(DESKTOP?11.5:10.5)+'px Georgia,serif';
@@ -1736,11 +1753,11 @@ function project(x,y,z){
 
 /* ---------- screens ---------- */
 function show(html){
-  ui.innerHTML='<div class="card">'+html+'</div>'; ui.classList.add('on'); ui.classList.remove('see');
+  ui.innerHTML='<div class="card">'+html+'</div>'; ui.classList.add('on'); ui.classList.remove('see','full');
   // any page over the game frees a captured mouse, or its buttons could not be clicked
   if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
 }
-function hide(){ ui.classList.remove('on','see'); ui.innerHTML=''; touches={}; IN.attack=false; }
+function hide(){ ui.classList.remove('on','see','full'); ui.innerHTML=''; touches={}; IN.attack=false; }
 var SAVED=null;
 function titleScreen(){
   if(G.player&&(G.state==='dead'||G.state==='play')) saveGame();
@@ -1921,6 +1938,8 @@ function keeperScreen(say){
   var full=deployed()>=S.allies;
   opts.push({id:'hire',  t:'Hire a companion', d:full?'Your company is full ('+deployed()+' of '+S.allies+')':'Blades for coin ('+deployed()+' of '+S.allies+' in your company)', off:full});
   if(!WILD.torch) opts.push({id:'torch', t:'Buy a torch — '+TORCH_PRICE+' ◉', d:p.coins<TORCH_PRICE?'Not enough coin':'For the Glimmer Cave under the Dragon\'s Crag', off:p.coins<TORCH_PRICE});
+  if(!WILD.rod) opts.push({id:'rod', t:'Buy a fly rod — '+ROD_PRICE+' ◉', d:p.coins<ROD_PRICE?'Not enough coin':'Fish the river, the sea and the isle shore', off:p.coins<ROD_PRICE});
+  if(fishTotal()) opts.push({id:'sellfish', t:'Sell your fish ('+fishTotal()+') — +'+fishValue()+' ◉', d:'Bram puts them on the stew'+(HOME.kitty?' · or keep one for '+esc(HOME.kitty.name):''), off:false});
   bramParcel(opts);
   opts.push({id:'story', t:'Ask for a story', d:'Bram knows the wood\'s old tales — and a few of his own', off:false});
   if(!b) opts.push({id:'work', t:'Ask for work', d:'Bram always has a job going', off:false});
@@ -1952,6 +1971,12 @@ function keeperDo(id){
     if(WILD.torch||p.coins<TORCH_PRICE) return;
     p.coins-=TORCH_PRICE; WILD.torch=true; sfx('pickup'); saveGame();
     keeperScreen('There. Pitch-soaked, burns for days. The cave\'s in the west face of the crag — and whatever glitters in there, I want to hear about it.');
+  } else if(id==='rod'){
+    if(WILD.rod||p.coins<ROD_PRICE) return;
+    p.coins-=ROD_PRICE; WILD.rod=true; sfx('pickup'); saveGame();
+    keeperScreen('Hazel rod, silk line, and a box of flies I tied myself. Mind: a fly that kills on the river won\'t get a look in the sea. Dry flies when they\'re rising, nymphs when they\'re not, streamers for the big ones and the salt. And I hear there\'s a golden trout, if you\'re patient.');
+  } else if(id==='sellfish'){
+    var fv=sellFish(); if(fv){ sfx('coin'); saveGame(); } keeperScreen(fv?'Lovely and fresh! That\'s '+fv+' coins. Fish stew tonight.':'');
   } else if(id==='parcel'){ keeperScreen(bramParcelDo());
   } else if(id==='story'){ var st=bramStory(); sfx('pickup'); keeperScreen(st);
   } else if(id==='hire'){ hireScreen(); }
@@ -2101,6 +2126,7 @@ cvs.addEventListener('pointermove',function(e){ ptrMove(e.pointerId,e.clientX,e.
 cvs.addEventListener('touchstart',function(e){e.preventDefault();},{passive:false});
 cvs.addEventListener('touchmove',function(e){e.preventDefault();},{passive:false});
 addEventListener('keydown',function(e){
+  if(e.target&&e.target.tagName==='INPUT') return;      // typing a name, not playing
   if([' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(e.key)>=0) e.preventDefault();
   KEY[e.key]=true; KEY[e.key.toLowerCase&&e.key.toLowerCase()]=true;
   sndWake();

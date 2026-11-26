@@ -101,6 +101,56 @@ a.btn{text-align:center;text-decoration:none}
 #cine .cskip{position:absolute;right:18px;bottom:calc(5.5vh - 9px + var(--sab));font-size:14px;letter-spacing:1.5px;color:#a89873;
   opacity:0;transition:opacity 1s}
 #cine .cskip.on{opacity:.8}
+/* fly fishing and the kitty */
+.card canvas.scene{position:static;display:block;width:100%;height:auto;margin:8px 0 2px;border:1px solid var(--edge);border-radius:10px;background:#1a3540}
+.btn.strike{background:linear-gradient(#ffe7a0,#f0b040);box-shadow:0 0 0 3px rgba(255,215,106,.35);animation:strk .5s ease-in-out infinite alternate;font-weight:600;letter-spacing:1px}
+@keyframes strk{from{transform:scale(1)}to{transform:scale(1.03)}}
+.btn:disabled{opacity:.5;cursor:default}
+/* fishing: full screen, with the controls floating over the scene */
+#ui.full{padding:0;overflow:hidden;background:#000;touch-action:none}
+#ui.full .card{position:relative;max-width:none;width:100%;height:100%;margin:0;padding:0;border:0;border-radius:0;background:none;box-shadow:none}
+.card canvas.fullscene{position:absolute;inset:0;width:100%;height:100%}
+.fh{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;padding:calc(8px + var(--sat)) 12px calc(10px + var(--sab))}
+.fh>*{pointer-events:auto}
+.fh-top{display:flex;align-items:center;gap:8px}
+.fh-title{flex:1;min-width:0;font-size:14px;color:#f3e7c9;background:rgba(10,8,4,.62);border:1px solid rgba(107,84,36,.8);border-radius:999px;padding:6px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fh-title b{color:var(--gold)}
+.fh-x{font:inherit;font-size:14px;color:var(--ink);background:rgba(10,8,4,.72);border:1px solid var(--edge);border-radius:999px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+.fh-tip{align-self:flex-start;margin:6px 0 0;font-size:13px;line-height:1.4;color:#f6efd8;background:rgba(10,8,4,.55);border-radius:10px;padding:5px 10px;max-width:760px;pointer-events:none}
+.fh-tip b{color:#ffe08a}
+.fh-turn{display:none}
+@media (orientation:portrait){.fh-turn{display:inline;color:#bfe3ff}}
+.fh-fly{align-self:flex-start;margin-top:6px;font:inherit;font-size:13px;color:var(--ink);background:rgba(10,8,4,.72);border:1px solid var(--edge);border-radius:10px;padding:6px 10px 6px 30px;position:relative;cursor:pointer}
+.fh-fly .fi{position:absolute;left:9px;top:50%;margin-top:-7px;width:14px;height:14px;border-radius:50% 50% 50% 0;transform:rotate(-45deg)}
+.fh-fly b{color:var(--gold);font-weight:600}.fh-fly em{font-style:normal;color:#ffd76a;letter-spacing:1px}.fh-fly small{color:#a89873;margin-left:4px}
+.fh-fly:disabled{opacity:.8;cursor:default}
+.fh-box,#flybox.fh-box{display:none;margin-top:6px;max-width:640px;background:rgba(14,10,4,.92);border:1px solid var(--edge);border-radius:12px;padding:8px}
+#flybox.fh-box.open{display:grid}
+.fh-boxhead{grid-column:1/-1;font-size:13px;color:var(--gold);margin:0 2px 2px}.fh-boxhead small{color:#a89873;margin-left:6px}
+.fh-bottom{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:6px}
+.fh-say{margin:0;max-width:760px;text-align:center;font-size:15.5px;line-height:1.45;font-style:italic;color:#fff8e6;background:rgba(10,8,4,.5);border-radius:12px;padding:6px 14px;pointer-events:none}.fh-say:empty{display:none}
+.fh-btns{display:flex;gap:10px;width:100%;max-width:620px}
+.fh-btns .btn{flex:1;margin-top:0;padding:15px 12px;font-size:17px}
+.fh-btns #fbtn{flex:1.5}
+.fh-keys{margin:0;font-size:11.5px;color:#cbbd96;text-shadow:0 1px 2px #000}
+@media (max-height:520px){.fh-tip{display:none}.fh-say{font-size:14px;padding:4px 10px}.fh-btns .btn{padding:10px 10px;font-size:15.5px}.fh-keys{display:none}.fh-title{font-size:12.5px;padding:4px 10px}.fh-x{font-size:12.5px;padding:4px 10px}}
+@media (max-width:520px){.fh-x span{display:none}}
+
+.flybox{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:6px 0 2px}
+.fly{font:inherit;text-align:left;background:#120d05;border:1px solid #3b2f16;border-radius:9px;padding:5px 6px 5px 28px;position:relative;color:var(--ink);cursor:pointer;min-height:52px}
+.fly .fi{position:absolute;left:7px;top:9px;width:15px;height:15px;border-radius:50% 50% 50% 0;transform:rotate(-45deg)}
+.fly b{display:block;font-size:11.5px;line-height:1.15;color:var(--gold);font-weight:600}
+.fly small{display:block;font-size:10px;color:#a89873;text-transform:uppercase;letter-spacing:.5px}
+.fly em{display:block;font-style:normal;font-size:10.5px;color:#ffd76a;letter-spacing:1px}
+.fly.on{border-color:var(--gold);background:#2a1f08;box-shadow:0 0 0 1px rgba(255,215,106,.35) inset}
+.fly:disabled{opacity:.35;cursor:default}
+@media (max-width:460px){.flybox{gap:4px}.fly{padding:4px 3px 4px 21px;min-height:48px}.fly .fi{left:4px;width:12px;height:12px}.fly b{font-size:10.5px}.fly small{display:none}}
+.fbtns{display:flex;gap:8px}.fbtns .btn{flex:1}
+#fbtn{touch-action:none;-webkit-user-select:none;user-select:none}
+input.field{display:block;width:100%;padding:11px 12px;font:inherit;font-size:17px;color:var(--ink);background:#120d05;border:1px solid var(--edge);border-radius:10px;-webkit-user-select:text;user-select:text;margin-bottom:6px}
+input.field:focus{outline:none;border-color:var(--gold)}
+.picks.coats{grid-template-columns:repeat(auto-fit,minmax(86px,1fr))}
+.sw{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:6px;vertical-align:-2px;border:1px solid rgba(255,255,255,.4)}
 #boot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   background:#0a0d09;color:var(--gold);font-size:15px;letter-spacing:.5px}
 </style>
@@ -127,6 +177,8 @@ a.btn{text-align:center;text-decoration:none}
 <script>/*FOLK*/</script>
 <script>/*ABIL*/</script>
 <script>/*GEAR*/</script>
+<script>/*FISHING*/</script>
+<script>/*FARM*/</script>
 <script>/*UI*/</script>
 <script>/*INTRO*/</script>
 <script>/*GAME*/</script>

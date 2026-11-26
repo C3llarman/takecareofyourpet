@@ -571,18 +571,134 @@ section('Home and progress');
   ok('at level 10 you can buy the cottage and fix it up', home.owned && home.ups === 7, `${home.ups} jobs done`);
   ok('crops grow and sell', home.planted === 8 && home.earned === 8 * home.sell, `8 plots of wheat: +${home.earned}`);
 
+  // gear you choose by hand stays on, even when it isn't "better"
+  const swap = await page.evaluate(() => { G.build.bag = []; G.build.picked = {}; const hi = makeItem('trinket', 3), lo = makeItem('trinket', 1); lo.n = 'Lucky Acorn';
+    equip(hi); G.build.bag.push(lo); G.state = 'play'; gearSheet(); const btn = document.querySelector('[data-e]'); const label = btn.textContent; btn.click();
+    const worn = equipped('trinket').n; takeItem(makeItem('trinket', 4)); const kept = equipped('trinket').n;
+    document.querySelector('[data-off="trinket"]').click(); const off = !equipped('trinket') && G.build.bag.some((i) => i.n === 'Lucky Acorn');
+    menuClose(); return { label, worn, kept, off }; });
+  ok('any piece in the bag can be swapped in, better or not', swap.label === 'Swap in' && swap.worn === 'Lucky Acorn', swap.label);
+  ok('a piece you chose stays on when better loot drops', swap.kept === 'Lucky Acorn');
+  ok('worn gear can be taken off', swap.off);
+
+  // fly fishing: Bram sells the rod; any water's edge will do
+  const fish = await page.evaluate(() => { const p = G.player; p.coins = 500; G.state = 'play'; keeperScreen(); keeperDo('rod'); const rod = WILD.rod; menuClose();
+    let spot = null;
+    for (let x = -120; x < 120 && !spot; x += 3) for (let z = -150; z < 150 && !spot; z += 3)
+      if (inBounds(x, z, 15) && Math.hypot(x, z) > 30 && H(x, z) > WATER + 0.1 && H(x, z) < WATER + 0.8 && H(x + 4, z) < WATER - 0.6) spot = { x, z };
+    p.x = spot.x; p.z = spot.z; p.y = H(p.x, p.z); p.yaw = Math.PI / 2;
+    const at = !!fishSpot(p); const dry = !fishSpot({ x: 0, z: 6, yaw: 0, dead: false });
+    // kinds of water: the river, the big lake by the glade, the sea
+    const kinds = [fishWhere(-116 + Math.sin(1) * 3.4, 82 + Math.cos(1) * 3.4), fishWhere(38, 24), fishWhere(WHALF * 0.84, 0)];
+    G.state = 'play'; fishScreen(); const F = FISHING; F.tok += 1000;          // drive it by hand, not by the clock
+    WILD.fly = 'pheasant'; F.target.lvl = 2;
+    // false casting: forward too soon cracks the line and gains nothing
+    fishPress(); fishTick(F, CAST_DUR * 0.2); fishPress(); const crack = F.lvl === 1;
+    fishTick(F, 0.5); fishPress(); fishTick(F, CAST_DUR * 0.7); fishPress(); const good = F.lvl === 2;
+    // too late and it falls on the grass
+    fishTick(F, 0.5); fishPress(); fishTick(F, CAST_DUR * 1.5); const dropped = F.stage === 'ready' && F.lvl === 0;
+    // two good false casts, then lay it down on the fish
+    fishPress(); fishTick(F, CAST_DUR * 0.7); fishPress(); fishTick(F, 0.5); fishPress(); fishTick(F, CAST_DUR * 0.7); fishPress(); fishTick(F, 0.5);
+    fishPress2(); const drifting = F.stage === 'drift' && F.acc === 1;
+    // on the river the line drags; mending frees it
+    F.took = false; F.dur = 99; for (let i = 0; i < 70; i++) fishTick(F, 0.1); const dragged = F.drag >= 1 || F.where !== 'river';
+    fishPress2(); const mended = F.drag === 0;
+    // a take: set the hook, then play the fish
+    fishTake(F); const take = F.stage === 'take'; fishPress(); const on = F.stage === 'fight';
+    F.runIn = 99; F.hold = true; for (let i = 0; i < 200 && F.stage === 'fight'; i++) fishTick(F, 0.1);
+    const landed = F.stage === 'landed', cm = F.cm;
+    // holding hard while it runs snaps the tippet
+    fishPress(); fishTick(F, CAST_DUR * 0.7); fishPress(); fishTick(F, 0.5); fishPress2(); fishTake(F); fishPress();
+    F.hold = true; F.P = 1.2; F.run = 99; for (let i = 0; i < 60 && F.stage === 'fight'; i++) fishTick(F, 0.1);
+    const snapped = F.stage === 'lost';
+    const r = { rod, at, dry, kinds, crack, good, dropped, drifting, dragged, mended, take, on, landed, cm, snapped, n: fishTotal(), coins: p.coins, known: flyKnown('pheasant', F.where) };
+    FISHING = null; menuClose(); return r; });
+  ok('Bram sells a fly rod', fish.rod && fish.coins === 500 - 40);
+  ok('you can fish at the water\'s edge, not on dry land', fish.at && fish.dry);
+  ok('the wood has river, lake and sea fishing', fish.kinds.join() === 'river,lake,sea', fish.kinds.join(', '));
+  ok('false casting: too soon cracks, in time carries the line out, too late drops it', fish.crack && fish.good && fish.dropped);
+  ok('lay it on the fish; the river drags the line until you mend', fish.drifting && fish.dragged && fish.mended);
+  ok('set the hook, strip in between runs, land it', fish.take && fish.on && fish.landed && fish.n === 1, `${fish.cm} cm`);
+  ok('hauling while it runs snaps the tippet', fish.snapped);
+  ok('a fly that takes a fish is learned for that water', fish.known);
+  // the fishing screen fills the screen, and the line is a real line: it loops out behind you, lands, and bellies in the current
+  const line = await page.evaluate(() => { const p = G.player; p.x = -116; p.z = 82; p.y = H(p.x, p.z); p.yaw = 1; FISHSPOT = fishSpot(p); G.state = 'play'; fishScreen();
+    const F = FISHING; F.tok += 1000; const cv = document.getElementById('fcv'), r = cv.getBoundingClientRect();
+    const full = ui.classList.contains('full') && r.width >= innerWidth - 2 && r.height >= innerHeight - 2;
+    const step = (s) => { for (let i = 0; i < Math.round(s / 0.016); i++) { fishTick(F, 0.016); ropeTick(F, 0.016); } fishDraw(cv, F); };
+    WILD.fly = 'caddis'; F.target.lvl = 2; step(0.3);
+    fishPress(); step(CAST_DUR * 0.35);
+    const loopBack = F.rope.p.some((q) => q.z < F.rope.p[0].z - 2) && F.rope.p.every((q) => q.y >= -0.01);
+    let above = 0; const tip = F.rope.p[0]; F.rope.p.forEach((q) => { if (q.y > tip.y - 0.2 && q.z < tip.z) above++; });
+    step(CAST_DUR * 0.55); const back = F.rope.p[ROPE_N - 1].z < tip.z - 3;       // straight out behind you
+    fishPress(); step(0.3); fishPress(); step(CAST_DUR * 0.8); fishPress(); step(0.6); const out = F.rope.p[ROPE_N - 1].z > 8;
+    fishPress2(); F.took = false; step(3);
+    const floating = F.rope.p.slice(ROPE_N >> 1).every((q) => q.y < 0.3);
+    const mid = F.rope.p[ROPE_N >> 1], chord = (F.rope.p[0].x + F.rope.p[ROPE_N - 1].x) / 2;
+    const belly = mid.x > chord + 0.3;
+    FISHING = null; menuClose(); return { full, loopBack, above, back, out, floating, belly, hide: !ui.classList.contains('full') }; });
+  ok('the fishing screen fills the whole screen, and closes back to the game', line.full && line.hide);
+  ok('the line loops back over your shoulder and straightens out behind you', line.loopBack && line.above > 3 && line.back);
+  ok('then shoots out over the water, lands and floats', line.out && line.floating);
+  ok('the current bellies the line downstream', line.belly);
+  const flies = await page.evaluate(() => ({ seaClouser: flyEff('clouser', 'sea'), riverClouser: flyEff('clouser', 'river'), lakeMidge: flyEff('chironomid', 'lake'),
+    seaDry: flyEff('caddis', 'sea'), match: flyEff('adams', 'river', 'mayfly'), noHatch: flyEff('adams', 'river', 'none'),
+    pike: (() => { let n = 0; for (let i = 0; i < 300; i++) if (pickFish('lake', 'bugger') === 'pike') n++; return n; })(),
+    pikeDry: (() => { let n = 0; for (let i = 0; i < 300; i++) if (pickFish('lake', 'adams') === 'pike') n++; return n; })() }));
+  ok('salt-water flies work in the sea, not the river; dries do nothing in salt', flies.seaClouser === 3 && flies.riverClouser === 0 && flies.seaDry === 0);
+  ok('still water loves a chironomid', flies.lakeMidge === 3);
+  ok('match the hatch: the right dry is best while it hatches', flies.match === 3 && flies.noHatch < flies.match);
+  const scale = await page.evaluate(() => { const order = ['easy', 'normal', 'hard', 'expert'], d0 = G.build.diff, out = {};
+    WILD.fish = { trout: 10 }; order.forEach((k) => { G.build.diff = k; out[k] = { win: FD().win, late: FD().late, snap: FD().snap, run: FD().run, pay: fishValue() }; });
+    G.build.diff = d0; WILD.fish = {};
+    // the kitty's map icon draws in every coat without trouble
+    let drawn = true; try { const save = HOME.kitty; Object.keys(KITTY_COATS).forEach((c) => { HOME.kitty = { name: 'x', coat: c }; mapIcon('kitty', 10, 10, 1); }); HOME.kitty = save; } catch (e) { drawn = false; }
+    return { out, drawn }; });
+  const S = scale.out, harder = (a, b) => a.win >= b.win && a.late >= b.late && a.snap >= b.snap && a.run <= b.run;
+  ok('fishing gets harder with the difficulty, and pays more', harder(S.easy, S.normal) && harder(S.normal, S.hard) && harder(S.hard, S.expert)
+    && S.expert.win < S.normal.win && S.expert.pay > S.normal.pay, `10 trout: ${S.easy.pay} / ${S.normal.pay} / ${S.hard.pay} / ${S.expert.pay} coins`);
+  ok('the kitty has a map icon', scale.drawn);
+  ok('pike come to streamers far more than to dries', flies.pike > flies.pikeDry * 3, `${flies.pike} vs ${flies.pikeDry} in 300`);
+
+  // the farm kitty: adopt and name it; it guards the house; a fish makes it purr
+  const cat = await page.evaluate(() => { const p = G.player; p.coins = 500; G.state = 'play'; cottageScreen(); cottageDo('adopt');
+    document.getElementById('kname').value = 'Sir <b>Fluff</b>'; document.querySelector('[data-coat="black"]').click();
+    document.getElementById('kname').value = 'Sir <b>Fluff</b>'; document.getElementById('kok').click();
+    const named = HOME.kitty && HOME.kitty.name, coat = HOME.kitty && HOME.kitty.coat, escaped = !ui.querySelector('b b'), k = findKitty(), paid = 500 - p.coins;
+    menuClose();
+    // a spider wanders up to the house; the player is far away
+    p.x = HOUSE.x + 80; p.z = HOUSE.z; G.ents = G.ents.filter((e) => !FOE[e.kind]);
+    const q = HT(12, 10); spawnSpider(q.x, q.z, false); const sp = G.ents[G.ents.length - 1];
+    for (let i = 0; i < 400 && G.ents.indexOf(sp) >= 0; i++) updateKitty(k, 0.05, 80);
+    const got = G.ents.indexOf(sp) < 0 && HOME.kitty.got === 1;
+    // one far from the house is left alone
+    const far = HT(60, 0); spawnSpider(far.x, far.z, false); const sp2 = G.ents[G.ents.length - 1];
+    for (let i = 0; i < 100; i++) updateKitty(k, 0.05, 80);
+    const spared = G.ents.indexOf(sp2) >= 0;
+    G.ents = G.ents.filter((e) => !FOE[e.kind]);
+    WILD.fish = { trout: 1 }; G.state = 'play'; kittyScreen(); kittyDo('feed:trout');
+    const eating = k.eatT > 0 && fishTotal() === 0;
+    for (let i = 0; i < 60; i++) updateKitty(k, 0.05, 80);
+    return { named, coat, escaped, got, spared, eating, purr: k.purrT > 0, fed: HOME.kitty.fed, paid }; });
+  ok('a kitty can be adopted and named', cat.named === 'Sir <b>Fluff</b>' && cat.coat === 'black' && cat.escaped && cat.paid === 60, cat.named);
+  ok('the kitty gets pests that come near the house', cat.got);
+  ok('and leaves the rest of the wood alone', cat.spared);
+  ok('bring the kitty a fish and it purrs', cat.eating && cat.purr && cat.fed === 1);
+
   // everything you own survives a reload
-  await page.evaluate(() => { G.bounty = { def: BOUNTIES[0], n: 9, got: 4 }; saveGame(); });
+  await page.evaluate(() => { G.bounty = { def: BOUNTIES[0], n: 9, got: 4 }; WILD.fish = { grayling: 2 }; saveGame(); });
   const saved = await page.evaluate(() => ({ lvl: G.player.level, coins: G.player.coins, gear: G.build.gear.w }));
   await page.reload(); await page.waitForFunction('window.__ready===true', { timeout: 60000 });
   const hasCont = await page.evaluate(() => !!document.getElementById('cont'));
   ok('the title offers to continue', hasCont);
   await page.click('#cont'); await page.waitForTimeout(400);
   const back = await page.evaluate(() => ({ lvl: G.player.level, coins: G.player.coins, gear: G.build.gear.w, owned: HOME.owned, ups: Object.keys(HOME.up).length,
-    bounty: G.bounty && G.bounty.got, dHome: Math.hypot(G.player.x - HOUSE.x, G.player.z - HOUSE.z) }));
+    bounty: G.bounty && G.bounty.got, dHome: Math.hypot(G.player.x - HOUSE.x, G.player.z - HOUSE.z),
+    kitty: HOME.kitty && HOME.kitty.name, cat: !!findKitty(), rod: WILD.rod, fish: fishTotal(), picked: !!G.build.picked.trinket }));
   ok('your hunter, coin, gear, bounty and cottage are saved', back.lvl === saved.lvl && back.coins === saved.coins && back.gear === saved.gear
     && back.owned && back.ups === 7 && back.bounty === 4, JSON.stringify({ lvl: back.lvl, coins: back.coins }));
   ok('you carry on at your own hearth', back.dHome < 8);
+  ok('your kitty, rod, fish and gear choices are saved', back.kitty === 'Sir <b>Fluff</b>' && back.cat && back.rod && back.fish === 2 && back.picked);
   await page.evaluate(() => { G.player.inv = 0; hurtPlayer(1e6, 'test'); });
   await page.waitForFunction(() => G.state === 'dead', null, { timeout: 10000 });
   await page.click('#again'); await page.waitForTimeout(200);

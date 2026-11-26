@@ -17,13 +17,14 @@ var SLOTNAME={weapon:'Weapon',head:'Head',shoulders:'Shoulders',chest:'Chest',tr
 var LEGEND={weapon:{warrior:"Cinderwing's Fang",rogue:"Aelthir's Whisper",wizard:'Staff of the Last Light'},
   head:'Crown of Aelthir', shoulders:"Mossback's Mantle", chest:'Heartwood Plate', trinket:"Marigold's Locket"};
 var PREFIX=['','Sturdy','Honed','Masterwork','Elvensteel',''];
+var TRINKETS=['Charm','Pendant','Lucky Acorn','Rune Stone','Feather Token','Moonstone','Bell Charm','Oak Ring','Fox Tooth','Shell Necklace'];
 function baseName(slot,tier){
   var cls=G.build.cls;
   if(slot==='weapon') return cls==='warrior'?'Axe':(cls==='wizard'?'Staff':'Blade');
   if(slot==='head') return tier<2?'Cap':(tier<4?'Helm':'Circlet');
   if(slot==='shoulders') return 'Pauldrons';
   if(slot==='chest') return tier<2?'Jerkin':'Breastplate';
-  return ['Charm','Pendant','Lucky Acorn','Rune Stone'][(Math.random()*4)|0];
+  return TRINKETS[(Math.random()*TRINKETS.length)|0];
 }
 function makeItem(slot,tier){
   tier=clamp(tier|0,1,5);
@@ -38,7 +39,10 @@ function itemStat(it){
 }
 function equipped(slot){ return (G.build.items||{})[slot]||null; }
 function tierOf(slot){ var it=equipped(slot); return it?it.tier:0; }
-function isBetter(it){ return it.tier>tierOf(it.slot)&&(it.slot!=='weapon'||!it.cls||it.cls===G.build.cls); }
+function canWear(it){ return it.slot!=='weapon'||!it.cls||it.cls===G.build.cls; }
+function isBetter(it){ return it.tier>tierOf(it.slot)&&canWear(it); }
+/* a slot you dressed by hand keeps what you chose: better loot waits in the bag */
+function handPicked(slot){ return !!(G.build.picked&&G.build.picked[slot]); }
 /* the old two-number gear (and anything still reading it) is kept in step */
 function gearSync(){
   var h=tierOf('head'), s=tierOf('shoulders'), c=tierOf('chest');
@@ -58,12 +62,25 @@ function equip(it){
   if(old) G.build.bag.push(old);
   gearSync(); recalc();
 }
+/* from the bag, by choice: anything you can wear, better or not */
+function wear(it){
+  if(!canWear(it)||G.build.bag.indexOf(it)<0) return false;
+  if(!G.build.picked) G.build.picked={};
+  if(isBetter(it)) delete G.build.picked[it.slot]; else G.build.picked[it.slot]=1;
+  equip(it); return true;
+}
+function takeOff(slot){
+  var it=equipped(slot); if(!it) return null;
+  delete G.build.items[slot]; G.build.bag.push(it);
+  if(!G.build.picked) G.build.picked={}; G.build.picked[slot]=1;
+  gearSync(); recalc(); return it;
+}
 function sellPrice(it){ return it.tier*it.tier*6+4; }
 function sell(it){ var i=G.build.bag.indexOf(it); if(i<0) return 0; G.build.bag.splice(i,1); var c=sellPrice(it); G.player.coins+=c; return c; }
 /* for a new hunter, or one from before items existed */
 function gearInit(sv){
-  G.build.items={}; G.build.bag=[];
-  if(sv&&sv.items){ G.build.items=sv.items; G.build.bag=sv.bag||[]; }
+  G.build.items={}; G.build.bag=[]; G.build.picked={};
+  if(sv&&sv.items){ G.build.items=sv.items; G.build.bag=sv.bag||[]; G.build.picked=sv.picked||{}; }
   else if(sv&&sv.gear){                     // an old save: its two gear tiers become pieces
     if(sv.gear.w) G.build.items.weapon=makeItem('weapon',sv.gear.w);
     if(sv.gear.a) ['head','shoulders','chest'].forEach(function(s){ G.build.items[s]=makeItem(s,sv.gear.a); });
@@ -92,10 +109,11 @@ function dropLoot(e){
 }
 function takeItem(it){
   var p=G.player, R=RARITY[it.tier];
-  if(isBetter(it)){ var old=equipped(it.slot); equip(it);
+  if(isBetter(it)&&!handPicked(it.slot)){ var old=equipped(it.slot); equip(it);
     msg('▲ '+it.n,R.c,p.x,p.y+2.8,p.z,17); logLine('Equipped: '+it.n+' ('+R.n+') ▲',R.c); sfx('levelup');
     if(it.tier>=4) tip(R.n+'! '+it.n);
-  } else { G.build.bag.push(it); msg('+ '+it.n,R.c,p.x,p.y+2.6,p.z,14); logLine('In your bag: '+it.n+' ('+R.n+')',R.c); sfx('pickup'); }
+  } else { G.build.bag.push(it); msg('+ '+it.n,R.c,p.x,p.y+2.6,p.z,14); sfx('pickup');
+    logLine('In your bag: '+it.n+' ('+R.n+')'+(isBetter(it)?' ▲ better (press C to wear it)':''),R.c); }
   setTimeout(saveGame,40);
 }
 function updateLoot(e,dt,pd){
@@ -130,7 +148,7 @@ function shopScreen(say){
   show(html);
   var els=ui.querySelectorAll('.opt[data-g]');
   for(var i=0;i<els.length;i++) els[i].onclick=function(){ var s=this.getAttribute('data-g'), next=tierOf(s)+1, price=SHOP_PRICE[s][next-1];
-    if(next>3||p.coins<price) return; p.coins-=price; equip(makeItem(s,next)); sfx('freed'); saveGame();
+    if(next>3||p.coins<price) return; p.coins-=price; if(G.build.picked) delete G.build.picked[s]; equip(makeItem(s,next)); sfx('freed'); saveGame();
     shopScreen(s==='weapon'?'“Feel the balance on that. Sharp as winter.”':'“That\'ll turn a fang or two.”'); };
   document.getElementById('gsheet').onclick=function(){ gearSheet(function(){ shopScreen(); }); };
   document.getElementById('gback').onclick=function(){ keeperScreen(); };
@@ -145,22 +163,25 @@ function gearSheet(back,say){
     '<div class="stat"><span>Melee / ranged</span><b>'+Math.round(G.S.melee*100)+'% / '+Math.round(G.S.ranged*100)+'%</b></div>'+
     '<h3>Wearing</h3><div class="opts">';
   SLOTS.forEach(function(s){ var it=equipped(s);
-    html+='<div class="opt slot">'+(it?itemHtml(it):'<b style="color:#8a7a5a">'+SLOTNAME[s]+': empty</b><small>'+(s==='trinket'?'Trinkets come off champions and bosses':'The forge sells these')+'</small>')+'</div>'; });
+    html+=it?'<div class="opt bag">'+itemHtml(it,handPicked(s)?' · your pick':'')+'<span class="bagbtns"><button class="mini alt" data-off="'+s+'">Take off</button></span></div>'
+      :'<div class="opt slot"><b style="color:#8a7a5a">'+SLOTNAME[s]+': empty</b><small>'+(s==='trinket'?'Trinkets come off champions and bosses':'The forge sells these')+'</small></div>'; });
   var charms=Object.keys(WILD.charms||{}).filter(function(k){ return WILD.charms[k]&&RECIPE_BY[k]; });
   if(charms.length) html+='<div class="opt slot"><b style="color:#d8c9ff">Charms</b><small>'+charms.map(function(k){ return RECIPE_BY[k].n; }).join(' · ')+'</small></div>';
   html+='</div><h3>Your bag ('+G.build.bag.length+')</h3><div class="opts">';
   if(!G.build.bag.length) html+='<div class="opt off"><b>Empty</b><small>Loot you don\'t need goes here. Beat champions and bosses to find some.</small></div>';
   G.build.bag.slice().sort(function(a,b){ return b.tier-a.tier; }).forEach(function(it){
-    var better=isBetter(it), k=G.build.bag.indexOf(it);
-    html+='<div class="opt bag">'+itemHtml(it,better?' · <span style="color:#9ff07a">▲ Better!</span>':' · not better')+
-      '<span class="bagbtns">'+(better?'<button class="mini" data-e="'+k+'">Equip</button>':'')+'<button class="mini alt" data-s="'+k+'">Sell '+sellPrice(it)+' ◉</button></span></div>'; });
+    var better=isBetter(it), k=G.build.bag.indexOf(it), ok=canWear(it), cur=equipped(it.slot);
+    var note=better?' · <span style="color:#9ff07a">▲ Better!</span>':(!ok?' · not for your calling':(cur&&cur.tier===it.tier?' · same as yours':' · not better'));
+    html+='<div class="opt bag">'+itemHtml(it,note)+
+      '<span class="bagbtns">'+(ok?'<button class="mini'+(better?'':' alt')+'" data-e="'+k+'">'+(better?'Equip ▲':(cur?'Swap in':'Wear'))+'</button>':'')+'<button class="mini alt" data-s="'+k+'">Sell '+sellPrice(it)+' ◉</button></span></div>'; });
   html+='</div>';
   var junk=G.build.bag.filter(function(it){ return !isBetter(it); });
   if(junk.length) html+='<button class="btn alt" id="selljunk">Sell everything not better (+'+junk.reduce(function(a,it){ return a+sellPrice(it); },0)+' ◉)</button>';
   html+='<button class="btn" id="gclose">'+(back?'Back':'Back to the wood')+'</button>';
   show(html);
-  var e1=ui.querySelectorAll('[data-e]'); for(var i=0;i<e1.length;i++) e1[i].onclick=function(){ var it=G.build.bag[+this.getAttribute('data-e')]; if(it){ equip(it); sfx('freed'); saveGame(); gearSheet(back,'You put on the '+it.n+'.'); } };
+  var e1=ui.querySelectorAll('[data-e]'); for(var i=0;i<e1.length;i++) e1[i].onclick=function(){ var it=G.build.bag[+this.getAttribute('data-e')]; if(it&&wear(it)){ sfx('freed'); saveGame(); gearSheet(back,'You put on the '+it.n+'.'); } };
+  var e0=ui.querySelectorAll('[data-off]'); for(var i0=0;i0<e0.length;i0++) e0[i0].onclick=function(){ var it=takeOff(this.getAttribute('data-off')); if(it){ sfx('pickup'); saveGame(); gearSheet(back,'The '+it.n+' goes in your bag.'); } };
   var e2=ui.querySelectorAll('[data-s]'); for(var j=0;j<e2.length;j++) e2[j].onclick=function(){ var it=G.build.bag[+this.getAttribute('data-s')]; if(it){ var c=sell(it); sfx('coin'); saveGame(); gearSheet(back,'Sold for '+c+' coins.'); } };
-  var sj=document.getElementById('selljunk'); if(sj) sj.onclick=function(){ var c=0; junk.forEach(function(it){ c+=sell(it); }); sfx('coin'); saveGame(); gearSheet(back,'Sold for '+c+' coins.'); };
+  var sj=document.getElementById('selljunk'); if(sj) sj.onclick=function(){ if(!this.dataset.sure){ this.dataset.sure=1; this.textContent='Sure? Tap again to sell them all'; return; } var c=0; junk.forEach(function(it){ c+=sell(it); }); sfx('coin'); saveGame(); gearSheet(back,'Sold for '+c+' coins.'); };
   document.getElementById('gclose').onclick=function(){ if(back) back(); else menuClose(); };
 }
