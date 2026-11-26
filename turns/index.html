@@ -188,9 +188,9 @@ dialog input.code { letter-spacing: .15em; text-transform: uppercase; }
   document.getElementById('year').textContent = new Date().getFullYear();
 
   /* ----- grown-up PIN ----- */
-  // Master unlock code for a forgotten PIN. Only its SHA-256 hash lives here, so
-  // the code itself can't be read from the page source. Entering it removes the PIN.
-  var UNLOCK_HASH = '3506f6847ba4a1866ed9a4260f04eedbb796ce0044e8bec68d27bb583dec148f';
+  // Forgotten-PIN unlock: a 90s fill-in-the-blank ("___ ___ baby"). Only the answer's
+  // SHA-256 hash lives here (uppercase, letters and digits only). Entering it removes the PIN.
+  var UNLOCK_HASH = '00e29b10b1d96df7589a5619286d2715869e9d411935f3a229de0c34bb977312';
   function checkUnlock(code) {
     code = String(code).toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!code || !window.crypto || !crypto.subtle || !window.TextEncoder) return Promise.resolve(false);
@@ -201,8 +201,8 @@ dialog input.code { letter-spacing: .15em; text-transform: uppercase; }
   function pinMode(unlock) {
     var inp = $('pinAsk');
     inp.value = ''; $('pinMsg').textContent = '';
-    $('pinH').textContent = unlock ? 'Unlock code' : 'Grown-up PIN';
-    $('pinP').textContent = unlock ? 'Forgot the PIN? Enter the Elk Leaf Arcade unlock code. It removes the PIN so you can set a new one.' : 'Enter the PIN to make this change.';
+    $('pinH').textContent = unlock ? 'Grown-up question' : 'Grown-up PIN';
+    $('pinP').textContent = unlock ? 'Forgot the PIN? Fill in the blanks: “___ ___ baby.” It removes the PIN so you can set a new one.' : 'Enter the PIN to make this change.';
     inp.className = unlock ? 'code' : '';
     inp.maxLength = unlock ? 12 : 4;
     inp.inputMode = unlock ? 'text' : 'numeric';
@@ -231,7 +231,7 @@ dialog input.code { letter-spacing: .15em; text-transform: uppercase; }
         checkUnlock(inp.value).then(function (ok) {
           if (ok) { T.setPin(''); draw(); done(true); return; }
           // a short wait after each wrong code makes guessing slow
-          $('pinMsg').textContent = 'That code isn’t right.'; inp.value = '';
+          $('pinMsg').textContent = 'That’s not it. Think 1990.'; inp.value = '';
           setTimeout(function () { busy = false; inp.focus(); }, 2000);
         });
       };
