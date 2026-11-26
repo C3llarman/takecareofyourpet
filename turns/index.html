@@ -78,6 +78,8 @@ dialog h3 { font-family: var(--font-display); font-weight: 400; font-size: 26px;
 dialog p { margin: 0 0 12px; font-weight: 700; color: var(--muted); }
 dialog input { font: inherit; font-weight: 900; font-size: 26px; letter-spacing: .4em; text-align: center; width: 100%; padding: 8px; border: 3px solid rgba(19,38,26,.25); border-radius: 14px; }
 dialog .row-btns { margin-top: 14px; }
+dialog input.code { letter-spacing: .15em; text-transform: uppercase; }
+.forgot { background: none; border: 0; padding: 0; margin: 2px 0 0; font: inherit; font-weight: 800; font-size: 15px; color: var(--pine); text-decoration: underline; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -160,10 +162,11 @@ dialog .row-btns { margin-top: 14px; }
 
 <dialog id="pinDlg">
   <form method="dialog" id="pinForm">
-    <h3>Grown-up PIN</h3>
-    <p>Enter the PIN to make this change.</p>
+    <h3 id="pinH">Grown-up PIN</h3>
+    <p id="pinP">Enter the PIN to make this change.</p>
     <input id="pinAsk" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-label="PIN">
     <p class="msg" id="pinMsg"></p>
+    <button class="forgot" type="button" id="pinForgot">Forgot the PIN?</button>
     <div class="row-btns">
       <button class="btn sm alt" value="cancel" type="button" id="pinCancel">Cancel</button>
       <button class="btn sm" value="ok" id="pinOk">OK</button>
@@ -185,18 +188,52 @@ dialog .row-btns { margin-top: 14px; }
   document.getElementById('year').textContent = new Date().getFullYear();
 
   /* ----- grown-up PIN ----- */
+  // Master unlock code for a forgotten PIN. Only its SHA-256 hash lives here, so
+  // the code itself can't be read from the page source. Entering it removes the PIN.
+  var UNLOCK_HASH = '3506f6847ba4a1866ed9a4260f04eedbb796ce0044e8bec68d27bb583dec148f';
+  function checkUnlock(code) {
+    code = String(code).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!code || !window.crypto || !crypto.subtle || !window.TextEncoder) return Promise.resolve(false);
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(code)).then(function (buf) {
+      return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('') === UNLOCK_HASH;
+    }, function () { return false; });
+  }
+  function pinMode(unlock) {
+    var inp = $('pinAsk');
+    inp.value = ''; $('pinMsg').textContent = '';
+    $('pinH').textContent = unlock ? 'Unlock code' : 'Grown-up PIN';
+    $('pinP').textContent = unlock ? 'Forgot the PIN? Enter the Elk Leaf Arcade unlock code. It removes the PIN so you can set a new one.' : 'Enter the PIN to make this change.';
+    inp.className = unlock ? 'code' : '';
+    inp.maxLength = unlock ? 12 : 4;
+    inp.inputMode = unlock ? 'text' : 'numeric';
+    if (unlock) inp.removeAttribute('pattern'); else inp.setAttribute('pattern', '[0-9]*');
+    inp.setAttribute('aria-label', unlock ? 'Unlock code' : 'PIN');
+    $('pinForgot').textContent = unlock ? 'Back to the PIN' : 'Forgot the PIN?';
+  }
   function needPin() {
     var pin = T.get().pin;
     if (!pin) return Promise.resolve(true);
-    var d = $('pinDlg'), inp = $('pinAsk');
-    inp.value = ''; $('pinMsg').textContent = '';
+    var d = $('pinDlg'), inp = $('pinAsk'), unlock = false, busy = false;
+    pinMode(false);
     if (!d.showModal) return Promise.resolve(window.prompt('Grown-up PIN') === pin);
     return new Promise(function (res) {
-      function done(v) { $('pinForm').onsubmit = null; $('pinCancel').onclick = null; d.onclose = null; if (d.open) d.close(); res(v); }
+      function done(v) { $('pinForm').onsubmit = null; $('pinCancel').onclick = null; $('pinForgot').onclick = null; d.onclose = null; if (d.open) d.close(); res(v); }
+      $('pinForgot').onclick = function () { unlock = !unlock; pinMode(unlock); inp.focus(); };
       $('pinForm').onsubmit = function (e) {
         e.preventDefault();
-        if (inp.value === pin) done(true);
-        else { $('pinMsg').textContent = 'That PIN isn’t right.'; inp.value = ''; inp.focus(); }
+        if (busy) return;
+        if (!unlock) {
+          if (inp.value === pin) done(true);
+          else { $('pinMsg').textContent = 'That PIN isn’t right.'; inp.value = ''; inp.focus(); }
+          return;
+        }
+        busy = true;
+        checkUnlock(inp.value).then(function (ok) {
+          if (ok) { T.setPin(''); draw(); done(true); return; }
+          // a short wait after each wrong code makes guessing slow
+          $('pinMsg').textContent = 'That code isn’t right.'; inp.value = '';
+          setTimeout(function () { busy = false; inp.focus(); }, 2000);
+        });
       };
       $('pinCancel').onclick = function () { done(false); };
       d.onclose = function () { res(false); };
